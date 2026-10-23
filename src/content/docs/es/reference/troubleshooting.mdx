@@ -202,10 +202,12 @@ bssh teams grant platform --fingerprint <FINGERPRINT>
 
 ### El equipo está en solo lectura o sin puestos libres
 
-Ambos errores vienen del servidor con un mensaje accionable, que `bssh` muestra tal cual.
+Los puestos y la facturación pertenecen a la [organización](/es/teams/organizations/) del equipo. Ambos errores vienen del servidor con un mensaje accionable, que `bssh` muestra tal cual.
 
-- `the team has no free seat`: un administrador se suscribe con `bssh teams billing <team> --checkout` o, si el equipo ya tiene suscripción, cambia sus puestos en el portal de facturación con `--manage`. En un servidor autoalojado sin facturación, libera un puesto quitando un miembro o revocando una invitación pendiente.
-- `the team is read-only`: el equipo tiene más miembros que su límite de puestos, porque la suscripción caducó o paga menos puestos que miembros hay. Un administrador lo corrige con `bssh teams billing <team> --checkout` o `--manage`. Las descargas y la concesión de claves siguen funcionando mientras el equipo está en solo lectura.
+- `the organization has no free seat`: la organización está llena. Un propietario se suscribe con `bssh org billing --checkout` o, si ya tiene suscripción, cambia sus puestos en el portal de facturación con `--manage`. En un servidor autoalojado sin facturación, libera un puesto quitando un miembro o revocando una invitación pendiente.
+- `read-only: the organization has ...`: la organización tiene más miembros que su límite de puestos, porque la suscripción caducó o paga menos puestos que miembros hay. Un propietario lo corrige con `bssh org billing --checkout` o `--manage`. Las descargas y la concesión de claves siguen funcionando mientras sus equipos están en solo lectura.
+- `only an owner of the organization can manage billing`: eres administrador de equipo pero no propietario. Pídeselo a uno; `bssh org show` los lista.
+- `one organization is free per account`: `bssh org create` se rechazó porque ya posees una organización sin suscripción. Suscríbela o crea equipos en ella.
 
 ### La cadena de auditoría no se verifica
 

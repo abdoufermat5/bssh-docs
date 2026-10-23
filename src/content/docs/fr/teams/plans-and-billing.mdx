@@ -5,20 +5,20 @@ description: Comprenez les limites de sièges, les options d'abonnement et le fo
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-bssh Teams est gratuit pour les petites équipes et propose une facturation simple par siège pour les organisations plus importantes. La facturation est gérée par équipe par les administrateurs.
+bssh Teams est gratuit pour les petites équipes et propose une facturation simple par siège pour les organisations plus importantes. La facturation est gérée par [organisation](/fr/teams/organizations/) par ses propriétaires.
 
 ## Sièges et offre gratuite
 
-Le nombre de sièges d'une équipe est calculé selon :
+Les sièges appartiennent à l'organisation, qui possède ses équipes. Le nombre de sièges d'une organisation est calculé selon :
 
-- **Les membres actifs** : Chaque personne ayant accepté une invitation et rejoint l'équipe.
-- **Les invitations en attente** : Les invitations envoyées mais pas encore acceptées ni révoquées. Chaque invitation en attente réserve un siège pendant 7 jours ou jusqu'à ce qu'un administrateur la révoque avec `bssh teams uninvite`.
+- **Les membres actifs** : Chaque personne distincte ayant rejoint une de ses équipes. Quelqu'un qui est dans plusieurs équipes occupe un siège.
+- **Les invitations en attente** : Les invitations envoyées à des personnes qui ne sont pas encore dans l'organisation, pas encore acceptées ni révoquées. Chacune réserve un siège pendant 7 jours ou jusqu'à ce qu'un administrateur la révoque avec `bssh teams uninvite`. Inviter quelqu'un qui est déjà dans l'organisation n'occupe aucun siège.
 
-Chaque équipe créée sur le serveur de synchronisation hébergé bénéficie automatiquement de **3 sièges gratuits**. L'offre gratuite comprend l'accès complet aux coffres chiffrés de bout en bout, à la synchronisation, à la vérification des appareils et au journal d'audit signé. Aucune carte bancaire n'est requise.
+Chaque organisation sur le serveur de synchronisation hébergé bénéficie automatiquement de **3 sièges gratuits**, partagés par toutes ses équipes. Les équipes existantes sont chacune devenues leur propre organisation : rien ne change pour elles. L'offre gratuite comprend l'accès complet aux coffres chiffrés de bout en bout, à la synchronisation, à la vérification des appareils et au journal d'audit signé. Aucune carte bancaire n'est requise.
 
 ## Souscrire un abonnement payant
 
-Dès que votre équipe dépasse 3 sièges, un administrateur souscrit un abonnement pour l'ensemble des sièges utilisés. Les abonnements sont facturés par siège selon un cycle mensuel ou annuel.
+Dès que votre organisation dépasse 3 sièges, un propriétaire souscrit un abonnement pour l'ensemble des sièges utilisés. Les abonnements sont facturés par siège selon un cycle mensuel ou annuel.
 
 <Tabs syncKey="surface">
 <TabItem label="Ligne de commande">
@@ -26,22 +26,24 @@ Dès que votre équipe dépasse 3 sièges, un administrateur souscrit un abonnem
 Consultez l'offre actuelle, les sièges utilisés et la date de renouvellement :
 
 ```sh
-bssh teams billing platform
+bssh org billing
 ```
 
-Abonnez l'équipe à une offre payante :
+Abonnez l'organisation à une offre payante :
 
 ```sh
-bssh teams billing platform --checkout --seats 8
+bssh org billing --checkout --seats 8
 ```
 
 Pour payer annuellement plutôt que mensuellement, ajoutez l'option `--yearly` :
 
 ```sh
-bssh teams billing platform --checkout --yearly
+bssh org billing --checkout --yearly
 ```
 
 Si vous omettez `--seats`, bssh utilise par défaut le nombre de sièges actuellement utilisés, avec au moins un siège au-delà de l'offre gratuite. La commande ouvre la page Stripe Checkout dans votre navigateur web.
+
+`<org>` est facultatif quand vous n'avez qu'une organisation. Sinon, nommez-la par un préfixe d'identifiant ou une de ses équipes, par exemple `bssh org billing platform`. `bssh teams billing <team>` fonctionne toujours et agit sur l'organisation de l'équipe.
 
 </TabItem>
 <TabItem label="Application de bureau">
@@ -57,7 +59,7 @@ Si vous omettez `--seats`, bssh utilise par défaut le nombre de sièges actuell
 
 ## Gérer votre abonnement
 
-Les administrateurs peuvent mettre à jour les moyens de paiement, télécharger les factures, ajuster le nombre de sièges ou résilier l'abonnement depuis le portail client Stripe.
+Les propriétaires de l'organisation peuvent mettre à jour les moyens de paiement, télécharger les factures, ajuster le nombre de sièges ou résilier l'abonnement depuis le portail client Stripe.
 
 <Tabs syncKey="surface">
 <TabItem label="Ligne de commande">
@@ -65,7 +67,7 @@ Les administrateurs peuvent mettre à jour les moyens de paiement, télécharger
 Ouvrez le portail de facturation client dans votre navigateur :
 
 ```sh
-bssh teams billing platform --manage
+bssh org billing --manage
 ```
 
 </TabItem>
@@ -76,20 +78,22 @@ Dans l'onglet **Members & devices** de l'équipe, sous **Plan and seats**, cliqu
 </TabItem>
 </Tabs>
 
+Le paiement et le portail demandent un propriétaire de l'organisation. Un administrateur d'équipe qui n'est pas propriétaire voit l'offre et les sièges, et obtient sinon `only an owner of the organization can manage billing`.
+
 ## Sécurité des paiements
 
 Bayesian SSH et le serveur de synchronisation ne manipulent, ne traitent ni ne stockent aucun numéro de carte bancaire. Les options `--checkout` et `--manage` génèrent des URL de redirection sécurisées à usage unique vers Stripe. Toutes les transactions et modifications d'adresse de facturation ont lieu directement sur l'infrastructure de Stripe.
 
 ## Fonctionnement en lecture seule
 
-Une équipe bascule en **mode lecture seule** dans les cas suivants :
+Les équipes d'une organisation basculent en **mode lecture seule** dans les cas suivants :
 
-- Un abonnement actif expire ou est résilié, alors que l'équipe compte plus de membres et d'invitations en attente que les 3 sièges gratuits.
-- Un administrateur réduit le nombre de sièges payants dans le portail de facturation en dessous du total actuel des membres et invitations en attente.
+- Un abonnement actif expire ou est résilié, alors que l'organisation compte plus de membres et d'invitations en attente que les 3 sièges gratuits.
+- Un propriétaire réduit le nombre de sièges payants dans le portail de facturation en dessous du total actuel des membres et invitations en attente.
 
 ### Ce qui reste fonctionnel en lecture seule
 
-Une équipe en lecture seule reste opérationnelle au quotidien :
+Les équipes d'une organisation en lecture seule restent opérationnelles au quotidien :
 
 - **Synchronisation** : Les membres peuvent exécuter `bssh teams sync` pour récupérer les connexions existantes.
 - **Connexion** : Se connecter aux hôtes de l'équipe avec `bssh connect` fonctionne normalement.
@@ -106,9 +110,9 @@ Toute modification apportée au coffre partagé est bloquée :
 
 ### Rétablir l'accès en écriture
 
-Pour rétablir l'accès en écriture, un administrateur peut :
+Pour rétablir l'accès en écriture, un propriétaire peut :
 
-1. Réabonner l'équipe avec `bssh teams billing <team> --checkout`, ou
+1. Réabonner l'organisation avec `bssh org billing <org> --checkout`, ou
 2. Retirer des membres ou révoquer des invitations jusqu'à revenir à 3 sièges ou moins.
 
 ## Paiements échoués
@@ -117,18 +121,18 @@ Si un prélèvement de renouvellement échoue, Stripe entre dans une période de
 
 Pendant cette période :
 
-- L'équipe n'est **pas** immédiatement basculée en lecture seule. Toutes les opérations, synchronisations et connexions continuent de fonctionner.
+- L'organisation n'est **pas** immédiatement basculée en lecture seule. Toutes les opérations, synchronisations et connexions continuent de fonctionner.
 - L'application de bureau affiche un avertissement sous **Plan and seats** : *"The last payment failed; Stripe is retrying. Update the card in Manage billing."*
-- En ligne de commande, `bssh teams billing <team>` indique `Subscription status: past_due`.
-- Un administrateur doit ouvrir le portail de facturation (`bssh teams billing <team> --manage` ou **Manage billing**) et mettre à jour la carte bancaire avant l'expiration du délai de relance.
+- En ligne de commande, `bssh org billing` indique `Subscription status: past_due`.
+- Un propriétaire doit ouvrir le portail de facturation (`bssh org billing --manage` ou **Manage billing**) et mettre à jour la carte bancaire avant l'expiration du délai de relance.
 
 ## Serveurs auto-hébergés
 
 Les serveurs de synchronisation auto-hébergés fonctionnent sans intégration de facturation Stripe.
 
-- Le nombre maximal de sièges sur une instance auto-hébergée est fixe et configuré directement par l'opérateur du serveur.
-- L'exécution de `bssh teams billing <team>` sur un serveur auto-hébergé affiche :
+- Le nombre maximal de sièges est par organisation, fixe et configuré par l'opérateur du serveur : `DEFAULT_SEATS` à la création de l'organisation.
+- L'exécution de `bssh org billing` sur un serveur auto-hébergé affiche :
   ```text
-  💳 platform: 5 of 20 seats used (this server has no billing)
+  💳 ana@example.com: 5 of 20 seats used (this server has no billing)
   ```
 - L'application de bureau indique que le serveur n'a pas de facturation et que son opérateur définit la limite de sièges.

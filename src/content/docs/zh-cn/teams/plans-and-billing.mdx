@@ -5,20 +5,20 @@ description: 了解 bssh Teams 的席位限制、订阅选项以及只读模式�
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-bssh Teams 对小型团队完全免费，并为成长型团队提供按席位计费的灵活方案。账单由团队管理员按团队分别管理。
+bssh Teams 对小型团队完全免费，并为成长型团队提供按席位计费的灵活方案。账单由所有者按[组织](/zh-cn/teams/organizations/)管理。
 
 ## 席位与免费方案
 
-团队占用的席位数量由以下两部分构成：
+席位属于组织，组织拥有它的团队。组织占用的席位数量由以下两部分构成：
 
-- **活跃成员**：已接受邀请并加入团队的每位成员。
-- **待处理邀请**：已发出但尚未被接受或撤销的邀请。每张待处理邀请会占用 1 个席位，有效期为 7 天，管理员亦可随时使用 `bssh teams uninvite` 提前撤销。
+- **活跃成员**：已加入其某个团队的每位不重复成员。同时在多个团队中的人只占一个席位。
+- **待处理邀请**：发给尚未加入该组织的人、且尚未被接受或撤销的邀请。每张待处理邀请会占用 1 个席位，有效期为 7 天，管理员亦可随时使用 `bssh teams uninvite` 提前撤销。邀请已经在该组织中的人不占用席位。
 
-在托管同步服务器上创建的每个团队均可自动获得 **3 个免费席位**。免费方案包含端到端加密保险库、客户端同步、设备验证和签名审计日志的完整功能，无需绑定信用卡。
+托管同步服务器上的每个组织均可自动获得 **3 个免费席位**，由其所有团队共享。现有团队各自成为了独立的组织，因此对它们没有任何变化。免费方案包含端到端加密保险库、客户端同步、设备验证和签名审计日志的完整功能，无需绑定信用卡。
 
 ## 订阅付费方案
 
-当团队成员及待处理邀请总数超过 3 个席位时，管理员需要为当前团队实际占用的席位总数订阅付费方案。订阅按席位计费，支持按月或按年结算。
+当组织的成员及待处理邀请总数超过 3 个席位时，所有者需要为当前团队实际占用的席位总数订阅付费方案。订阅按席位计费，支持按月或按年结算。
 
 <Tabs syncKey="surface">
 <TabItem label="命令行">
@@ -26,22 +26,24 @@ bssh Teams 对小型团队完全免费，并为成长型团队提供按席位计
 查看当前方案、已占用席位及续费日期：
 
 ```sh
-bssh teams billing platform
+bssh org billing
 ```
 
-为团队订阅付费方案：
+为组织订阅付费方案：
 
 ```sh
-bssh teams billing platform --checkout --seats 8
+bssh org billing --checkout --seats 8
 ```
 
 如需按年结算以享受年度优惠，添加 `--yearly` 参数：
 
 ```sh
-bssh teams billing platform --checkout --yearly
+bssh org billing --checkout --yearly
 ```
 
 如果省略 `--seats`，bssh 默认使用当前已占用的席位数量（且至少比免费席位多 1 个）。执行命令后，系统将在默认网页浏览器中打开 Stripe Checkout 结账页面。
+
+只有一个组织时，`<org>` 可以省略。否则用 id 前缀或其某个团队的名称指明，例如 `bssh org billing platform`。`bssh teams billing <team>` 仍然可用，并作用于团队所属的组织。
 
 </TabItem>
 <TabItem label="桌面应用">
@@ -57,7 +59,7 @@ bssh teams billing platform --checkout --yearly
 
 ## 管理订阅
 
-管理员可以通过 Stripe 客户门户更新付款方式、下载发票、调整席位数量或取消订阅。
+组织所有者可以通过 Stripe 客户门户更新付款方式、下载发票、调整席位数量或取消订阅。
 
 <Tabs syncKey="surface">
 <TabItem label="命令行">
@@ -65,7 +67,7 @@ bssh teams billing platform --checkout --yearly
 在浏览器中打开客户账单门户：
 
 ```sh
-bssh teams billing platform --manage
+bssh org billing --manage
 ```
 
 </TabItem>
@@ -76,20 +78,22 @@ bssh teams billing platform --manage
 </TabItem>
 </Tabs>
 
+结账和门户需要组织所有者。不是所有者的团队管理员仍可查看方案和席位，否则会收到 `only an owner of the organization can manage billing`。
+
 ## 支付安全
 
 Bayesian SSH 客户端及中心同步服务器绝不会接触、处理或保存任何信用卡卡号。`--checkout` 和 `--manage` 仅生成指向 Stripe 的一次性安全跳转链接。所有银行卡交易和账单地址修改均在 Stripe 自身的合规基础设施上完成。
 
 ## 只读模式
 
-当出现以下情况时，团队将进入**只读模式**：
+当出现以下情况时，组织的团队将进入**只读模式**：
 
-- 付费订阅到期未续费或被取消，且团队成员加待处理邀请总数超过 3 个免费席位。
-- 管理员在账单门户中将付费席位数调低至低于当前成员及待处理邀请总数。
+- 付费订阅到期未续费或被取消，且组织的成员加待处理邀请总数超过 3 个免费席位。
+- 所有者在账单门户中将付费席位数调低至低于当前成员及待处理邀请总数。
 
 ### 只读模式下仍可进行的操作
 
-处于只读模式的团队在日常运维中依然可用：
+处于只读模式的组织，其团队在日常运维中依然可用：
 
 - **同步**：成员可以继续运行 `bssh teams sync` 拉取已有连接。
 - **连接**：使用 `bssh connect` 连接团队主机完全不受影响。
@@ -106,9 +110,9 @@ Bayesian SSH 客户端及中心同步服务器绝不会接触、处理或保存�
 
 ### 恢复写入权限
 
-如需恢复正常写入权限，管理员可以选择：
+如需恢复正常写入权限，所有者可以选择：
 
-1. 使用 `bssh teams billing <team> --checkout` 重新订阅付费方案，或者
+1. 使用 `bssh org billing <org> --checkout` 重新订阅付费方案，或者
 2. 移除成员或撤销待处理邀请，将席位总数缩减至 3 个或以下。
 
 ## 扣费失败
@@ -117,18 +121,18 @@ Bayesian SSH 客户端及中心同步服务器绝不会接触、处理或保存�
 
 在重试宽限期内：
 
-- 团队**不会**立即被切换为只读模式。所有连接、同步和日常配置操作均可正常使用。
+- 组织**不会**立即被切换为只读模式。所有连接、同步和日常配置操作均可正常使用。
 - 桌面应用的 **Plan and seats** 区域会显示警告提示：*"The last payment failed; Stripe is retrying. Update the card in Manage billing."*
-- 命令行执行 `bssh teams billing <team>` 会显示 `Subscription status: past_due`。
-- 管理员应尽快打开账单门户（`bssh teams billing <team> --manage` 或点击 **Manage billing**），在宽限期结束前更新支付卡信息。
+- 命令行执行 `bssh org billing` 会显示 `Subscription status: past_due`。
+- 所有者应尽快打开账单门户（`bssh org billing --manage` 或点击 **Manage billing**），在宽限期结束前更新支付卡信息。
 
 ## 自托管服务器
 
 自托管同步服务器不包含 Stripe 账单集成：
 
-- 自托管实例的席位上限是固定的，由服务器的运维方直接配置。
-- 在自托管实例上运行 `bssh teams billing <team>` 会显示：
+- 席位上限按组织计算，是固定的，由服务器运维方配置：创建组织时为 `DEFAULT_SEATS`。
+- 在自托管实例上运行 `bssh org billing` 会显示：
   ```text
-  💳 platform: 5 of 20 seats used (this server has no billing)
+  💳 ana@example.com: 5 of 20 seats used (this server has no billing)
   ```
 - 桌面应用会明确标注该服务器未启用账单系统，席位上限由其运维方设定。

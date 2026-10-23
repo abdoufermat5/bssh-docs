@@ -5,7 +5,7 @@ description: Exécutez le serveur de synchronisation bssh Teams sur votre propre
 
 import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-Le serveur de synchronisation de bssh Teams est une seule image de conteneur, adossée à PostgreSQL. Le service hébergé exécute la même image : un serveur auto-hébergé se comporte donc de la même façon, avec les données sur votre infrastructure. Sans Stripe configuré, il n'y a pas de facturation : chaque équipe dispose d'un nombre fixe de sièges.
+Le serveur de synchronisation de bssh Teams est une seule image de conteneur, adossée à PostgreSQL. Le service hébergé exécute la même image : un serveur auto-hébergé se comporte donc de la même façon, avec les données sur votre infrastructure. Sans Stripe configuré, il n'y a pas de facturation : chaque organisation dispose d'un nombre fixe de sièges.
 
 Le serveur ne stocke que du texte chiffré et des métadonnées. Il ne détient jamais les noms d'hôtes, les notes, les clés privées ni le contenu des enregistrements, et il n'est jamais dans le chemin des données SSH. [Sécurité de Teams](/fr/teams/security/) décrit le modèle de confiance.
 
@@ -40,7 +40,7 @@ Tout se règle à l'exécution ; aucune valeur propre à un environnement n'est 
 | `SIGNUP_MODE` | `invite` | `invite` : seules les adresses invitées et celles de `SIGNUP_BOOTSTRAP_EMAILS` peuvent créer un compte. `open` accepte tout le monde et ne sert qu'au développement. |
 | `SIGNUP_BOOTSTRAP_EMAILS` / `SIGNUP_BOOTSTRAP_EMAILS_FILE` | vide | Adresses autorisées à créer un compte sans invitation : les créateurs d'équipe, intégrés à la main. Séparées par des virgules ou des retours à la ligne ; les deux sources sont fusionnées. |
 | `TRUST_PROXY_HEADERS` | désactivé | Enregistre l'IP du client dans le journal d'audit à partir de `X-Forwarded-For` / `X-Real-IP`. Uniquement derrière un proxy qui les écrase et qui est le seul point d'entrée. |
-| `DEFAULT_SEATS` | `5` | Sièges d'une nouvelle équipe lorsque la facturation est désactivée. |
+| `DEFAULT_SEATS` | `5` | Sièges d'une nouvelle organisation lorsque la facturation est désactivée. |
 | `MIN_CLIENT_VERSION` | `0.0.0` | Plus ancienne version de client acceptée. |
 | `RUST_LOG` | non défini | Filtre de journalisation, par exemple `info`. |
 
@@ -184,16 +184,16 @@ L'invitation contient l'URL du serveur et un jeton à usage unique, affiché une
 
 ## Sièges
 
-Sur un serveur sans facturation, une nouvelle équipe reçoit `DEFAULT_SEATS` sièges, enregistrés avec l'équipe. Modifier la variable n'affecte que les équipes créées ensuite.
+Sur un serveur sans facturation, une nouvelle [organisation](/fr/teams/organizations/) reçoit `DEFAULT_SEATS` sièges, enregistrés avec l'organisation. Modifier la variable n'affecte que les organisations créées ensuite.
 
-Les membres et les invitations en attente comptent tous deux dans la limite. Quand une équipe est pleine, une nouvelle invitation échoue. Une invitation dont l'acceptation ne trouve aucun siège libre reste en attente et fonctionne dès qu'un siège se libère. Libérez un siège en retirant un membre ou en révoquant une invitation en attente :
+Les sièges sont partagés par toutes les équipes de l'organisation. Chaque personne occupe un siège quel que soit le nombre de ses équipes, et les invitations en attente de personnes qui n'y sont pas encore en occupent un aussi. Quand l'organisation est pleine, une nouvelle invitation échoue. Une invitation dont l'acceptation ne trouve aucun siège libre reste en attente et fonctionne dès qu'un siège se libère. Libérez un siège en retirant un membre ou en révoquant une invitation en attente :
 
 ```sh
 bssh teams uninvite platform ana@example.com
 bssh teams remove platform ana@example.com
 ```
 
-Sur un serveur sans facturation, une équipe n'est jamais en lecture seule et ses sièges ne changent jamais d'eux-mêmes.
+Sur un serveur sans facturation, une organisation n'est jamais en lecture seule et ses sièges ne changent jamais d'eux-mêmes.
 
 ## Sauvegardes et restaurations
 

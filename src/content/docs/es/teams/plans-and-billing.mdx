@@ -5,20 +5,20 @@ description: Conoce los límites de puestos, opciones de suscripción y el compo
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-bssh Teams es gratuito para equipos pequeños y ofrece una facturación sencilla por puesto para organizaciones en crecimiento. La facturación la gestionan los administradores de cada equipo.
+bssh Teams es gratuito para equipos pequeños y ofrece una facturación sencilla por puesto para organizaciones en crecimiento. La facturación la gestionan los propietarios de cada [organización](/es/teams/organizations/).
 
 ## Puestos y plan gratuito
 
-El recuento de puestos de un equipo se calcula según:
+Los puestos pertenecen a la organización, que posee sus equipos. El recuento de puestos de una organización se calcula según:
 
-- **Miembros activos**: Cada persona que ha aceptado una invitación y se ha unido al equipo.
-- **Invitaciones pendientes**: Invitaciones emitidas que aún no se han aceptado ni revocado. Cada invitación pendiente reserva un puesto durante 7 días o hasta que un administrador la revoque con `bssh teams uninvite`.
+- **Miembros activos**: Cada persona distinta que se ha unido a uno de sus equipos. Quien está en varios equipos ocupa un puesto.
+- **Invitaciones pendientes**: Invitaciones emitidas a personas que aún no están en la organización y que aún no se han aceptado ni revocado. Cada una reserva un puesto durante 7 días o hasta que un administrador la revoque con `bssh teams uninvite`. Invitar a alguien que ya está en la organización no ocupa ningún puesto.
 
-Cada equipo creado en el servidor de sincronización alojado dispone de **3 puestos gratuitos** de forma automática. El plan gratuito incluye acceso completo a bóvedas cifradas de extremo a extremo, sincronización, verificación de dispositivos y registros de auditoría firmados. No se requiere tarjeta de crédito.
+Cada organización del servidor de sincronización alojado dispone de **3 puestos gratuitos** de forma automática, compartidos por todos sus equipos. Los equipos existentes se convirtieron cada uno en su propia organización, así que nada cambia para ellos. El plan gratuito incluye acceso completo a bóvedas cifradas de extremo a extremo, sincronización, verificación de dispositivos y registros de auditoría firmados. No se requiere tarjeta de crédito.
 
 ## Suscribirse a un plan de pago
 
-Cuando tu equipo supere los 3 puestos, un administrador debe suscribir el plan para todos los puestos en uso. Las suscripciones se facturan por puesto de forma mensual o anual.
+Cuando tu organización supere los 3 puestos, un propietario debe suscribir el plan para todos los puestos en uso. Las suscripciones se facturan por puesto de forma mensual o anual.
 
 <Tabs syncKey="surface">
 <TabItem label="Línea de comandos">
@@ -26,22 +26,24 @@ Cuando tu equipo supere los 3 puestos, un administrador debe suscribir el plan p
 Consulta el plan actual, los puestos en uso y la fecha de renovación:
 
 ```sh
-bssh teams billing platform
+bssh org billing
 ```
 
-Suscribe al equipo a un plan de pago:
+Suscribe la organización a un plan de pago:
 
 ```sh
-bssh teams billing platform --checkout --seats 8
+bssh org billing --checkout --seats 8
 ```
 
 Para pagar anualmente en lugar de mensualmente, añade la opción `--yearly`:
 
 ```sh
-bssh teams billing platform --checkout --yearly
+bssh org billing --checkout --yearly
 ```
 
 Si omites `--seats`, bssh utiliza por defecto el número de puestos en uso actualmente, redondeado a al menos un puesto por encima del plan gratuito. El comando abre la página de Stripe Checkout en tu navegador web.
+
+`<org>` es opcional cuando tienes una sola organización. Si no, nómbrala con un prefijo de identificador o uno de sus equipos, por ejemplo `bssh org billing platform`. `bssh teams billing <team>` sigue funcionando y actúa sobre la organización del equipo.
 
 </TabItem>
 <TabItem label="Aplicación de escritorio">
@@ -57,7 +59,7 @@ Si omites `--seats`, bssh utiliza por defecto el número de puestos en uso actua
 
 ## Gestionar tu suscripción
 
-Los administradores pueden actualizar métodos de pago, descargar facturas, modificar el número de puestos o cancelar suscripciones desde el portal de clientes de Stripe.
+Los propietarios de la organización pueden actualizar métodos de pago, descargar facturas, modificar el número de puestos o cancelar suscripciones desde el portal de clientes de Stripe.
 
 <Tabs syncKey="surface">
 <TabItem label="Línea de comandos">
@@ -65,7 +67,7 @@ Los administradores pueden actualizar métodos de pago, descargar facturas, modi
 Abre el portal de facturación en tu navegador:
 
 ```sh
-bssh teams billing platform --manage
+bssh org billing --manage
 ```
 
 </TabItem>
@@ -76,20 +78,22 @@ En la pestaña **Members & devices** del equipo, dentro de **Plan and seats**, h
 </TabItem>
 </Tabs>
 
+El pago y el portal requieren un propietario de la organización. Un administrador de equipo que no sea propietario puede ver el plan y los puestos, y en otro caso recibe `only an owner of the organization can manage billing`.
+
 ## Seguridad en los pagos
 
 Bayesian SSH y el servidor de sincronización nunca manipulan, procesan ni almacenan números de tarjetas de crédito. Los parámetros `--checkout` y `--manage` generan URLs de redirección seguras de un solo uso hacia Stripe. Todas las transacciones y modificaciones de datos de facturación se realizan directamente en la infraestructura de Stripe.
 
 ## Modo de solo lectura
 
-Un equipo entra en **modo de solo lectura** si:
+Los equipos de una organización entran en **modo de solo lectura** si:
 
-- Una suscripción activa vence o se cancela, y el equipo tiene más miembros e invitaciones pendientes que los 3 puestos gratuitos.
-- Un administrador reduce la cantidad de puestos contratados en el portal de facturación por debajo del total actual de miembros e invitaciones pendientes.
+- Una suscripción activa vence o se cancela, y la organización tiene más miembros e invitaciones pendientes que los 3 puestos gratuitos.
+- Un propietario reduce la cantidad de puestos contratados en el portal de facturación por debajo del total actual de miembros e invitaciones pendientes.
 
 ### Qué sigue funcionando en solo lectura
 
-Un equipo en solo lectura sigue siendo completamente operativo en su rutina diaria:
+Los equipos de una organización en solo lectura siguen siendo completamente operativos en su rutina diaria:
 
 - **Sincronización**: Los miembros pueden ejecutar `bssh teams sync` para obtener las conexiones existentes.
 - **Conexión**: Conectarse a los hosts del equipo con `bssh connect` funciona sin interrupciones.
@@ -106,9 +110,9 @@ Se bloquean las modificaciones en la bóveda compartida:
 
 ### Cómo restablecer el acceso de escritura
 
-Para recuperar el acceso de escritura, un administrador puede:
+Para recuperar el acceso de escritura, un propietario puede:
 
-1. Volver a suscribir al equipo con `bssh teams billing <team> --checkout`, o
+1. Volver a suscribir la organización con `bssh org billing <org> --checkout`, o
 2. Eliminar miembros o revocar invitaciones pendientes hasta volver a un total de 3 puestos o menos.
 
 ## Pagos fallidos
@@ -117,18 +121,18 @@ Si falla un cobro de renovación, Stripe inicia un período de reintentos autom�
 
 Durante este intervalo de reintento:
 
-- El equipo **no** pasa inmediatamente a modo de solo lectura. Todas las operaciones, sincronizaciones y conexiones continúan funcionando.
+- La organización **no** pasa inmediatamente a modo de solo lectura. Todas las operaciones, sincronizaciones y conexiones continúan funcionando.
 - La aplicación de escritorio muestra una advertencia en **Plan and seats**: *"The last payment failed; Stripe is retrying. Update the card in Manage billing."*
-- En la línea de comandos, `bssh teams billing <team>` muestra `Subscription status: past_due`.
-- Un administrador debe acceder al portal de facturación (`bssh teams billing <team> --manage` o **Manage billing**) y actualizar la tarjeta de pago antes de que venza el plazo de reintentos.
+- En la línea de comandos, `bssh org billing` muestra `Subscription status: past_due`.
+- Un propietario debe acceder al portal de facturación (`bssh org billing --manage` o **Manage billing**) y actualizar la tarjeta de pago antes de que venza el plazo de reintentos.
 
 ## Servidores autoalojados
 
 Los servidores de sincronización autoalojados funcionan sin integración de facturación con Stripe.
 
-- Los límites de puestos en instancias autoalojadas son fijos y los configura directamente el operador del servidor.
-- Ejecutar `bssh teams billing <team>` en un servidor autoalojado muestra:
+- El límite de puestos es por organización, fijo y lo configura el operador del servidor: `DEFAULT_SEATS` al crear la organización.
+- Ejecutar `bssh org billing` en un servidor autoalojado muestra:
   ```text
-  💳 platform: 5 of 20 seats used (this server has no billing)
+  💳 ana@example.com: 5 of 20 seats used (this server has no billing)
   ```
 - La aplicación de escritorio indica que el servidor no tiene facturación y que su operador define el límite de puestos.

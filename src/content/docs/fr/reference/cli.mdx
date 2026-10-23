@@ -665,7 +665,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | --- | --- |
 | `init` | Configurer cette machine : créer votre compte et les clés de cet appareil. |
 | `whoami` | Afficher le compte, l'appareil et l'empreinte de cette machine. |
-| `create` | Créer une équipe ; vous en devenez administrateur. |
+| `create` | Créer une équipe ; vous en devenez administrateur. `--org` choisit son organisation. |
 | `list` | Lister les équipes de cette machine. |
 | `invite` | Inviter quelqu'un par e-mail (administrateur). |
 | `uninvite` | Révoquer une invitation en attente (administrateur) : son jeton cesse de fonctionner et son siège est libéré. |
@@ -675,7 +675,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | `share` | Partager une connexion enregistrée avec une équipe (ou pousser vos modifications vers une connexion d'équipe). |
 | `unshare` | Supprimer une connexion d'équipe pour toute l'équipe. |
 | `members` | Lister les membres d'une équipe et leurs appareils. |
-| `billing` | Afficher l'offre et les sièges d'une équipe ; s'abonner ou gérer l'abonnement (administrateur). |
+| `billing` | Afficher l'offre et les sièges de l'organisation d'une équipe ; s'abonner ou gérer l'abonnement (propriétaire de l'organisation). |
 | `remove` | Retirer un membre et faire tourner la clé d'équipe (administrateur). |
 | `audit` | Afficher et vérifier le journal d'audit de l'équipe (administrateur). Sort avec un code non nul si une vérification échoue. |
 
@@ -713,6 +713,7 @@ Usage: bssh teams create [OPTIONS] <NAME>
 | Option | Description |
 | --- | --- |
 | `<NAME>` | Nom de l'équipe, aussi utilisé comme nom de source dans `bssh list`. |
+| `--org <ORG>` | Organisation où la créer : un préfixe d'identifiant ou le nom d'une de ses équipes (par défaut : la plus ancienne organisation que vous possédez, ou une nouvelle). |
 
 ### bssh teams list
 
@@ -827,7 +828,7 @@ Usage: bssh teams members [OPTIONS] <TEAM>
 
 ### bssh teams billing
 
-Afficher l'offre et les sièges d'une équipe ; s'abonner ou gérer l'abonnement (administrateur).
+Afficher l'offre et les sièges de l'organisation d'une équipe ; s'abonner ou gérer l'abonnement (propriétaire de l'organisation). Elle agit sur l'organisation de l'équipe, et le paiement et le portail demandent un propriétaire de l'organisation : voir [`bssh org billing`](#bssh-org-billing).
 
 ```text
 Usage: bssh teams billing [OPTIONS] <TEAM>
@@ -836,10 +837,10 @@ Usage: bssh teams billing [OPTIONS] <TEAM>
 | Option | Description |
 | --- | --- |
 | `<TEAM>` | Nom de l'équipe. |
-| `--checkout` | Ouvrir une page de paiement pour abonner l'équipe (administrateur). |
+| `--checkout` | Ouvrir une page de paiement pour abonner l'organisation de l'équipe (propriétaire). |
 | `--seats <SEATS>` | Nombre de sièges à souscrire (par défaut : les sièges utilisés, au moins un de plus que l'offre gratuite). |
 | `--yearly` | Payer à l'année plutôt qu'au mois. |
-| `--manage` | Ouvrir le portail de facturation : carte, factures, sièges, résiliation (administrateur). |
+| `--manage` | Ouvrir le portail de facturation : carte, factures, sièges, résiliation (propriétaire). |
 
 ### bssh teams remove
 
@@ -869,6 +870,81 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--member <EMAIL>` | Seulement les événements de ce membre. |
 | `--since <DATE>` | Seulement les événements reçus depuis cette date (`YYYY-MM-DD` ou RFC 3339). |
 | `--limit <LIMIT>` | Nombre maximal d'événements (par défaut et maximum : 1000). |
+
+## Organisations
+
+Une organisation possède des équipes et, sur les serveurs avec facturation, leur abonnement et leurs sièges. Les sièges sont comptés par organisation : quelqu'un qui est dans plusieurs de ses équipes occupe un siège, et une invitation en attente en occupe un. Une organisation n'a pas de nom sur le serveur ; elle est affichée par les adresses e-mail de ses propriétaires. Voir [Organisations](/fr/teams/organizations/).
+
+### bssh org
+
+```text
+Usage: bssh org [OPTIONS] <COMMAND>
+```
+
+| Commande | Description |
+| --- | --- |
+| `list` | Lister les organisations que vous pouvez voir. |
+| `show` | Afficher les propriétaires, les équipes et les sièges d'une organisation. |
+| `create` | Créer une organisation vide ; une est gratuite par compte. |
+| `owners` | Gérer les propriétaires d'une organisation (propriétaire). |
+| `billing` | Afficher l'offre et les sièges d'une organisation ; s'abonner ou gérer l'abonnement (propriétaire). |
+
+### bssh org list
+
+Lister les organisations que vous pouvez voir.
+
+```text
+Usage: bssh org list [OPTIONS]
+```
+
+### bssh org show
+
+Afficher les propriétaires, les équipes et les sièges d'une organisation.
+
+```text
+Usage: bssh org show [OPTIONS] [ORG]
+```
+
+| Option | Description |
+| --- | --- |
+| `[ORG]` | Préfixe d'identifiant d'organisation ou nom d'une de ses équipes (par défaut : votre seule organisation). |
+
+### bssh org create
+
+Créer une organisation vide ; une est gratuite par compte.
+
+```text
+Usage: bssh org create [OPTIONS]
+```
+
+### bssh org owners
+
+Gérer les propriétaires d'une organisation (propriétaire).
+
+```text
+Usage: bssh org owners [OPTIONS] <COMMAND>
+```
+
+| Commande | Description |
+| --- | --- |
+| `add <ORG> <EMAIL>` | Faire d'un membre d'une de ses équipes un propriétaire (propriétaire). |
+| `remove <ORG> <EMAIL>` | Retirer un propriétaire (propriétaire) ; le dernier propriétaire ne peut pas être retiré. |
+
+### bssh org billing
+
+Afficher l'offre et les sièges d'une organisation ; s'abonner ou gérer l'abonnement (propriétaire).
+
+```text
+Usage: bssh org billing [OPTIONS] [ORG]
+```
+
+| Option | Description |
+| --- | --- |
+| `[ORG]` | Préfixe d'identifiant d'organisation ou nom d'une de ses équipes (par défaut : votre seule organisation). |
+| `--checkout` | Ouvrir une page de paiement pour abonner l'organisation (propriétaire). |
+| `--seats <SEATS>` | Nombre de sièges à souscrire (par défaut : les sièges utilisés, au moins un de plus que l'offre gratuite). |
+| `--yearly` | Payer à l'année plutôt qu'au mois. |
+| `--manage` | Ouvrir le portail de facturation : carte, factures, sièges, résiliation (propriétaire). |
 
 ## Bureau et shell
 

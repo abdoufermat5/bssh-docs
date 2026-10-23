@@ -202,10 +202,12 @@ bssh teams grant platform --fingerprint <FINGERPRINT>
 
 ### 团队为只读或没有空缺席位
 
-这两个错误都来自服务器，并带有可操作的消息，`bssh` 会原样显示。
+席位和计费属于团队所在的[组织](/zh-cn/teams/organizations/)。这两个错误都来自服务器，并带有可操作的消息，`bssh` 会原样显示。
 
-- `the team has no free seat`：管理员用 `bssh teams billing <team> --checkout` 订阅，或在团队已有订阅时用 `--manage` 在计费门户中修改席位数。在没有计费的自托管服务器上，通过移除成员或撤销待处理邀请来释放席位。
-- `the team is read-only`：团队的成员数超过席位上限，因为订阅已失效，或支付的席位少于成员数。管理员用 `bssh teams billing <team> --checkout` 或 `--manage` 修复。团队为只读时，拉取和授予密钥仍然可用。
+- `the organization has no free seat`：组织席位已满。所有者用 `bssh org billing --checkout` 订阅，或在已有订阅时用 `--manage` 在计费门户中修改席位数。在没有计费的自托管服务器上，通过移除成员或撤销待处理邀请来释放席位。
+- `read-only: the organization has ...`：组织的成员数超过席位上限，因为订阅已失效，或支付的席位少于成员数。所有者用 `bssh org billing --checkout` 或 `--manage` 修复。其团队为只读时，拉取和授予密钥仍然可用。
+- `only an owner of the organization can manage billing`：你是团队管理员但不是所有者。请所有者操作；`bssh org show` 会列出他们。
+- `one organization is free per account`：`bssh org create` 被拒绝，因为你已拥有一个没有订阅的组织。请为它订阅，或在其中创建团队。
 
 ### 审计链无法验证
 

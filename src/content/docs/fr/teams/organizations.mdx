@@ -1,0 +1,132 @@
+---
+title: Organisations
+description: Comment une organisation regroupe des équipes, partage les sièges et la facturation, et qui la possède.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Une organisation possède des équipes. Sur un serveur avec facturation, elle possède aussi l'abonnement et les sièges. Chaque équipe appartient à exactement une organisation.
+
+Les rôles d'équipe ne changent pas : dans une équipe, on reste administrateur ou membre. L'organisation ajoute un rôle, celui de **propriétaire** (*owner*).
+
+## Ce que peuvent faire les propriétaires
+
+Les propriétaires d'une organisation :
+
+- gèrent sa facturation : s'abonner, changer les sièges, mettre à jour la carte, résilier ;
+- ajoutent et retirent des propriétaires ;
+- y créent des équipes.
+
+Toute personne d'une de ses équipes voit l'organisation, ses propriétaires, ses équipes, son offre et ses sièges.
+
+Une organisation n'a pas de nom sur le serveur, pour la même raison que les noms d'équipe restent dans le coffre chiffré. `bssh` affiche une organisation par les adresses e-mail de ses propriétaires, comme `ana@example.com, bo@example.com`, et par un identifiant court.
+
+L'application de bureau affiche l'organisation sur la page Teams.
+
+<Aside type="note">
+Les équipes qui existaient avant les organisations sont chacune devenues leur propre organisation, et leurs administrateurs en sont les propriétaires. Rien à faire pour les équipes existantes.
+</Aside>
+
+## Sièges
+
+Les sièges sont comptés par organisation, pas par équipe. Le compte est :
+
+- **les personnes distinctes de toutes ses équipes** : quelqu'un qui est dans trois équipes occupe un siège ;
+- **plus les invitations en attente** de personnes qui ne sont pas encore dans l'organisation.
+
+Inviter quelqu'un qui est déjà dans l'organisation, dans une autre équipe, n'occupe aucun siège.
+
+L'offre gratuite s'applique aussi à l'organisation : sur le service hébergé, une organisation a 3 sièges gratuits au total, quel que soit son nombre d'équipes. Voir [Formules et facturation](/fr/teams/plans-and-billing/).
+
+## Voir vos organisations
+
+```sh
+bssh org list
+```
+
+Cette commande liste chaque organisation que vous possédez ou où vous avez une équipe, avec votre rôle, son nombre d'équipes et celles qui sont sur cette machine.
+
+```sh
+bssh org show
+```
+
+Elle affiche les propriétaires, les équipes, l'offre et les sièges. `<org>` est facultatif quand vous n'avez qu'une organisation.
+
+Les commandes qui prennent un `<org>` acceptent un préfixe d'identifiant, ou le nom d'une de ses équipes sur cette machine :
+
+```sh
+bssh org show platform
+bssh org show 3f9a
+```
+
+Si vous voyez plusieurs organisations sans en nommer aucune, `bssh` les liste avec leurs identifiants courts et vous demande d'en choisir une.
+
+## Créer une organisation
+
+```sh
+bssh org create
+```
+
+Cette commande crée une organisation vide, dont vous êtes propriétaire. Créez ensuite une équipe dedans :
+
+```sh
+bssh teams create infra --org 3f9a
+```
+
+Vous aurez rarement besoin de `bssh org create`. `bssh teams create` crée une organisation pour vous quand vous n'en possédez pas encore.
+
+<Aside type="note">
+Chaque compte a une organisation gratuite. Pour en créer une autre, la première doit avoir un abonnement.
+</Aside>
+
+## Choisir où va une équipe
+
+`bssh teams create <name>` place la nouvelle équipe dans :
+
+1. l'organisation que vous nommez avec `--org`, si vous en donnez une (vous devez en être propriétaire) ;
+2. sinon, la plus ancienne organisation que vous possédez ;
+3. sinon, une nouvelle organisation, dont vous êtes propriétaire.
+
+```sh
+bssh teams create infra --org platform
+```
+
+## Gérer les propriétaires
+
+```sh
+bssh org owners add platform ana@example.com
+bssh org owners remove platform ana@example.com
+```
+
+Seul un membre d'une des équipes de l'organisation peut devenir propriétaire. Une organisation garde toujours au moins un propriétaire : le dernier ne peut pas être retiré.
+
+Les propriétaires n'ont pas besoin d'être administrateurs d'équipe, et les administrateurs d'équipe ne sont pas propriétaires par défaut.
+
+## Facturation
+
+```sh
+bssh org billing
+bssh org billing --checkout --seats 8
+bssh org billing --manage
+```
+
+Ces commandes affichent l'offre et les sièges, ouvrent la page de paiement et ouvrent le portail de facturation. Le paiement et le portail demandent un propriétaire. Tout sur l'abonnement est dans [Formules et facturation](/fr/teams/plans-and-billing/).
+
+`bssh teams billing <team>` fonctionne toujours : elle agit sur l'organisation de l'équipe, et le paiement et le portail demandent un propriétaire de cette organisation.
+
+## Serveurs auto-hébergés
+
+Un serveur sans facturation donne à chaque organisation une limite fixe de sièges : `DEFAULT_SEATS` à sa création. Le compte est le même que ci-dessus. Voir [Auto-hébergement](/fr/teams/self-hosting/#sièges).
+
+## Erreurs courantes
+
+Les messages du serveur restent en anglais.
+
+- ``one organization is free per account: subscribe to your existing one (`bssh org billing <org> --checkout`) to create another, or create teams in it`` : vous possédez déjà une organisation sans abonnement. Abonnez-la, ou créez votre équipe dedans.
+- `only an owner of the organization can manage billing` : demandez à un propriétaire de lancer `bssh org billing <org> --checkout` ou `--manage`. `bssh org show` liste les propriétaires.
+- `only an owner of the organization can create teams in it` : demandez à un propriétaire de créer l'équipe, ou de faire de vous un propriétaire.
+- `only a member of one of the organization's teams can become an owner` : invitez d'abord la personne dans une de ses équipes, puis lancez `bssh org owners add`.
+- `the organization must keep at least one owner` : ajoutez un autre propriétaire avant de retirer celui-ci.
+- `you see 2 organizations; name one by an id prefix or a team name` : passez l'argument `<org>`. L'erreur liste chaque organisation avec son identifiant court.
+- ``the organization has no free seat; an owner can add seats (`bssh org billing` shows how) or a member or pending invite can be removed`` : l'organisation est pleine. Un propriétaire ajoute des sièges avec `bssh org billing --manage`, ou s'abonne avec `--checkout`. Vous pouvez aussi retirer un membre ou révoquer une invitation en attente.
+- `read-only: the organization has more members than the free plan and no active subscription; an owner can subscribe (bssh org billing --checkout) or remove members` : voir [le mode lecture seule](/fr/teams/plans-and-billing/#fonctionnement-en-lecture-seule).

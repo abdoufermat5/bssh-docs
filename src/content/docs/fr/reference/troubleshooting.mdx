@@ -202,10 +202,12 @@ bssh teams grant platform --fingerprint <FINGERPRINT>
 
 ### L'équipe est en lecture seule ou sans siège libre
 
-Les deux erreurs viennent du serveur avec un message actionnable, que `bssh` affiche tel quel.
+Les sièges et la facturation appartiennent à l'[organisation](/fr/teams/organizations/) de l'équipe. Les deux erreurs viennent du serveur avec un message actionnable, que `bssh` affiche tel quel.
 
-- `the team has no free seat` : un administrateur s'abonne avec `bssh teams billing <team> --checkout` ou, si l'équipe a déjà un abonnement, modifie ses sièges dans le portail de facturation avec `--manage`. Sur un serveur auto-hébergé sans facturation, libérez un siège en retirant un membre ou en révoquant une invitation en attente.
-- `the team is read-only` : l'équipe compte plus de membres que sa limite de sièges, parce que l'abonnement a expiré ou paie moins de sièges qu'il n'y a de membres. Un administrateur corrige avec `bssh teams billing <team> --checkout` ou `--manage`. Les récupérations et les attributions de clés continuent de fonctionner pendant que l'équipe est en lecture seule.
+- `the organization has no free seat` : l'organisation est pleine. Un propriétaire s'abonne avec `bssh org billing --checkout` ou, si elle a déjà un abonnement, modifie ses sièges dans le portail de facturation avec `--manage`. Sur un serveur auto-hébergé sans facturation, libérez un siège en retirant un membre ou en révoquant une invitation en attente.
+- `read-only: the organization has ...` : l'organisation compte plus de membres que sa limite de sièges, parce que l'abonnement a expiré ou paie moins de sièges qu'il n'y a de membres. Un propriétaire corrige avec `bssh org billing --checkout` ou `--manage`. Les récupérations et les attributions de clés continuent de fonctionner pendant que ses équipes sont en lecture seule.
+- `only an owner of the organization can manage billing` : vous êtes administrateur d'équipe sans être propriétaire. Demandez à un propriétaire ; `bssh org show` les liste.
+- `one organization is free per account` : `bssh org create` a été refusée car vous possédez déjà une organisation sans abonnement. Abonnez-la ou créez-y des équipes.
 
 ### La chaîne d'audit ne se vérifie pas
 

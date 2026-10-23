@@ -665,7 +665,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | --- | --- |
 | `init` | Set up this machine: create your account and this device's keys. |
 | `whoami` | Show this machine's account, device and fingerprint. |
-| `create` | Create a team; you become its admin. |
+| `create` | Create a team; you become its admin. Use `--org` to choose its organization. |
 | `list` | List the teams on this machine. |
 | `invite` | Invite someone by email (admin). |
 | `uninvite` | Revoke a pending invite (admin): its token stops working and its seat is free again. |
@@ -675,7 +675,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | `share` | Share a saved connection with a team (or push your edits to a team connection). |
 | `unshare` | Delete a team connection for everyone in the team. |
 | `members` | List a team's members and their devices. |
-| `billing` | Show a team's plan and seats; subscribe or manage the subscription (admin). |
+| `billing` | Show the plan and seats of a team's organization; subscribe or manage the subscription (organization owner). |
 | `remove` | Remove a member and rotate the team key (admin). |
 | `audit` | Show and verify the team's audit log (admin). Exits non-zero if anything fails to verify. |
 
@@ -713,6 +713,7 @@ Usage: bssh teams create [OPTIONS] <NAME>
 | Flag | Description |
 | --- | --- |
 | `<NAME>` | Team name, also used as its source name in `bssh list`. |
+| `--org <ORG>` | Organization to create it in: an id prefix or one of its team names (default: the oldest organization you own, or a new one). |
 
 ### bssh teams list
 
@@ -827,7 +828,7 @@ Usage: bssh teams members [OPTIONS] <TEAM>
 
 ### bssh teams billing
 
-Show a team's plan and seats; subscribe or manage the subscription (admin).
+Show the plan and seats of a team's organization; subscribe or manage the subscription (organization owner). It acts on the team's organization, and checkout and portal need an organization owner: see [`bssh org billing`](#bssh-org-billing).
 
 ```text
 Usage: bssh teams billing [OPTIONS] <TEAM>
@@ -836,10 +837,10 @@ Usage: bssh teams billing [OPTIONS] <TEAM>
 | Flag | Description |
 | --- | --- |
 | `<TEAM>` | Team name. |
-| `--checkout` | Open a checkout page to subscribe the team (admin). |
+| `--checkout` | Open a checkout page to subscribe the team's organization (owner). |
 | `--seats <SEATS>` | Seats to subscribe for (default: the seats in use, at least one above the free plan). |
 | `--yearly` | Pay yearly instead of monthly. |
-| `--manage` | Open the billing portal: card, invoices, seats, cancellation (admin). |
+| `--manage` | Open the billing portal: card, invoices, seats, cancellation (owner). |
 
 ### bssh teams remove
 
@@ -869,6 +870,81 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--member <EMAIL>` | Only events by this member. |
 | `--since <DATE>` | Only events received since this date (`YYYY-MM-DD` or RFC 3339). |
 | `--limit <LIMIT>` | Maximum number of events (default and maximum: 1000). |
+
+## Organizations
+
+An organization owns teams and, on servers with billing, their subscription and seats. Seats are counted per organization: someone in several of its teams takes one seat, and a pending invite holds one. An organization has no name on the server; it is shown by its owners' emails. See [Organizations](/teams/organizations/).
+
+### bssh org
+
+```text
+Usage: bssh org [OPTIONS] <COMMAND>
+```
+
+| Command | Description |
+| --- | --- |
+| `list` | List the organizations you can see. |
+| `show` | Show an organization's owners, teams and seats. |
+| `create` | Create an empty organization; one is free per account. |
+| `owners` | Manage an organization's owners (owner). |
+| `billing` | Show an organization's plan and seats; subscribe or manage the subscription (owner). |
+
+### bssh org list
+
+List the organizations you can see.
+
+```text
+Usage: bssh org list [OPTIONS]
+```
+
+### bssh org show
+
+Show an organization's owners, teams and seats.
+
+```text
+Usage: bssh org show [OPTIONS] [ORG]
+```
+
+| Flag | Description |
+| --- | --- |
+| `[ORG]` | Organization id prefix or one of its team names (default: your only organization). |
+
+### bssh org create
+
+Create an empty organization; one is free per account.
+
+```text
+Usage: bssh org create [OPTIONS]
+```
+
+### bssh org owners
+
+Manage an organization's owners (owner).
+
+```text
+Usage: bssh org owners [OPTIONS] <COMMAND>
+```
+
+| Command | Description |
+| --- | --- |
+| `add <ORG> <EMAIL>` | Make a member of one of its teams an owner (owner). |
+| `remove <ORG> <EMAIL>` | Remove an owner (owner); the last owner can't be removed. |
+
+### bssh org billing
+
+Show an organization's plan and seats; subscribe or manage the subscription (owner).
+
+```text
+Usage: bssh org billing [OPTIONS] [ORG]
+```
+
+| Flag | Description |
+| --- | --- |
+| `[ORG]` | Organization id prefix or one of its team names (default: your only organization). |
+| `--checkout` | Open a checkout page to subscribe the organization (owner). |
+| `--seats <SEATS>` | Seats to subscribe for (default: the seats in use, at least one above the free plan). |
+| `--yearly` | Pay yearly instead of monthly. |
+| `--manage` | Open the billing portal: card, invoices, seats, cancellation (owner). |
 
 ## Desktop and shell
 

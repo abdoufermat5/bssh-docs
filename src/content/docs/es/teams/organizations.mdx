@@ -1,0 +1,132 @@
+---
+title: Organizaciones
+description: Cómo una organización agrupa equipos, comparte puestos y facturación, y quién la posee.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Una organización posee equipos. En un servidor con facturación, también posee la suscripción y los puestos. Cada equipo pertenece a exactamente una organización.
+
+Los roles de equipo no cambian: dentro de un equipo, sigues siendo administrador o miembro. La organización añade un rol más, el de **propietario** (*owner*).
+
+## Qué pueden hacer los propietarios
+
+Los propietarios de una organización:
+
+- gestionan su facturación: suscribirse, cambiar puestos, actualizar la tarjeta, cancelar;
+- añaden y quitan propietarios;
+- crean equipos en ella.
+
+Cualquier persona de uno de sus equipos ve la organización, sus propietarios, sus equipos, su plan y sus puestos.
+
+Una organización no tiene nombre en el servidor, por la misma razón por la que los nombres de equipo se quedan en la bóveda cifrada. `bssh` muestra una organización por los correos de sus propietarios, como `ana@example.com, bo@example.com`, y por un identificador corto.
+
+La aplicación de escritorio muestra la organización en la página Teams.
+
+<Aside type="note">
+Los equipos que existían antes de las organizaciones se convirtieron cada uno en su propia organización, y sus administradores pasaron a ser propietarios. No hay nada que hacer para los equipos existentes.
+</Aside>
+
+## Puestos
+
+Los puestos se cuentan por organización, no por equipo. El recuento es:
+
+- **las personas distintas de todos sus equipos**: quien está en tres equipos ocupa un puesto;
+- **más las invitaciones pendientes** a personas que aún no están en la organización.
+
+Invitar a alguien que ya está en la organización, en otro equipo, no ocupa ningún puesto.
+
+El plan gratuito también se aplica a la organización: en el servicio alojado, una organización tiene 3 puestos gratis en total, sea cual sea su número de equipos. Consulta [Planes y facturación](/es/teams/plans-and-billing/).
+
+## Ver tus organizaciones
+
+```sh
+bssh org list
+```
+
+Lista cada organización que posees o en la que tienes un equipo, con tu rol, su número de equipos y cuáles están en esta máquina.
+
+```sh
+bssh org show
+```
+
+Muestra los propietarios, los equipos, el plan y los puestos. `<org>` es opcional cuando tienes una sola organización.
+
+Los comandos que reciben un `<org>` aceptan un prefijo de identificador, o el nombre de uno de sus equipos en esta máquina:
+
+```sh
+bssh org show platform
+bssh org show 3f9a
+```
+
+Si ves varias organizaciones y no nombras ninguna, `bssh` las lista con sus identificadores cortos y te pide elegir una.
+
+## Crear una organización
+
+```sh
+bssh org create
+```
+
+Crea una organización vacía de la que eres propietario. Luego crea un equipo en ella:
+
+```sh
+bssh teams create infra --org 3f9a
+```
+
+Rara vez necesitarás `bssh org create`. `bssh teams create` crea una organización por ti cuando aún no posees ninguna.
+
+<Aside type="note">
+Cada cuenta tiene una organización gratuita. Para crear otra, la primera necesita una suscripción.
+</Aside>
+
+## Elegir dónde va un equipo
+
+`bssh teams create <name>` coloca el equipo nuevo en:
+
+1. la organización que indiques con `--org`, si das una (debes ser propietario de ella);
+2. si no, la organización más antigua que poseas;
+3. si no, una organización nueva, de la que eres propietario.
+
+```sh
+bssh teams create infra --org platform
+```
+
+## Gestionar propietarios
+
+```sh
+bssh org owners add platform ana@example.com
+bssh org owners remove platform ana@example.com
+```
+
+Solo un miembro de uno de los equipos de la organización puede convertirse en propietario. Una organización siempre conserva al menos un propietario, así que el último no se puede quitar.
+
+Los propietarios no necesitan ser administradores de equipo, y los administradores de equipo no son propietarios por defecto.
+
+## Facturación
+
+```sh
+bssh org billing
+bssh org billing --checkout --seats 8
+bssh org billing --manage
+```
+
+Estos comandos muestran el plan y los puestos, abren la página de pago y abren el portal de facturación. El pago y el portal requieren un propietario. Todo sobre la suscripción está en [Planes y facturación](/es/teams/plans-and-billing/).
+
+`bssh teams billing <team>` sigue funcionando: actúa sobre la organización del equipo, y el pago y el portal requieren un propietario de esa organización.
+
+## Servidores autoalojados
+
+Un servidor sin facturación da a cada organización un límite fijo de puestos: `DEFAULT_SEATS` al crearla. El recuento es el mismo de arriba. Consulta [Autoalojamiento](/es/teams/self-hosting/#puestos).
+
+## Errores comunes
+
+Los mensajes del servidor se quedan en inglés.
+
+- ``one organization is free per account: subscribe to your existing one (`bssh org billing <org> --checkout`) to create another, or create teams in it``: ya posees una organización sin suscripción. Suscríbela, o crea tu equipo en ella.
+- `only an owner of the organization can manage billing`: pide a un propietario que ejecute `bssh org billing <org> --checkout` o `--manage`. `bssh org show` lista los propietarios.
+- `only an owner of the organization can create teams in it`: pide a un propietario que cree el equipo, o que te haga propietario.
+- `only a member of one of the organization's teams can become an owner`: invita primero a la persona a uno de sus equipos y luego ejecuta `bssh org owners add`.
+- `the organization must keep at least one owner`: añade otro propietario antes de quitar a este.
+- `you see 2 organizations; name one by an id prefix or a team name`: pasa el argumento `<org>`. El error lista cada organización con su identificador corto.
+- ``the organization has no free seat; an owner can add seats (`bssh org billing` shows how) or a member or pending invite can be removed``: la organización está llena. Un propietario añade puestos con `bssh org billing --manage`, o se suscribe con `--checkout`. También puedes quitar un miembro o revocar una invitación pendiente.
+- `read-only: the organization has more members than the free plan and no active subscription; an owner can subscribe (bssh org billing --checkout) or remove members`: consulta [el modo de solo lectura](/es/teams/plans-and-billing/#modo-de-solo-lectura).

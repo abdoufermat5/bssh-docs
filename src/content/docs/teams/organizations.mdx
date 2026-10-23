@@ -1,0 +1,130 @@
+---
+title: Organizations
+description: How an organization groups teams, shares seats and billing, and who owns it.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+An organization owns teams. On a server with billing, it also owns the subscription and the seats. Every team belongs to exactly one organization.
+
+Team roles don't change: inside a team, people are still admins or members. The organization adds one more role, the **owner**.
+
+## What owners can do
+
+Owners of an organization:
+
+- manage its billing: subscribe, change seats, update the card, cancel;
+- add and remove owners;
+- create teams in it.
+
+Everyone in one of its teams can see the organization, its owners, its teams and its plan and seats.
+
+An organization has no name on the server, for the same reason team names stay in the encrypted vault. `bssh` shows an organization by its owners' emails, such as `ana@example.com, bo@example.com`, and by a short id.
+
+The desktop app shows the organization on the Teams page.
+
+<Aside type="note">
+Teams that existed before organizations each became their own organization, and their admins became its owners. Nothing to do for existing teams.
+</Aside>
+
+## Seats
+
+Seats are counted per organization, not per team. The count is:
+
+- **distinct people across all its teams**: someone in three teams takes one seat;
+- **plus pending invites** to people who are not in the organization yet.
+
+Inviting someone who is already in the organization, in another team, takes no seat.
+
+The free plan applies to the organization too: on the hosted service, an organization has 3 free seats in total, however many teams it has. See [Plans and billing](/teams/plans-and-billing/).
+
+## See your organizations
+
+```sh
+bssh org list
+```
+
+It lists each organization you own or have a team in, with your role, its number of teams and which of them are on this machine.
+
+```sh
+bssh org show
+```
+
+It shows the owners, the teams, and the plan and seats. `<org>` is optional when you have a single organization.
+
+Commands that take an `<org>` accept an id prefix, or the name of one of its teams on this machine:
+
+```sh
+bssh org show platform
+bssh org show 3f9a
+```
+
+If you see several organizations and name none, `bssh` lists them with their short ids and asks you to pick one.
+
+## Create an organization
+
+```sh
+bssh org create
+```
+
+This creates an empty organization and you are its owner. Then create a team in it:
+
+```sh
+bssh teams create infra --org 3f9a
+```
+
+You rarely need `bssh org create`. `bssh teams create` makes an organization for you when you don't own one yet.
+
+<Aside type="note">
+Each account has one free organization. To create another one, the first needs a subscription.
+</Aside>
+
+## Choose where a team goes
+
+`bssh teams create <name>` puts the new team in:
+
+1. the organization you name with `--org`, if you give one (you must be an owner of it);
+2. otherwise, the oldest organization you own;
+3. otherwise, a new organization, which you own.
+
+```sh
+bssh teams create infra --org platform
+```
+
+## Manage owners
+
+```sh
+bssh org owners add platform ana@example.com
+bssh org owners remove platform ana@example.com
+```
+
+Only a member of one of the organization's teams can become an owner. An organization always keeps at least one owner, so the last one can't be removed.
+
+Owners don't need to be team admins, and team admins aren't owners by default.
+
+## Billing
+
+```sh
+bssh org billing
+bssh org billing --checkout --seats 8
+bssh org billing --manage
+```
+
+These show the plan and seats, open the checkout page, and open the billing portal. Checkout and portal need an owner. Everything about subscribing is in [Plans and billing](/teams/plans-and-billing/).
+
+`bssh teams billing <team>` still works: it acts on the team's organization, and checkout and portal need an owner of that organization.
+
+## Self-hosted servers
+
+A server without billing gives each organization a fixed seat limit: `DEFAULT_SEATS` when the organization is created. The count is the same as above. See [Self-hosting](/teams/self-hosting/#seats).
+
+## Common errors
+
+- ``one organization is free per account: subscribe to your existing one (`bssh org billing <org> --checkout`) to create another, or create teams in it``: You already own an organization with no subscription. Subscribe to it, or create your team in it.
+- `only an owner of the organization can manage billing`: Ask an owner to run `bssh org billing <org> --checkout` or `--manage`. `bssh org show` lists the owners.
+- `only an owner of the organization can create teams in it`: Ask an owner to create the team, or to make you an owner.
+- `only a member of one of the organization's teams can become an owner`: Invite the person to one of its teams first, then run `bssh org owners add`.
+- `the organization must keep at least one owner`: Add another owner before removing this one.
+- `you see 2 organizations; name one by an id prefix or a team name`: Pass the `<org>` argument. The error lists each organization with its short id.
+- ``the organization has no free seat; an owner can add seats (`bssh org billing` shows how) or a member or pending invite can be removed``: The organization is full. An owner adds seats with `bssh org billing --manage`, or subscribes with `--checkout`. You can also remove a member or revoke a pending invite.
+- `read-only: the organization has more members than the free plan and no active subscription; an owner can subscribe (bssh org billing --checkout) or remove members`: See [read-only mode](/teams/plans-and-billing/#read-only-mode).

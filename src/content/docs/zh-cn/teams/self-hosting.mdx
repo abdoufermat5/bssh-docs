@@ -5,7 +5,7 @@ description: 使用 Docker 和 PostgreSQL 在自己的基础设施上运行 bssh
 
 import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-bssh Teams 同步服务器是一个由 PostgreSQL 支持的单容器镜像。托管服务运行同一个镜像，因此自托管服务器的行为完全相同，只是数据位于你自己的基础设施上。未配置 Stripe 时没有计费：每个团队的席位数固定。
+bssh Teams 同步服务器是一个由 PostgreSQL 支持的单容器镜像。托管服务运行同一个镜像，因此自托管服务器的行为完全相同，只是数据位于你自己的基础设施上。未配置 Stripe 时没有计费：每个组织的席位数固定。
 
 服务器只保存密文和元数据。它从不持有主机名、备注、私钥或录制内容，也从不位于 SSH 数据路径中。[Teams 安全](/zh-cn/teams/security/) 说明了信任模型。
 
@@ -40,7 +40,7 @@ docker load -i bssh-cloud-api_0.2.0.tar
 | `SIGNUP_MODE` | `invite` | `invite`：只有被邀请的邮箱和 `SIGNUP_BOOTSTRAP_EMAILS` 中的邮箱可以创建账户。`open` 接受任何人，仅用于开发。 |
 | `SIGNUP_BOOTSTRAP_EMAILS` / `SIGNUP_BOOTSTRAP_EMAILS_FILE` | 空 | 无需邀请即可创建账户的邮箱：由运维方手动加入的团队创建者。以逗号或换行分隔；两个来源会合并。 |
 | `TRUST_PROXY_HEADERS` | 关闭 | 从 `X-Forwarded-For` / `X-Real-IP` 记录审计日志中的客户端 IP。仅当前置代理会覆写这些头且是唯一入口时使用。 |
-| `DEFAULT_SEATS` | `5` | 计费关闭时新团队的席位数。 |
+| `DEFAULT_SEATS` | `5` | 计费关闭时新组织的席位数。 |
 | `MIN_CLIENT_VERSION` | `0.0.0` | 接受的最旧客户端版本。 |
 | `RUST_LOG` | 未设置 | 日志过滤，例如 `info`。 |
 
@@ -184,16 +184,16 @@ bssh teams invite platform sam@example.com
 
 ## 席位
 
-在没有计费的服务器上，新团队获得 `DEFAULT_SEATS` 个席位，并与团队一起保存。修改该变量只影响之后创建的团队。
+在没有计费的服务器上，新[组织](/zh-cn/teams/organizations/)获得 `DEFAULT_SEATS` 个席位，并与组织一起保存。修改该变量只影响之后创建的组织。
 
-成员和待处理的邀请都计入上限。团队满员时，新建邀请会失败。接受邀请时若没有空缺席位，邀请会保持待处理，并在有席位空出后生效。通过移除成员或撤销待处理的邀请来释放席位：
+席位由组织的所有团队共享。每个人无论在其多少个团队中都只占一个席位，发给尚未加入该组织的人的待处理邀请同样占一个席位。组织满员时，新建邀请会失败。接受邀请时若没有空缺席位，邀请会保持待处理，并在有席位空出后生效。通过移除成员或撤销待处理的邀请来释放席位：
 
 ```sh
 bssh teams uninvite platform ana@example.com
 bssh teams remove platform ana@example.com
 ```
 
-在没有计费的服务器上，团队永远不会变为只读，席位数也不会自行变化。
+在没有计费的服务器上，组织永远不会变为只读，席位数也不会自行变化。
 
 ## 备份与恢复
 

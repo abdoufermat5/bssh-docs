@@ -202,10 +202,12 @@ bssh teams grant platform --fingerprint <FINGERPRINT>
 
 ### The team is read-only or out of seats
 
-Both errors come from the server with an actionable message, which `bssh` shows as is.
+Seats and billing belong to the team's [organization](/teams/organizations/). Both errors come from the server with an actionable message, which `bssh` shows as is.
 
-- `the team has no free seat`: an admin subscribes with `bssh teams billing <team> --checkout`, or, if the team already has a subscription, changes its seats in the billing portal with `--manage`. On a self-hosted server without billing, free a seat by removing a member or revoking a pending invite.
-- `the team is read-only`: the team has more members than its seat limit, because the subscription lapsed or pays for fewer seats than there are members. An admin fixes it with `bssh teams billing <team> --checkout` or `--manage`. Pulls and key grants keep working while the team is read-only.
+- `the team has no free seat`: the organization is full. An owner subscribes with `bssh org billing --checkout`, or, if it already has a subscription, changes its seats in the billing portal with `--manage`. On a self-hosted server without billing, free a seat by removing a member or revoking a pending invite.
+- `read-only: the organization has ...`: the organization has more members than its seat limit, because the subscription lapsed or pays for fewer seats than there are members. An owner fixes it with `bssh org billing --checkout` or `--manage`. Pulls and key grants keep working while its teams are read-only.
+- `only an owner of the organization can manage billing`: you are a team admin but not an owner. Ask one; `bssh org show` lists them.
+- `one organization is free per account`: `bssh org create` was refused because you already own an organization without a subscription. Subscribe to it or create teams in it.
 
 ### The audit chain does not verify
 

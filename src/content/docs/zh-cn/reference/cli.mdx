@@ -665,7 +665,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | --- | --- |
 | `init` | 设置这台机器：创建你的账号和本设备的密钥。 |
 | `whoami` | 显示这台机器的账号、设备和指纹。 |
-| `create` | 创建团队；你将成为它的管理员。 |
+| `create` | 创建团队；你将成为它的管理员。`--org` 选择其组织。 |
 | `list` | 列出这台机器上的团队。 |
 | `invite` | 通过电子邮件邀请某人（管理员）。 |
 | `uninvite` | 撤销待处理的邀请（管理员）：其令牌立即失效，席位随之释放。 |
@@ -713,6 +713,7 @@ Usage: bssh teams create [OPTIONS] <NAME>
 | 选项 | 说明 |
 | --- | --- |
 | `<NAME>` | 团队名称，也用作 `bssh list` 中的清单源名称。 |
+| `--org <ORG>` | 在哪个组织中创建：id 前缀或其某个团队的名称（默认值：你拥有的最早创建的组织，或新建一个）。 |
 
 ### bssh teams list
 
@@ -827,7 +828,7 @@ Usage: bssh teams members [OPTIONS] <TEAM>
 
 ### bssh teams billing
 
-显示团队的方案和席位；订阅或管理订阅（管理员）。
+显示团队的方案和席位；订阅或管理订阅（管理员）。它作用于团队所属的组织，结账和门户需要组织所有者：参见 [`bssh org billing`](#bssh-org-billing)。
 
 ```text
 Usage: bssh teams billing [OPTIONS] <TEAM>
@@ -869,6 +870,81 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--member <EMAIL>` | 只显示该成员的事件。 |
 | `--since <DATE>` | 只显示该日期之后收到的事件（`YYYY-MM-DD` 或 RFC 3339）。 |
 | `--limit <LIMIT>` | 最多显示的事件数（默认值和上限均为 1000）。 |
+
+## 组织
+
+组织拥有团队，并在启用计费的服务器上拥有它们的订阅和席位。席位按组织计算：同时在其多个团队中的人只占一个席位，待处理的邀请占一个席位。组织在服务器上没有名称，以所有者的邮箱显示。参见[组织](/zh-cn/teams/organizations/)。
+
+### bssh org
+
+```text
+Usage: bssh org [OPTIONS] <COMMAND>
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `list` | 列出你能看到的组织。 |
+| `show` | 显示组织的所有者、团队和席位。 |
+| `create` | 创建一个空组织；每个账户有一个免费组织。 |
+| `owners` | 管理组织的所有者（所有者）。 |
+| `billing` | 显示组织的方案和席位；订阅或管理订阅（所有者）。 |
+
+### bssh org list
+
+列出你能看到的组织。
+
+```text
+Usage: bssh org list [OPTIONS]
+```
+
+### bssh org show
+
+显示组织的所有者、团队和席位。
+
+```text
+Usage: bssh org show [OPTIONS] [ORG]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[ORG]` | 组织 id 前缀或其某个团队的名称（默认值：你唯一的组织）。 |
+
+### bssh org create
+
+创建一个空组织；每个账户有一个免费组织。
+
+```text
+Usage: bssh org create [OPTIONS]
+```
+
+### bssh org owners
+
+管理组织的所有者（所有者）。
+
+```text
+Usage: bssh org owners [OPTIONS] <COMMAND>
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `add <ORG> <EMAIL>` | 将其某个团队的成员设为所有者（所有者）。 |
+| `remove <ORG> <EMAIL>` | 移除所有者（所有者）；最后一位所有者无法移除。 |
+
+### bssh org billing
+
+显示组织的方案和席位；订阅或管理订阅（所有者）。
+
+```text
+Usage: bssh org billing [OPTIONS] [ORG]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[ORG]` | 组织 id 前缀或其某个团队的名称（默认值：你唯一的组织）。 |
+| `--checkout` | 打开结账页面为组织订阅（所有者）。 |
+| `--seats <SEATS>` | 要订阅的席位数（默认值：当前使用的席位数，且至少比免费方案多一个）。 |
+| `--yearly` | 按年付费而不是按月。 |
+| `--manage` | 打开账单门户：银行卡、发票、席位、取消（所有者）。 |
 
 ## 桌面与 shell
 

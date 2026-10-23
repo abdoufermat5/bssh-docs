@@ -74,6 +74,7 @@ export default defineConfig({
 					'teams/overview',
 					'teams/setup',
 					'teams/members',
+					'teams/organizations',
 					'teams/sync',
 					'teams/audit-log',
 					'teams/plans-and-billing',

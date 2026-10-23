@@ -5,7 +5,7 @@ description: Ejecuta el servidor de sincronización de bssh Teams en tu propia i
 
 import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-El servidor de sincronización de bssh Teams es una sola imagen de contenedor respaldada por PostgreSQL. El servicio alojado ejecuta la misma imagen, así que un servidor autoalojado se comporta igual, con los datos en tu infraestructura. Sin Stripe configurado, no hay facturación: cada equipo tiene un número fijo de puestos.
+El servidor de sincronización de bssh Teams es una sola imagen de contenedor respaldada por PostgreSQL. El servicio alojado ejecuta la misma imagen, así que un servidor autoalojado se comporta igual, con los datos en tu infraestructura. Sin Stripe configurado, no hay facturación: cada organización tiene un número fijo de puestos.
 
 El servidor solo guarda texto cifrado y metadatos. Nunca contiene nombres de host, notas, claves privadas ni el contenido de las grabaciones, y nunca está en la ruta de los datos SSH. [Seguridad de Teams](/es/teams/security/) explica el modelo de confianza.
 
@@ -40,7 +40,7 @@ Todo se define en tiempo de ejecución; ningún valor específico de un entorno 
 | `SIGNUP_MODE` | `invite` | `invite`: solo los correos invitados y los de `SIGNUP_BOOTSTRAP_EMAILS` pueden crear una cuenta. `open` acepta a cualquiera y es solo para desarrollo. |
 | `SIGNUP_BOOTSTRAP_EMAILS` / `SIGNUP_BOOTSTRAP_EMAILS_FILE` | vacío | Correos que pueden crear una cuenta sin invitación: los creadores de equipo, incorporados a mano. Separados por comas o saltos de línea; las dos fuentes se combinan. |
 | `TRUST_PROXY_HEADERS` | desactivado | Registra la IP del cliente en el registro de auditoría a partir de `X-Forwarded-For` / `X-Real-IP`. Solo detrás de un proxy que los sobrescriba y sea la única entrada. |
-| `DEFAULT_SEATS` | `5` | Puestos de un equipo nuevo cuando la facturación está desactivada. |
+| `DEFAULT_SEATS` | `5` | Puestos de una organización nueva cuando la facturación está desactivada. |
 | `MIN_CLIENT_VERSION` | `0.0.0` | Versión de cliente más antigua aceptada. |
 | `RUST_LOG` | sin definir | Filtro de registros, por ejemplo `info`. |
 
@@ -184,16 +184,16 @@ La invitación contiene la URL del servidor y un token de un solo uso, que se mu
 
 ## Puestos
 
-En un servidor sin facturación, un equipo nuevo recibe `DEFAULT_SEATS` puestos, guardados con el equipo. Cambiar la variable solo afecta a los equipos creados después.
+En un servidor sin facturación, una [organización](/es/teams/organizations/) nueva recibe `DEFAULT_SEATS` puestos, guardados con la organización. Cambiar la variable solo afecta a las organizaciones creadas después.
 
-Los miembros y las invitaciones pendientes cuentan ambos para el límite. Cuando un equipo está lleno, una invitación nueva falla. Una invitación cuya aceptación no encuentra ningún puesto libre queda pendiente y funciona en cuanto se libera un puesto. Libera un puesto quitando un miembro o revocando una invitación pendiente:
+Los puestos se comparten entre todos los equipos de la organización. Cada persona ocupa un puesto sea cual sea el número de sus equipos, y las invitaciones pendientes a personas que aún no están en ella ocupan uno también. Cuando la organización está llena, una invitación nueva falla. Una invitación cuya aceptación no encuentra ningún puesto libre queda pendiente y funciona en cuanto se libera un puesto. Libera un puesto quitando un miembro o revocando una invitación pendiente:
 
 ```sh
 bssh teams uninvite platform ana@example.com
 bssh teams remove platform ana@example.com
 ```
 
-En un servidor sin facturación, un equipo nunca está en solo lectura y sus puestos nunca cambian solos.
+En un servidor sin facturación, una organización nunca está en solo lectura y sus puestos nunca cambian solos.
 
 ## Copias de seguridad y restauraciones
 

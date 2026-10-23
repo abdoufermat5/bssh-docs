@@ -665,7 +665,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | --- | --- |
 | `init` | Configurar esta máquina: crear tu cuenta y las claves de este dispositivo. |
 | `whoami` | Mostrar la cuenta, el dispositivo y la huella de esta máquina. |
-| `create` | Crear un equipo; te conviertes en su administrador. |
+| `create` | Crear un equipo; te conviertes en su administrador. `--org` elige su organización. |
 | `list` | Listar los equipos de esta máquina. |
 | `invite` | Invitar a alguien por correo (administrador). |
 | `uninvite` | Revocar una invitación pendiente (administrador): su token deja de funcionar y su puesto queda libre. |
@@ -713,6 +713,7 @@ Usage: bssh teams create [OPTIONS] <NAME>
 | Opción | Descripción |
 | --- | --- |
 | `<NAME>` | Nombre del equipo, que también se usa como nombre de fuente en `bssh list`. |
+| `--org <ORG>` | Organización en la que crearlo: un prefijo de identificador o el nombre de uno de sus equipos (por defecto: la organización más antigua que poseas, o una nueva). |
 
 ### bssh teams list
 
@@ -827,7 +828,7 @@ Usage: bssh teams members [OPTIONS] <TEAM>
 
 ### bssh teams billing
 
-Muestra el plan y los puestos de un equipo; suscríbete o gestiona la suscripción (administrador).
+Muestra el plan y los puestos de un equipo; suscríbete o gestiona la suscripción (administrador). Actúa sobre la organización del equipo, y el pago y el portal requieren un propietario de la organización: consulta [`bssh org billing`](#bssh-org-billing).
 
 ```text
 Usage: bssh teams billing [OPTIONS] <TEAM>
@@ -869,6 +870,81 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--member <EMAIL>` | Solo los eventos de este miembro. |
 | `--since <DATE>` | Solo los eventos recibidos desde esta fecha (`YYYY-MM-DD` o RFC 3339). |
 | `--limit <LIMIT>` | Número máximo de eventos (por defecto y máximo: 1000). |
+
+## Organizaciones
+
+Una organización posee equipos y, en los servidores con facturación, su suscripción y sus puestos. Los puestos se cuentan por organización: quien está en varios de sus equipos ocupa un puesto, y una invitación pendiente ocupa uno. Una organización no tiene nombre en el servidor; se muestra por los correos de sus propietarios. Consulta [Organizaciones](/es/teams/organizations/).
+
+### bssh org
+
+```text
+Usage: bssh org [OPTIONS] <COMMAND>
+```
+
+| Comando | Descripción |
+| --- | --- |
+| `list` | Lista las organizaciones que puedes ver. |
+| `show` | Muestra los propietarios, los equipos y los puestos de una organización. |
+| `create` | Crea una organización vacía; una es gratuita por cuenta. |
+| `owners` | Gestiona los propietarios de una organización (propietario). |
+| `billing` | Muestra el plan y los puestos de una organización; suscríbete o gestiona la suscripción (propietario). |
+
+### bssh org list
+
+Lista las organizaciones que puedes ver.
+
+```text
+Usage: bssh org list [OPTIONS]
+```
+
+### bssh org show
+
+Muestra los propietarios, los equipos y los puestos de una organización.
+
+```text
+Usage: bssh org show [OPTIONS] [ORG]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `[ORG]` | Prefijo del identificador de la organización o nombre de uno de sus equipos (por defecto: tu única organización). |
+
+### bssh org create
+
+Crea una organización vacía; una es gratuita por cuenta.
+
+```text
+Usage: bssh org create [OPTIONS]
+```
+
+### bssh org owners
+
+Gestiona los propietarios de una organización (propietario).
+
+```text
+Usage: bssh org owners [OPTIONS] <COMMAND>
+```
+
+| Comando | Descripción |
+| --- | --- |
+| `add <ORG> <EMAIL>` | Convierte en propietario a un miembro de uno de sus equipos (propietario). |
+| `remove <ORG> <EMAIL>` | Quita a un propietario (propietario); no se puede quitar al último. |
+
+### bssh org billing
+
+Muestra el plan y los puestos de una organización; suscríbete o gestiona la suscripción (propietario).
+
+```text
+Usage: bssh org billing [OPTIONS] [ORG]
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `[ORG]` | Prefijo del identificador de la organización o nombre de uno de sus equipos (por defecto: tu única organización). |
+| `--checkout` | Abrir una página de pago para suscribir la organización (propietario). |
+| `--seats <SEATS>` | Puestos que suscribir (por defecto: los puestos en uso, al menos uno por encima del plan gratuito). |
+| `--yearly` | Pagar al año en lugar de al mes. |
+| `--manage` | Abrir el portal de facturación: tarjeta, facturas, puestos, cancelación (propietario). |
 
 ## Escritorio y shell
 

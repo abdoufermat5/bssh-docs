@@ -1,0 +1,132 @@
+---
+title: 组织
+description: 组织如何把团队归在一起、共享席位和计费，以及谁拥有它。
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+组织拥有团队。在启用计费的服务器上，它还拥有订阅和席位。每个团队恰好属于一个组织。
+
+团队角色不变：在团队内，人们仍然是管理员或成员。组织多了一个角色：**所有者**（*owner*）。
+
+## 所有者可以做什么
+
+组织的所有者可以：
+
+- 管理它的计费：订阅、更改席位、更新银行卡、取消；
+- 添加和移除所有者；
+- 在其中创建团队。
+
+组织任一团队中的人都能看到该组织、它的所有者、团队、方案和席位。
+
+组织在服务器上没有名称，原因与团队名称保存在加密保险库中相同。`bssh` 用所有者的邮箱显示组织，例如 `ana@example.com, bo@example.com`，并附一个短 id。
+
+桌面应用在 Teams 页面显示组织。
+
+<Aside type="note">
+组织出现之前就存在的团队，各自成为了独立的组织，其管理员成为所有者。现有团队无需任何操作。
+</Aside>
+
+## 席位
+
+席位按组织计算，而不是按团队。计数包括：
+
+- **其所有团队中的不重复成员**：同时在三个团队中的人只占一个席位；
+- **加上待处理的邀请**，即发给尚未加入该组织的人的邀请。
+
+邀请已经在该组织（另一个团队）中的人不占用席位。
+
+免费方案同样按组织适用：在托管服务上，一个组织无论有多少团队，总共有 3 个免费席位。参见[套餐与计费](/zh-cn/teams/plans-and-billing/)。
+
+## 查看你的组织
+
+```sh
+bssh org list
+```
+
+它会列出你拥有或在其中有团队的每个组织，包括你的角色、团队数量，以及其中哪些团队在这台机器上。
+
+```sh
+bssh org show
+```
+
+它会显示所有者、团队，以及方案和席位。只有一个组织时，`<org>` 可以省略。
+
+接受 `<org>` 的命令可以使用 id 前缀，或这台机器上该组织某个团队的名称：
+
+```sh
+bssh org show platform
+bssh org show 3f9a
+```
+
+如果你能看到多个组织却没有指明任何一个，`bssh` 会列出它们及其短 id，并要求你选择一个。
+
+## 创建组织
+
+```sh
+bssh org create
+```
+
+这会创建一个空组织，你是它的所有者。然后在其中创建团队：
+
+```sh
+bssh teams create infra --org 3f9a
+```
+
+你很少需要 `bssh org create`。当你还没有任何组织时，`bssh teams create` 会替你创建一个。
+
+<Aside type="note">
+每个账户有一个免费组织。要创建另一个，第一个必须已有订阅。
+</Aside>
+
+## 选择团队所在的组织
+
+`bssh teams create <name>` 会把新团队放到：
+
+1. 你用 `--org` 指定的组织（如果指定了，你必须是它的所有者）；
+2. 否则，你拥有的最早创建的组织；
+3. 否则，一个新组织，你是它的所有者。
+
+```sh
+bssh teams create infra --org platform
+```
+
+## 管理所有者
+
+```sh
+bssh org owners add platform ana@example.com
+bssh org owners remove platform ana@example.com
+```
+
+只有组织某个团队的成员才能成为所有者。组织始终至少保留一位所有者，因此最后一位无法移除。
+
+所有者不必是团队管理员，团队管理员默认也不是所有者。
+
+## 计费
+
+```sh
+bssh org billing
+bssh org billing --checkout --seats 8
+bssh org billing --manage
+```
+
+这些命令分别显示方案和席位、打开结账页面、打开账单门户。结账和门户需要所有者。关于订阅的全部内容见[套餐与计费](/zh-cn/teams/plans-and-billing/)。
+
+`bssh teams billing <team>` 仍然可用：它作用于团队所属的组织，结账和门户需要该组织的所有者。
+
+## 自托管服务器
+
+没有计费的服务器为每个组织设定固定的席位上限：创建时为 `DEFAULT_SEATS`。计数方式与上文相同。参见[自托管](/zh-cn/teams/self-hosting/#席位)。
+
+## 常见错误
+
+服务器消息保持英文。
+
+- ``one organization is free per account: subscribe to your existing one (`bssh org billing <org> --checkout`) to create another, or create teams in it``：你已经拥有一个没有订阅的组织。请为它订阅，或在其中创建团队。
+- `only an owner of the organization can manage billing`：请所有者运行 `bssh org billing <org> --checkout` 或 `--manage`。`bssh org show` 会列出所有者。
+- `only an owner of the organization can create teams in it`：请所有者创建团队，或把你设为所有者。
+- `only a member of one of the organization's teams can become an owner`：先邀请该用户加入其某个团队，再运行 `bssh org owners add`。
+- `the organization must keep at least one owner`：先添加另一位所有者，再移除这一位。
+- `you see 2 organizations; name one by an id prefix or a team name`：传入 `<org>` 参数。错误消息会列出每个组织及其短 id。
+- ``the team has no free seat; a team admin can add seats (`bssh teams billing <team>` shows how) or remove a member``：组织席位已满。所有者用 `bssh org billing --manage` 增加席位，或用 `--checkout` 订阅。你也可以移除成员或撤销待处理的邀请。
+- `read-only: the organization has more members than the free plan and no active subscription; an owner can subscribe (bssh org billing --checkout) or remove members`：参见[只读模式](/zh-cn/teams/plans-and-billing/#只读模式)。

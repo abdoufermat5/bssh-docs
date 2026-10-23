@@ -5,7 +5,7 @@ description: Run the bssh Teams sync server on your own infrastructure with Dock
 
 import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-The bssh Teams sync server is one container image backed by PostgreSQL. The hosted service runs the same image, so a self-hosted server behaves the same way, with the data on your own infrastructure. Without Stripe configured, there is no billing: each team has a fixed number of seats.
+The bssh Teams sync server is one container image backed by PostgreSQL. The hosted service runs the same image, so a self-hosted server behaves the same way, with the data on your own infrastructure. Without Stripe configured, there is no billing: each organization has a fixed number of seats.
 
 The server stores ciphertext and metadata only. It never holds hostnames, notes, private keys or recording contents, and it is never in the SSH data path. [Teams security](/teams/security/) explains the trust model.
 
@@ -40,7 +40,7 @@ Everything is set at run time; no environment-specific value is baked into the i
 | `SIGNUP_MODE` | `invite` | `invite`: only invited emails and `SIGNUP_BOOTSTRAP_EMAILS` may create accounts. `open` accepts anyone and is for development only. |
 | `SIGNUP_BOOTSTRAP_EMAILS` / `SIGNUP_BOOTSTRAP_EMAILS_FILE` | empty | Emails that may create an account without an invite: team creators, onboarded by hand. Comma- or newline-separated; both sources are merged. |
 | `TRUST_PROXY_HEADERS` | off | Record the audit client IP from `X-Forwarded-For` / `X-Real-IP`. Only behind a proxy that overwrites them and is the only way in. |
-| `DEFAULT_SEATS` | `5` | Seats of a new team when billing is off. |
+| `DEFAULT_SEATS` | `5` | Seats of a new organization when billing is off. |
 | `MIN_CLIENT_VERSION` | `0.0.0` | Oldest client version accepted. |
 | `RUST_LOG` | unset | Log filter, for example `info`. |
 
@@ -184,16 +184,16 @@ The invite carries the server URL and a single-use token, shown once. The invite
 
 ## Seats
 
-On a server without billing, a new team gets `DEFAULT_SEATS` seats, stored with the team. Changing the variable affects teams created afterwards, not existing ones.
+On a server without billing, a new [organization](/teams/organizations/) gets `DEFAULT_SEATS` seats, stored with the organization. Changing the variable affects organizations created afterwards, not existing ones.
 
-Members and pending invites both count against the limit. When a team is full, a new invite fails. An invitation whose acceptance finds no free seat stays pending, and works once a seat frees up. Free a seat by removing a member or revoking a pending invite:
+Seats are shared by all the organization's teams. Each person takes one seat however many of its teams they are in, and pending invites to people not in it yet hold one too. When the organization is full, a new invite fails. An invitation whose acceptance finds no free seat stays pending, and works once a seat frees up. Free a seat by removing a member or revoking a pending invite:
 
 ```sh
 bssh teams uninvite platform ana@example.com
 bssh teams remove platform ana@example.com
 ```
 
-On a server without billing, a team is never read-only and its seats never change on their own.
+On a server without billing, an organization is never read-only and its seats never change on their own.
 
 ## Backups and restores
 

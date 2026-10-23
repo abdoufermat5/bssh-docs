@@ -5,20 +5,20 @@ description: Understand seat limits, subscription options, and read-only behavio
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-bssh Teams is free for small teams and offers simple per-seat billing for growing organizations. Billing is managed per team by team administrators.
+bssh Teams is free for small teams and offers simple per-seat billing for growing organizations. Billing is managed per [organization](/teams/organizations/) by its owners.
 
 ## Seats and the free tier
 
-A team's seat count is determined by:
+Seats belong to the organization, which owns its teams. An organization's seat count is determined by:
 
-- **Active members**: Every person who has accepted an invite and joined the team.
-- **Pending invites**: Invitations that have been issued but not yet accepted or revoked. Each pending invite holds one seat for 7 days or until an admin revokes it with `bssh teams uninvite`.
+- **Active members**: Every distinct person who has joined one of its teams. Someone in several teams takes one seat.
+- **Pending invites**: Invitations issued to people who are not in the organization yet, and not yet accepted or revoked. Each one holds one seat for 7 days or until an admin revokes it with `bssh teams uninvite`. Inviting someone who is already in the organization takes no seat.
 
-Every team created on the hosted sync server receives **3 free seats** automatically. The free plan includes full access to end-to-end encrypted vaults, client synchronization, device verification, and signed audit logging. No credit card is required.
+Every organization on the hosted sync server receives **3 free seats** automatically, shared by all its teams. Existing teams each became their own organization, so nothing changes for them. The free plan includes full access to end-to-end encrypted vaults, client synchronization, device verification, and signed audit logging. No credit card is required.
 
 ## Subscribing to a paid plan
 
-When your team exceeds 3 seats, an administrator subscribes for all seats currently in use. Subscriptions are billed per seat on a monthly or yearly cycle.
+When your organization exceeds 3 seats, an owner subscribes for all seats currently in use. Subscriptions are billed per seat on a monthly or yearly cycle.
 
 <Tabs syncKey="surface">
 <TabItem label="Command line">
@@ -26,22 +26,24 @@ When your team exceeds 3 seats, an administrator subscribes for all seats curren
 Check the current plan, seats in use, and renewal date:
 
 ```sh
-bssh teams billing platform
+bssh org billing
 ```
 
-Subscribe the team to a paid plan:
+Subscribe the organization to a paid plan:
 
 ```sh
-bssh teams billing platform --checkout --seats 8
+bssh org billing --checkout --seats 8
 ```
 
 To pay annually instead of monthly, add the `--yearly` flag:
 
 ```sh
-bssh teams billing platform --checkout --yearly
+bssh org billing --checkout --yearly
 ```
 
 If you omit `--seats`, bssh defaults to the number of seats currently in use, rounded to at least one seat above the free plan. The command opens Stripe Checkout in your default web browser.
+
+`<org>` is optional when you have a single organization. Otherwise name it by an id prefix or one of its teams, for example `bssh org billing platform`. `bssh teams billing <team>` still works and acts on the team's organization.
 
 </TabItem>
 <TabItem label="Desktop app">
@@ -57,7 +59,7 @@ If you omit `--seats`, bssh defaults to the number of seats currently in use, ro
 
 ## Managing your subscription
 
-Administrators can update payment methods, download invoices, adjust seat counts, or cancel subscriptions through the Stripe Customer Portal.
+Organization owners can update payment methods, download invoices, adjust seat counts, or cancel subscriptions through the Stripe Customer Portal.
 
 <Tabs syncKey="surface">
 <TabItem label="Command line">
@@ -65,7 +67,7 @@ Administrators can update payment methods, download invoices, adjust seat counts
 Open the customer billing portal in your browser:
 
 ```sh
-bssh teams billing platform --manage
+bssh org billing --manage
 ```
 
 </TabItem>
@@ -76,20 +78,22 @@ In the team's **Members & devices** tab under **Plan and seats**, click **Manage
 </TabItem>
 </Tabs>
 
+Checkout and the portal need an organization owner. A team admin who isn't an owner can still see the plan and seats, and gets `only an owner of the organization can manage billing` otherwise.
+
 ## Payment security
 
 Bayesian SSH and the sync server never handle, process, or store credit card numbers. Both `--checkout` and `--manage` generate secure single-use redirect URLs to Stripe. All card transactions and billing address changes occur directly on Stripe's infrastructure.
 
 ## Read-only mode
 
-A team enters **read-only mode** if:
+An organization's teams enter **read-only mode** if:
 
-- An active subscription lapses or is cancelled, and the team has more members and pending invites than the 3 free seats.
-- An administrator reduces the paid seat count in the billing portal below the team's current member and invite count.
+- An active subscription lapses or is cancelled, and the organization has more people and pending invites than the 3 free seats.
+- An administrator reduces the paid seat count in the billing portal below the organization's current member and invite count.
 
 ### What works in read-only mode
 
-A read-only team remains functional for day-to-day operations:
+A read-only organization's teams remain functional for day-to-day operations:
 
 - **Sync**: Teammates can run `bssh teams sync` to pull existing connections.
 - **Connect**: Connecting to team hosts with `bssh connect` works without interruption.
@@ -106,9 +110,9 @@ Modifications to the shared vault are blocked:
 
 ### Restoring write access
 
-To restore write access, an administrator can either:
+To restore write access, an owner can either:
 
-1. Re-subscribe the team using `bssh teams billing <team> --checkout`, or
+1. Re-subscribe the organization using `bssh org billing <org> --checkout`, or
 2. Remove members or revoke pending invites until the total seat count is 3 or fewer.
 
 ## Failed payments
@@ -117,18 +121,18 @@ If a renewal payment fails, Stripe enters an automatic retry period. The subscri
 
 During this retry window:
 
-- The team is **not** immediately placed into read-only mode. All operations, syncs, and connections continue to work.
+- The organization is **not** immediately placed into read-only mode. All operations, syncs, and connections continue to work.
 - The desktop app displays a warning notice under **Plan and seats**: *"The last payment failed; Stripe is retrying. Update the card in Manage billing."*
-- On the command line, `bssh teams billing <team>` displays `Subscription status: past_due`.
-- An administrator should open the billing portal (`bssh teams billing <team> --manage` or **Manage billing**) and update the payment card before the retry period expires.
+- On the command line, `bssh org billing` displays `Subscription status: past_due`.
+- An owner should open the billing portal (`bssh org billing --manage` or **Manage billing**) and update the payment card before the retry period expires.
 
 ## Self-hosted servers
 
 Self-hosted sync servers run without Stripe billing integration.
 
-- Seat limits on self-hosted instances are fixed and configured directly by the server operator.
-- Running `bssh teams billing <team>` on a self-hosted instance shows:
+- The seat limit is per organization, fixed and configured by the server operator: `DEFAULT_SEATS` when the organization is created.
+- Running `bssh org billing` on a self-hosted instance shows:
   ```text
-  💳 platform: 5 of 20 seats used (this server has no billing)
+  💳 ana@example.com: 5 of 20 seats used (this server has no billing)
   ```
 - The desktop application indicates that the server has no billing and that its operator sets the seat limit.

@@ -1,0 +1,192 @@
+---
+title: Historique et sessions actives
+description: Consultez les connexions SSH passées, affichez les statistiques d'utilisation et fermez les sessions actives ou orphelines.
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Bayesian SSH consigne chaque connexion dans sa base de données locale, en enregistrant les horodatages de début, la durée et le code de sortie. Vous pouvez inspecter les sessions passées, analyser vos habitudes d'utilisation et gérer les connexions en cours d'exécution depuis la ligne de commande ou l'application de bureau.
+
+## Consulter l'historique des sessions
+
+Exécutez `bssh history` pour afficher les sessions SSH récentes.
+
+```sh
+bssh history
+```
+
+La sortie affiche un en-tête récapitulatif suivi des sessions récentes, de la plus récente à la plus ancienne :
+
+```text
+📋 Session History
+
+────────────────────────────────────────────────────────────────────────────────────────
+📊 Summary: 4 sessions | ✅ 3 successful (75.0%) | ❌ 1 failed | ⏱️  Avg duration: 12m 45s
+────────────────────────────────────────────────────────────────────────────────────────
+
+SESSION    CONNECTION           STARTED              DURATION     STATUS          EXIT CODE
+────────────────────────────────────────────────────────────────────────────────────────
+3f2a91c0 ● web-prod             2026-10-23 09:14:22  18m 10s      Success         0
+8c4e12a9   db-primary           2026-10-23 08:30:05  42m 02s      Success         0
+1b7d55f0   bastion-ext          2026-10-23 07:15:40  2m 11s       Error           255
+f4a10e82 ● staging-api          2026-10-22 17:05:12  5m 28s       Success         0
+```
+
+Chaque ligne comprend :
+
+- **SESSION** : un préfixe de 8 caractères de l'UUID de la session. Un marqueur `●` à côté de l'identifiant indique qu'un enregistrement de session est disponible.
+- **CONNECTION** : le nom de la connexion enregistrée.
+- **STARTED** : l'horodatage d'ouverture de la connexion.
+- **DURATION** : la durée totale écoulée, ou `ongoing` pour les sessions actives.
+- **STATUS** : l'état de la session (`Success`, `Error`, `Terminated` ou `Active`).
+- **EXIT CODE** : le code de sortie SSH distant, ou `-` en cas d'arrêt anormal.
+
+Lorsque vous exécutez `bssh history`, `bssh` détecte automatiquement les sessions dont les processus locaux ne fonctionnent plus et met à jour leur état dans la base de données.
+
+### Filtrer les entrées de l'historique
+
+Affinez l'historique à l'aide des options de la ligne de commande :
+
+```sh
+# Afficher uniquement les sessions d'une connexion spécifique
+bssh history -c web-prod
+
+# Limiter aux sessions des 7 derniers jours
+bssh history --days 7
+
+# Afficher uniquement les sessions qui se sont terminées par une erreur
+bssh history --failed
+
+# Modifier le nombre d'entrées affichées (par défaut : 20)
+bssh history -n 50
+```
+
+Pour rechercher du texte affiché lors des sessions enregistrées, utilisez `-g` ou `--grep` :
+
+```sh
+bssh history --grep "Out of memory"
+```
+
+Pour en savoir plus sur la sortie des sessions enregistrées et leur relecture, consultez [Enregistrement de session](/fr/guides/recording/).
+
+## Gérer les sessions actives
+
+La commande `bssh close` liste et ferme les sessions SSH actives initiées par `bssh`.
+
+### Lister les sessions en cours
+
+Exécutez `bssh close` sans argument pour afficher toutes les sessions actuellement actives :
+
+```sh
+bssh close
+```
+
+```text
+📋 Active Sessions
+
+CONNECTION           PID        STARTED              DURATION
+──────────────────────────────────────────────────────────────────────
+web-prod             41208      2026-10-23 09:14:22  18m 10s 🟢
+db-primary           41355      2026-10-23 08:30:05  42m 02s 🟢
+
+💡 Use 'bssh close <connection>' to close a session
+   Use 'bssh close --cleanup' to remove stale sessions
+```
+
+### Fermer une session
+
+Indiquez le nom d'une connexion pour terminer ses sessions actives :
+
+```sh
+bssh close web-prod
+```
+
+`bssh` vous demande confirmation avant d'envoyer un signal `SIGTERM` au processus :
+
+```text
+Close session for 'web-prod' (PID 41208)? [y/N] y
+✅ Sent SIGTERM to session 'web-prod' (PID 41208)
+```
+
+Pour ignorer l'invite interactive, ajoutez `-f` ou `--force` :
+
+```sh
+bssh close web-prod -f
+```
+
+### Fermer toutes les sessions
+
+Pour fermer toutes les sessions actives en une seule fois, utilisez `-a` ou `--all` :
+
+```sh
+bssh close --all -f
+```
+
+:::note
+`bssh kill` est un alias de `bssh close`. Les commandes telles que `bssh kill --all -f` effectuent exactement la même opération.
+:::
+
+### Nettoyer les sessions orphelines
+
+Si une fenêtre de terminal a été fermée brutalement ou si votre système d'exploitation a redémarré, des enregistrements de session peuvent rester marqués comme actifs alors que leur processus n'existe plus.
+
+Exécutez `bssh close --cleanup` pour régulariser la table des sessions :
+
+```sh
+bssh close --cleanup
+```
+
+```text
+🧹 Cleaned stale session: web-prod (PID 41208)
+
+✅ Cleaned 1 stale session(s)
+```
+
+Si vous avez configuré une durée de rétention des enregistrements, `bssh close --cleanup` supprime également les enregistrements `.cast` expirés ainsi que leurs entrées dans l'index de recherche.
+
+## Statistiques d'utilisation
+
+Exécutez `bssh stats` pour consulter le nombre total de connexions, l'activité récente et la répartition par tag :
+
+```sh
+bssh stats
+```
+
+```text
+📊 Bayesian SSH Statistics
+
+Total Connections: 28
+Most Used: web-prod (last: 2026-10-23 09:14:22)
+
+Recently Used:
+  1. web-prod - 10-23 09:14
+  2. db-primary - 10-23 08:30
+  3. bastion-ext - 10-23 07:15
+  4. staging-api - 10-22 17:05
+  5. monitoring - 10-22 14:10
+
+Connections by Tag:
+  prod: 12 connection(s)
+  aws: 8 connection(s)
+  database: 5 connection(s)
+  staging: 3 connection(s)
+```
+
+En plus de renseigner sur l'utilisation, l'historique des sessions alimente le moteur de classement : chaque session terminée met à jour les probabilités bayésiennes qui déterminent quel hôte apparaît en premier lorsque vous lancez `bssh connect`. Consultez [Recherche et classement](/fr/guides/search-and-ranking/) pour plus de détails.
+
+## Application de bureau
+
+L'application de bureau intègre le suivi des sessions dans son interface :
+
+![La vue History de l'application de bureau montrant les sessions passées, les états et les filtres](../../../../assets/screenshots/app-history.png)
+
+- **Vue History** : cliquez sur l'onglet **History** dans la barre latérale pour examiner les sessions passées. Vous pouvez filtrer par nom de connexion ou par état, vérifier les horodatages d'exécution et cliquer sur une session enregistrée pour lancer le lecteur de terminal intégré.
+- **Terminaux actifs** : les onglets de terminal en cours d'exécution s'affichent dans la barre d'onglets supérieure. Fermer un onglet arrête le processus SSH correspondant.
+- **Sessions détachées** : si l'application de bureau détecte des sessions s'exécutant en arrière-plan, accédez-y depuis la palette de commandes (<kbd>Ctrl</kbd>+<kbd>K</kbd>) en cherchant **Detached sessions**.
+
+## Pour continuer
+
+<CardGrid>
+	<LinkCard title="Enregistrement de session" description="Enregistrez la sortie des sessions au format asciicast et rejouez-les." href="/fr/guides/recording/" />
+	<LinkCard title="Recherche et classement" description="Découvrez comment l'historique influence le classement bayésien des hôtes." href="/fr/guides/search-and-ranking/" />
+</CardGrid>

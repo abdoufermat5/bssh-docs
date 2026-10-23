@@ -1,0 +1,207 @@
+---
+title: 安装
+description: 使用单行安装脚本、预编译 Linux 软件包、Snap 或从源码编译安装 Bayesian SSH。
+---
+
+import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH 提供了适用于 `x86_64` (amd64) 与 `aarch64` (arm64) 的预编译 Linux 软件包及二进制文件、自动化安装脚本、Snap 软件包以及源码编译支持。
+
+## 单行安装脚本
+
+安装脚本会自动检测系统架构并下载对应的最新预编译发布版本，校验校验和后将 `bayesian-ssh` 及 `bssh` 别名安装至 `/usr/local/bin`。
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash
+```
+
+默认情况下，该脚本会同时安装命令行工具与桌面应用，并配置应用程序菜单入口与桌面图标。
+
+### 安装脚本选项
+
+可以通过 `bash -s -- <选项>` 为安装脚本传递参数：
+
+- **仅安装命令行工具**（适用于服务器与无图形界面环境）：
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash -s -- --no-gui
+  ```
+- **交互式安装模式**（提示选择预编译版本或源码编译，并可选择是否包含桌面应用）：
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash -s -- --interactive
+  ```
+
+### 桌面应用运行时依赖
+
+桌面应用依赖 WebKitGTK 4.1。如果是在精简版桌面环境中运行图形界面，请安装所需的运行时依赖库：
+
+<Tabs syncKey="os">
+	<TabItem label="Debian / Ubuntu">
+		```sh
+		sudo apt install libwebkit2gtk-4.1-0 libayatana-appindicator3-1
+		```
+	</TabItem>
+	<TabItem label="Fedora / RHEL">
+		```sh
+		sudo dnf install webkit2gtk4.1 libappindicator-gtk3
+		```
+	</TabItem>
+</Tabs>
+
+## Linux 软件包
+
+每个 [GitHub Releases 发布版本](https://github.com/abdoufermat5/bayesian-ssh/releases) 都会提供集成了命令行工具与桌面应用的统一 `.deb` 与 `.rpm` 软件包，支持 `x86_64` 和 `aarch64` 架构。
+
+<Tabs syncKey="os">
+	<TabItem label="Debian / Ubuntu">
+		```sh
+		sudo apt install ./bayesian-ssh_2.10.0_amd64.deb
+		```
+	</TabItem>
+	<TabItem label="Fedora / RHEL">
+		```sh
+		sudo dnf install ./bayesian-ssh-2.10.0-1.x86_64.rpm
+		```
+	</TabItem>
+</Tabs>
+
+## Snap 软件包
+
+通过 Snap Store 安装 `bayesian-ssh`：
+
+```sh
+sudo snap install bayesian-ssh
+```
+
+### 安装后配置
+
+由于 Snap 运行在严格限制（strict confinement）模式下，安装后需手动授予读取 SSH 配置与私钥的权限：
+
+```sh
+sudo snap connect bayesian-ssh:ssh-keys
+```
+
+你也可以选择启用简短的 `bssh` 命令别名：
+
+```sh
+sudo snap alias bayesian-ssh bssh
+```
+
+### 限制说明
+
+严格限制模式带来以下环境约束：
+
+- `~/.ssh` 以只读方式挂载。Snap 无法更新 `known_hosts`，也无法向 `~/.ssh` 写入新生成的密钥。
+- 配置文件与数据库保存在 `~/snap/bayesian-ssh/current/.config/bayesian-ssh/`，与系统的原生安装相互隔离。
+- Snap 内置了独立的 `ssh`、`kinit` 与 `klist` 工具。
+- 主机 Kerberos 凭据：若需复用主机上通过 `KRB5CCNAME=FILE:/tmp/krb5cc_*` 创建的票据缓存，连接票据插件接口：
+  ```sh
+  sudo snap connect bayesian-ssh:kerberos-tickets
+  ```
+  现代 Fedora、RHEL 和 SSSD 默认使用的 KCM 与 KEYRING 票据缓存在严格限制下无法被访问。在此类系统上建议使用原生软件包或安装脚本。
+- Snap 版本中禁用了应用内置更新器，所有更新均由 Snap Store 统一分发。
+
+## 源码编译
+
+从源码构建需要 Git 以及稳定版 Rust 工具链（`cargo`）。如需构建桌面应用，还需安装 Make、Node.js（含 `npm`）以及 GTK 3 和 WebKitGTK 4.1 的开发头文件。
+
+<Steps>
+1. 克隆代码仓库：
+   ```sh
+   git clone https://github.com/abdoufermat5/bayesian-ssh.git
+   cd bayesian-ssh
+   ```
+
+2. 编译并安装命令行工具与桌面应用：
+   ```sh
+   make release && make install
+   ```
+</Steps>
+
+如果只需要构建无图形界面依赖的命令行工具：
+
+```sh
+cargo build --release --locked --package bayesian-ssh
+sudo install -m 755 target/release/bayesian-ssh /usr/local/bin/bayesian-ssh
+sudo ln -sf /usr/local/bin/bayesian-ssh /usr/local/bin/bssh
+```
+
+## Shell 补全
+
+使用 `bssh completions <SHELL>` 生成对应的命令行自动补全脚本：
+
+<Tabs syncKey="shell">
+	<TabItem label="Bash">
+		```sh
+		bssh completions bash > ~/.local/share/bash-completion/completions/bssh
+		```
+	</TabItem>
+	<TabItem label="Zsh">
+		```sh
+		bssh completions zsh > ~/.zfunc/_bssh
+		```
+	</TabItem>
+	<TabItem label="Fish">
+		```sh
+		bssh completions fish > ~/.config/fish/completions/bssh.fish
+		```
+	</TabItem>
+</Tabs>
+
+支持的 Shell：`bash`、`elvish`、`fish`、`powershell` 与 `zsh`。生成补全脚本后，请重启终端或重新加载 Shell 配置文件。
+
+## 更新
+
+更新步骤取决于最初的安装方式：
+
+- **桌面应用内置更新**：GitHub Releases 提供的独立 `.AppImage` 以及 `bayesian-ssh-desktop` 的 `.deb`/`.rpm` 软件包支持在 **Settings** → **Updates** 中自动检查更新并在原地安装。应用更新时会关闭当前打开的会话。
+- **Snap**：更新由 snapd 自动推送，也可以执行 `sudo snap refresh bayesian-ssh` 手动更新。
+- **安装脚本与系统软件包**：重新运行单行安装脚本，或安装新版 `.deb`/`.rpm` 软件包，亦或拉取最新仓库源码后重新执行 `make release && make install`。
+
+## 验证发布版本
+
+所有发布文件与校验和均使用 Sigstore 无密钥工作流签名。GitHub 还会为每个发布资源生成可验证的构建来源证明（attestations）。
+
+有关使用 `cosign` 验证 `SHA256SUMS` 以及使用 `gh attestation verify` 校验构建证明的详细步骤，请参阅[安全参考](/zh-cn/reference/security/)。
+
+## 卸载
+
+`install.sh` 脚本本身不提供专门的卸载参数。要清理安装脚本写入的二进制文件及资源：
+
+```sh
+sudo rm -f /usr/local/bin/bayesian-ssh /usr/local/bin/bssh /usr/local/bin/bayesian-ssh-desktop /usr/local/bin/bayesian-ssh-gui
+sudo rm -f /usr/share/applications/bayesian-ssh-desktop.desktop
+sudo rm -f /usr/share/icons/hicolor/128x128/apps/bayesian-ssh-desktop.png
+```
+
+如果最初是通过 Makefile 从源码安装的，执行：
+
+```sh
+make uninstall
+```
+
+如果是通过系统的包管理器安装的：
+
+<Tabs syncKey="os">
+	<TabItem label="Debian / Ubuntu">
+		```sh
+		sudo apt remove bayesian-ssh
+		```
+	</TabItem>
+	<TabItem label="Fedora / RHEL">
+		```sh
+		sudo dnf remove bayesian-ssh
+		```
+	</TabItem>
+	<TabItem label="Snap">
+		```sh
+		sudo snap remove bayesian-ssh
+		```
+	</TabItem>
+</Tabs>
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="快速开始" description="添加你的第一台主机并完成连接。" href="/zh-cn/start/quick-start/" />
+	<LinkCard title="配置" description="设置默认用户、端口和跳板机。" href="/zh-cn/start/configuration/" />
+</CardGrid>

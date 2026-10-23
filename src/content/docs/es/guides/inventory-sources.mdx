@@ -1,0 +1,223 @@
+---
+title: Fuentes de inventario
+description: Conecta proveedores cloud dinámicos, inventarios de Ansible y configuraciones SSH para sincronizar tus hosts automáticamente.
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Las fuentes de inventario permiten a Bayesian SSH descubrir y sincronizar hosts desde proveedores de infraestructura externos, como AWS, Google Cloud, Tailscale, Ansible y archivos de configuración de OpenSSH.
+
+En lugar de añadir manualmente cada servidor, configuras una fuente una sola vez y sincronizas sus hosts cada vez que tu infraestructura cambie.
+
+## Cómo funcionan las fuentes de inventario
+
+1. **Registrar**: Añade la configuración de una fuente mediante `bssh source add`. Registrar una fuente almacena los parámetros de conexión, pero no importa los hosts de inmediato.
+2. **Sincronizar**: Ejecuta `bssh source sync` para consultar las instancias remotas, asignarlas a conexiones de Bayesian SSH y aplicar los cambios.
+3. **Rastrear**: Cada host sincronizado recibe un identificador `external_id` (como un ID de instancia EC2 o un ID de nodo de Tailscale). Cuando cambian las direcciones IP o los atributos de una instancia, `bssh` actualiza la conexión existente en lugar de crear un duplicado.
+
+## Tipos de fuentes admitidos
+
+Bayesian SSH admite cinco tipos de fuentes de inventario estándar, además de las bóvedas de equipo:
+
+| Tipo | Argumento del comando | Requisitos | Descripción |
+| --- | --- | --- | --- |
+| OpenSSH | `ssh-config` | Ruta del archivo de configuración | Lee hosts desde un archivo de configuración de OpenSSH. |
+| Ansible | `ansible` | `ansible-inventory` | Consulta un archivo de inventario de Ansible o un script de inventario dinámico. |
+| Tailscale | `tailscale` | CLI `tailscale` | Descubre dispositivos en tu red privada de Tailscale. |
+| AWS EC2 | `aws` | CLI `aws` y credenciales | Analiza instancias EC2 en ejecución en una o varias regiones. |
+| Google Cloud | `gcp` | CLI `gcloud` y autenticación | Descubre instancias de Compute Engine activas en un proyecto. |
+| Bóveda de equipo | `team` | Cuenta de bssh Teams | Sincronizada a través de [bssh Teams](/es/teams/overview/) mediante `bssh teams sync`. |
+
+### Configuración de OpenSSH
+
+Para sincronizar hosts continuamente desde un archivo de configuración de OpenSSH:
+
+```sh
+# Sincronizar desde el archivo por defecto ~/.ssh/config
+bssh source add local-config ssh-config
+
+# Sincronizar desde una ruta personalizada
+bssh source add office-hosts ssh-config --path ~/.ssh/config.d/office
+```
+
+### Inventario de Ansible
+
+El tipo de fuente `ansible` ejecuta `ansible-inventory -i <file> --list` para procesar variables de hosts y pertenencia a grupos. Los grupos de Ansible se convierten automáticamente en etiquetas de Bayesian SSH:
+
+```sh
+bssh source add prod-infra ansible --inventory ~/infra/hosts.ini
+```
+
+### Tailscale
+
+El tipo de fuente `tailscale` ejecuta `tailscale status --json` para descubrir máquinas activas en tu red privada:
+
+```sh
+# Descubrir nodos de Tailscale activos
+bssh source add my-tailnet tailscale
+
+# Incluir también nodos desconectados
+bssh source add my-tailnet tailscale --include-offline
+```
+
+### Amazon Web Services (AWS EC2)
+
+El tipo de fuente `aws` llama a `aws ec2 describe-instances` para descubrir instancias EC2 en ejecución. Debes indicar al menos una región con `--region`:
+
+```sh
+bssh source add aws-prod aws \
+  --region us-east-1,eu-west-1 \
+  --profile production \
+  --address private \
+  --user ubuntu \
+  --bastion bastion.example.com
+```
+
+- `--region <REGION>`: Una o más regiones de AWS (separadas por comas o repetidas).
+- `--profile <PROFILE>`: Nombre opcional del perfil de credenciales de la CLI de AWS.
+- `--address <private|public|dns>`: Tipo de dirección de red para conectar (predeterminado: `private`).
+- `--user <USER>`: Usuario SSH predeterminado para las instancias descubiertas.
+- `--bastion <HOST>` y `--bastion-user <USER>`: Host de salto opcional aplicado a todas las instancias descubiertas.
+
+### Google Cloud Platform (GCP)
+
+El tipo de fuente `gcp` llama a `gcloud compute instances list` para descubrir instancias activas en un proyecto específico:
+
+```sh
+bssh source add gcp-prod gcp \
+  --project my-gcp-project-123 \
+  --address internal \
+  --user debian
+```
+
+- `--project <PROJECT>`: ID del proyecto de GCP (obligatorio).
+- `--address <internal|external>`: Tipo de dirección de red para conectar (predeterminado: `internal`).
+- `--user <USER>`: Usuario SSH predeterminado para las instancias descubiertas.
+- `--bastion <HOST>` y `--bastion-user <USER>`: Host de salto opcional aplicado a todas las instancias descubiertas.
+
+### Bóvedas de equipo
+
+Cuando creas o te unes a un equipo en bssh Teams, se registra automáticamente una fuente de tipo `team`. Las bóvedas de equipo están cifradas de extremo a extremo y se sincronizan mediante `bssh teams sync` en lugar de `bssh source sync`. Para más detalles, consulta la [descripción general de bssh Teams](/es/teams/overview/).
+
+## Listar fuentes configuradas
+
+Ejecuta `bssh source list` para ver todas las fuentes de inventario configuradas, el total de hosts, la cantidad de hosts obsoletos y la fecha de última sincronización:
+
+```sh
+bssh source list
+```
+
+```text
+📦 Inventory sources
+NAME                 KIND          HOSTS STALE  LAST SYNC        ERROR
+aws-prod             aws              42     2  15m ago          
+my-tailnet           tailscale        18     0  2h ago           
+prod-infra           ansible          25     1  1d ago           
+team-core            team             12     0  10m ago          
+```
+
+## Sincronizar fuentes
+
+Ejecuta `bssh source sync` seguido del nombre de la fuente para conciliar sus hosts remotos con tu base de datos local:
+
+```sh
+bssh source sync aws-prod
+```
+
+```text
+Syncing 'aws-prod' (aws):
++ added web-api-1 (10.0.4.12)
++ added web-api-2 (10.0.4.13)
+~ updated worker-01 (host 10.0.4.50 → 10.0.4.55)
+- stale legacy-cache
+Added 2, updated 1, marked 1 stale, restored 0.
+```
+
+### Previsualizar cambios sin escribir
+
+Para comprobar los cambios que realizaría una sincronización sin alterar tu base de datos, añade `--dry-run`:
+
+```sh
+bssh source sync aws-prod --dry-run
+```
+
+### Sincronizar todas las fuentes
+
+Para actualizar secuencialmente todas las fuentes configuradas:
+
+```sh
+bssh source sync --all
+```
+
+Si una fuente experimenta un error de red o de autenticación, `bssh` continúa sincronizando las fuentes restantes y detalla todos los fallos al final.
+
+## Cómo se muestran los hosts sincronizados
+
+Los hosts sincronizados se integran completamente en los comandos habituales de Bayesian SSH:
+
+- **Vista de lista**: En `bssh list`, los hosts sincronizados muestran el nombre de su fuente entre corchetes (por ejemplo `[aws-prod]`) en la columna INFO.
+- **Vista detallada**: Al ejecutar `bssh list -d` se visualiza el nombre de la fuente en la línea `│ source:`.
+- **Nombres estables**: En el primer descubrimiento, `bssh` asigna un nombre único. Si una conexión existente comparte dicho nombre, el nuevo host recibe un sufijo `@source` (por ejemplo `web-01@aws-prod`). Los nombres se asignan una sola vez y se conservan en sincronizaciones futuras.
+- **Actualizaciones de IP**: Como los hosts se identifican mediante su `external_id` inmutable, cualquier cambio de dirección IP en AWS o GCP actualiza la conexión existente en lugar de crear un duplicado.
+
+## Hosts obsoletos y purga
+
+Cuando una instancia se detiene, se elimina o se da de baja en tu cuenta cloud, no se borra de inmediato en Bayesian SSH.
+
+1. **Marcado como obsoleto**: En la siguiente sincronización, el host ausente se marca como obsoleto (`stale`) y se le asigna la marca de tiempo `stale_since`.
+2. **Identificación**: En `bssh list`, el host aparece con `(stale)` junto a su nombre (por ejemplo `legacy-cache (stale)`).
+3. **Aviso al conectar**: Aún puedes conectarte a un host obsoleto. Al ejecutar `bssh connect legacy-cache`, `bssh` muestra una advertencia antes de establecer la conexión:
+   ```text
+   ⚠️  not seen in the last sync of aws-prod (since 2026-10-15)
+   ```
+4. **Restauración automática**: Si la instancia vuelve a estar activa en una sincronización posterior, `bssh` retira automáticamente el estado obsoleto (`↺ back legacy-cache`).
+
+### Purgar hosts obsoletos vencidos
+
+Para eliminar definitivamente los hosts que hayan permanecido obsoletos durante un periodo prolongado, utiliza `--prune`:
+
+```sh
+# Purgar hosts obsoletos por más de 30 días (umbral predeterminado)
+bssh source sync aws-prod --prune
+
+# Umbral personalizado (por ejemplo 14 días)
+bssh source sync aws-prod --prune --prune-after 14
+```
+
+## Conexiones de solo lectura frente a editables
+
+- **Prevalencia del proveedor**: Las conexiones sincronizadas están gestionadas por su fuente de inventario externa. Aunque puedes modificar una conexión con `bssh edit`, cualquier sincronización posterior con `bssh source sync` sobrescribirá los campos controlados por el proveedor (dirección del host, puerto, usuario, clave y etiquetas) con los datos remotos.
+- **Personalizar un host**: Para crear una configuración persistente y personalizada a partir de un host sincronizado, clónalo mediante `bssh duplicate`:
+  ```sh
+  bssh duplicate web-api-1 my-custom-api
+  ```
+  La conexión duplicada pasa a ser un host local independiente sin vinculación a la fuente y no se sobrescribirá en sincronizaciones posteriores.
+
+## Eliminar una fuente de inventario
+
+Para eliminar una fuente de inventario configurada, utiliza `bssh source remove`:
+
+```sh
+bssh source remove aws-prod
+```
+
+```text
+⚠️  WARNING: Remove source 'aws-prod' (aws), 42 host connection(s) will be detached.
+Remove source 'aws-prod'? [y/N] y
+✅ Source 'aws-prod' removed.
+```
+
+De forma predeterminada, eliminar una fuente **desvincula** sus conexiones. Estas permanecen en tu base de datos como hosts locales estándar y completamente editables, mientras que su enlace de fuente y su estado obsoleto se eliminan.
+
+Para borrar tanto la configuración de la fuente como todas las conexiones descubiertas mediante ella, añade `--delete-hosts`:
+
+```sh
+bssh source remove aws-prod --delete-hosts -f
+```
+
+## Próximos pasos
+
+<CardGrid>
+	<LinkCard title="Conexiones guardadas" description="Conéctate a tus servidores y administra tus hosts guardados." href="/es/guides/connections/" />
+	<LinkCard title="Descripción de bssh Teams" description="Comparte bóvedas de conexiones cifradas con tu equipo." href="/es/teams/overview/" />
+</CardGrid>

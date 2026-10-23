@@ -1,0 +1,82 @@
+---
+title: Sécurité et modèle de confiance
+description: Périmètre de confiance, atténuation des menaces, primitives cryptographiques et gestion des clés dans bssh Teams.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+bssh Teams repose sur une architecture sans connaissance (zero-knowledge) : le serveur de synchronisation n'est pas approuvé pour la confidentialité, mais il est approuvé pour la disponibilité et l'ordonnancement des événements. Les informations sensibles relatives aux hôtes sont chiffrées sur vos appareils avant de quitter votre machine.
+
+Toute la cryptographie côté client et les gestionnaires de protocole réseau sont open source dans le dépôt public, permettant une inspection indépendante.
+
+## Périmètre de confiance
+
+Le serveur de synchronisation n'a jamais accès aux clés cryptographiques nécessaires pour déchiffrer votre coffre.
+
+| Le serveur peut voir | Le serveur ne peut pas voir |
+| --- | --- |
+| L'ID de l'équipe, les adresses e-mail des membres, les rôles et le nombre de sièges | Les noms d'hôte, adresses IP, noms d'utilisateur, ports, tags et notes |
+| Les identifiants opaques d'entrées, numéros de révision et tailles de texte chiffré | Les mots de passe, clés privées SSH et configurations de routage par bastion |
+| Les événements d'audit : *le membre M a utilisé l'entrée E à l'instant T depuis l'IP A* | La clé d'équipe ou les clés privées d'appareil des membres |
+
+<Aside type="note">
+La visibilité de ces métadonnées par le serveur est intentionnelle : elle permet au serveur d'indexer les révisions, d'ordonner les flux de synchronisation et de répondre aux requêtes d'audit administratives sans jamais examiner le contenu en clair.
+</Aside>
+
+## Modèle de menaces
+
+Le modèle de sécurité protège les données d'équipe contre les compromissions d'infrastructure, les accès non autorisés et les participants malveillants :
+
+| Menace | Atténuation |
+| --- | --- |
+| **Compromission de la base ou du stockage du serveur** | Les données sensibles sont chiffrées sur le client avant transmission. Un attaquant qui accéderait au stockage du serveur n'obtiendrait que du texte chiffré et des métadonnées. |
+| **Opérateur de serveur malveillant ou compromis** | Les clients épinglent les clés publiques des administrateurs d'équipe. Le serveur ne peut pas injecter un appareil membre non autorisé sans la signature cryptographique d'un administrateur. |
+| **Membre révoqué** | Le retrait d'un membre entraîne une rotation immédiate de la clé d'équipe. Les écritures ultérieures sont chiffrées avec la nouvelle clé. (Voir la limitation ci-dessous relative aux copies en cache.) |
+| **Vol d'ordinateur portable ou d'appareil** | La base locale et les clés Teams de l'appareil sont chiffrées avec Argon2id et AES-256-GCM. Un administrateur peut révoquer l'appareil compromis à distance. |
+| **Interception réseau (homme du milieu)** | Le transport est strictement restreint à TLS 1.3, combiné au chiffrement de bout en bout des données utiles. Les connexions HTTP en clair sont rejetées. |
+| **Altération du journal d'audit** | Chaque événement est signé avec la clé d'appareil Ed25519 du membre et chaîné aux événements précédents via des empreintes SHA-256. Les outils de vérification détectent les événements falsifiés, réordonnés ou supprimés. |
+| **Client ou membre malveillant** | Le serveur valide les permissions de rôle, la portée de l'équipe et les limites de débit sur toutes les écritures. Les clients vérifient les signatures sur chaque charge utile récupérée. |
+
+## Cryptographie
+
+bssh Teams s'appuie sur des primitives cryptographiques éprouvées et standards :
+
+- **Chiffrement symétrique** : AES-256-GCM chiffre les entrées de coffre. Chaque charge utile utilise un nonce aléatoire unique de 96 bits et un octet de version explicite.
+- **Dérivation de clés** : Argon2id protège les phrases secrètes locales de l'appareil contre les attaques par force brute. HKDF-SHA256 dérive les sous-clés opérationnelles.
+- **Échange et enveloppement de clés** : L'accord de clés X25519 enveloppe la clé d'équipe partagée individuellement pour chaque appareil membre approuvé.
+- **Signatures numériques** : Des paires de clés Ed25519 signent les modifications de composition d'équipe, les approbations d'appareils et les événements du journal d'audit.
+- **Enregistrements de session** : La sortie du terminal et les enregistrements de session restent entièrement sur votre machine locale. Ils ne sont jamais téléversés sur le serveur de synchronisation ni partagés avec l'équipe.
+- **Protection en mémoire** : Les clés cryptographiques sensibles en mémoire sont automatiquement effacées lorsqu'elles sont libérées (zeroization).
+
+## Vérification des appareils et empreintes hors bande
+
+Pour garantir que le serveur de synchronisation ne puisse pas injecter d'appareil imposteur dans votre équipe, l'approbation d'un appareil nécessite une vérification hors bande :
+
+1. Lorsqu'un utilisateur rejoint une équipe, son appareil calcule une empreinte publique (`SHA256:...`).
+2. L'utilisateur communique cette empreinte à un administrateur d'équipe via un canal indépendant et sécurisé (messagerie chiffrée, appel téléphonique ou en personne).
+3. L'administrateur approuve l'appareil (`bssh teams grant`) uniquement après avoir vérifié que l'empreinte correspond exactement à celle reçue sur le canal de confiance.
+4. Une fois vérifié, l'appareil de l'administrateur enveloppe la clé d'équipe avec la clé publique du nouvel appareil.
+
+## Rotation des clés et limites
+
+Lorsqu'un administrateur retire un membre (`bssh teams remove`), bssh effectue une rotation de la clé d'équipe :
+
+- Une nouvelle clé d'équipe est générée et enveloppée uniquement pour les appareils approuvés restants.
+- Toutes les entrées de connexion nouvelles ou modifiées sont chiffrées à l'aide de la nouvelle clé.
+- L'appareil du membre retiré ne peut plus récupérer de mises à jour ni déchiffrer les nouvelles entrées.
+
+<Aside type="caution">
+**Copies en cache** : La rotation de clé empêche l'accès aux mises à jour futures, mais un membre révoqué conserve les données déjà synchronisées sur sa machine locale avant son départ. Si un ancien collègue ne doit plus avoir accès à certains serveurs, renouvelez les identifiants sur ces serveurs (mots de passe, clés autorisées SSH et jetons d'accès).
+</Aside>
+
+## Règles de récupération
+
+bssh Teams ne comporte délibérément **aucun mécanisme de récupération côté serveur** :
+
+- Il n'existe aucune porte dérobée administrative, clé principale de secours ni procédure de réinitialisation sur le serveur.
+- Si un membre oublie sa phrase secrète locale ou perd son appareil, un administrateur peut lui renvoyer une invitation, ce qui enveloppe la clé d'équipe pour son nouvel appareil.
+- Si **tous les administrateurs de l'équipe perdent leurs appareils et phrases secrètes**, le coffre d'équipe chiffré est irrémédiablement perdu. Maintenez toujours au moins deux administrateurs avec des appareils distincts pour chaque équipe.
+
+## Trajet réseau
+
+Le serveur de synchronisation ne se trouve **jamais sur le trajet de connexion SSH**. Les sessions SSH s'établissent directement depuis votre machine locale vers le serveur cible, ou via vos hôtes de rebond configurés. Aucun trafic SSH, identifiant ou octet du shell interactif ne transite par le serveur de synchronisation.

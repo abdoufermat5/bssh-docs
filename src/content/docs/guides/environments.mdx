@@ -1,0 +1,136 @@
+---
+title: Environments
+description: Isolate connections, history, and settings into independent profiles.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Environments allow you to manage multiple isolated profiles within `bssh`. Each environment maintains its own independent database of connections, tags, aliases, session history, and default configuration.
+
+## What is isolated
+
+Every environment is stored in its own directory under `~/.config/bayesian-ssh/environments/<name>/`:
+
+- **`history.db`**: An independent SQLite database containing:
+  - Saved connections and credentials
+  - Tags and groups
+  - Short aliases
+  - Past session history and durations
+  - Configured inventory sources
+- **`config.json`**: Profile-specific settings, including:
+  - Default SSH username and port
+  - Default bastion and bastion username
+  - Search mode (`bayesian` or `fuzzy`)
+  - Session recording settings
+  - Context prediction settings
+
+The built-in initial environment is named `default`. Your currently active environment is tracked in `~/.config/bayesian-ssh/active_env`.
+
+## Manage environments
+
+### List environments
+
+Run `bssh env list` to view all available environments. The currently active profile is marked with an asterisk:
+
+```sh
+bssh env list
+```
+
+```text
+Environments:
+    client-a
+  * default (active)
+```
+
+### Create an environment
+
+Run `bssh env create` with a unique name to initialize a new profile:
+
+```sh
+bssh env create client-a
+```
+
+```text
+✅ Created new environment 'client-a'
+To start using it, run: bayesian-ssh env use client-a
+```
+
+Creating an environment generates a clean `history.db` database and a fresh `config.json` pre-populated with standard defaults.
+
+### Switch environments
+
+Run `bssh env use` to switch your active profile:
+
+```sh
+bssh env use client-a
+```
+
+```text
+✅ Now using environment 'client-a'
+```
+
+Once switched, all subsequent `bssh` commands operate on the selected environment's database until changed again.
+
+### Remove an environment
+
+Run `bssh env remove` to delete an environment and its stored database:
+
+```sh
+bssh env remove client-a
+```
+
+```text
+🗑️ Removed environment 'client-a'
+```
+
+`bssh` enforces safety constraints when deleting environments:
+- You cannot delete the currently active environment. Switch to another environment first.
+- You cannot delete the built-in `default` environment.
+
+:::caution
+Removing an environment permanently deletes its directory, SQLite database, connections, and session history.
+:::
+
+## Desktop app support
+
+<Tabs syncKey="surface">
+  <TabItem label="Command line">
+    ```sh
+    # Switch profile from the terminal
+    bssh env use client-a
+    ```
+  </TabItem>
+  <TabItem label="Desktop app">
+    In the desktop app, click the profile selector at the top of the sidebar to switch between profiles, or choose **Manage profiles…** to add or remove profiles.
+  </TabItem>
+</Tabs>
+
+## Per-invocation override
+
+To run a single command in another environment without switching your persistent active profile, pass the `--env` flag:
+
+```sh
+# List connections in the client-b environment
+bssh --env client-b list
+
+# Connect to a host stored in client-b
+bssh --env client-b connect db-prod
+
+# Check reachability of hosts in client-b
+bssh --env client-b ping --all
+```
+
+The `--env` flag takes precedence for that execution only. Your active environment remains unchanged.
+
+## Typical workflows
+
+- **Client separation**: Consultants and agencies can maintain dedicated environments for each client (`client-acme`, `client-beta`). Connections, bastion routes, and aliases never mix or appear in another client's search results.
+- **Work and personal**: Keep your personal home lab and hobby VPS instances completely isolated from corporate production infrastructure.
+- **Compliance and audits**: Configure strict session recording and mandatory bastion routes in a `production` environment, while leaving a `sandbox` environment unrestricted.
+
+## Next steps
+
+<CardGrid>
+  <LinkCard title="Connections" description="Save and manage SSH host entries." href="/guides/connections/" />
+  <LinkCard title="Configuration reference" description="Inspect every setting and file path." href="/reference/configuration/" />
+</CardGrid>

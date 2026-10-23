@@ -1,0 +1,249 @@
+---
+title: Connections
+description: Save, list, edit, duplicate, test, and organize your SSH connections.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+A connection stores the hostname, port, username, authentication settings, bastion route, and tags for a remote server. You can manage connections from the command line or using the desktop application.
+
+## Save a connection
+
+Run `bssh add` with a friendly name and the target hostname or IP address:
+
+```sh
+bssh add web-prod web.example.com -u deploy
+```
+
+Specify custom ports, private keys, or Kerberos authentication when adding the host:
+
+```sh
+# Custom port and identity file
+bssh add db01 10.0.1.5 -p 2222 -i ~/.ssh/id_ed25519
+
+# Route through a bastion host with Kerberos
+bssh add internal-api api.internal -b bastion.example.com -B jumpuser -k true
+```
+
+Assign tags using `-t` or `--tags`. Pass multiple flags or separate values with commas:
+
+```sh
+# Repeatable flags
+bssh add staging-app 10.0.2.10 -t staging -t backend
+
+# Comma-separated tags
+bssh add staging-app 10.0.2.10 -t staging,backend
+```
+
+| Flag | Description |
+| --- | --- |
+| `-u, --user <USER>` | SSH username (falls back to config default or `$USER`). |
+| `-p, --port <PORT>` | SSH port (defaults to configured default, usually `22`). |
+| `-i, --key <FILE>` | Path to an SSH private key. |
+| `-b, --bastion <HOST>` | Bastion or jump host to route through. |
+| `-B, --bastion-user <USER>` | Username for the bastion host. |
+| `--no-bastion` | Mark as direct connection (ignores default bastion). |
+| `-k, --kerberos <BOOL>` | Enable Kerberos (`true` or `false`). |
+| `-t, --tags <TAG>` | Tags for grouping and filtering (repeatable or comma-separated). |
+
+<Tabs syncKey="surface">
+  <TabItem label="Command line">
+    ```sh
+    bssh add web-prod web.example.com -u deploy -t prod,web
+    ```
+  </TabItem>
+  <TabItem label="Desktop app">
+    Click **New host** in the toolbar or press <kbd>Ctrl</kbd>+<kbd>N</kbd> (<kbd>Cmd</kbd>+<kbd>N</kbd> on macOS) to open the connection form.
+
+    ![Host list in desktop app](../../../assets/screenshots/app-hosts.png)
+  </TabItem>
+</Tabs>
+
+## List connections
+
+Run `bssh list` to display all saved connections in the active environment. Results are ranked by Bayesian score, placing your most frequently and recently used hosts at the top:
+
+```sh
+bssh list
+```
+
+```text
+🔗 Connections
+══════════════════════════════════════════════════════════════════════
+#   NAME                 HOST                      PORT     INFO
+──────────────────────────────────────────────────────────────────────
+1   web-prod             deploy@web.example.com    22       [prod,web]
+2   db01                 postgres@10.0.1.5         2222     [db,prod]
+──────────────────────────────────────────────────────────────────────
+Total: 2 connection(s)
+```
+
+Filter connections by tag or recency, or display full configuration details:
+
+```sh
+# Show only connections with the prod tag
+bssh list -t prod
+
+# Show only recently used connections
+bssh list --recent
+
+# Show full connection details including ID, bastion, and keys
+bssh list --detailed
+```
+
+## View connection details
+
+Run `bssh show` to inspect the full configuration of a saved connection. Pass a connection name, alias, or ID:
+
+```sh
+bssh show web-prod
+```
+
+```text
+🔗 Connection Details: web-prod
+
+  ID:       9a699d0b-7607-4ee2-8ebc-1f00596ed6d1
+  Host:     web.example.com:22
+  User:     deploy
+  Kerberos: Disabled
+  Created:  2026-10-23 08:39:36 UTC
+  Tags:     prod, web
+
+  SSH Command: ssh -p 22 deploy@web.example.com
+```
+
+The output displays all stored fields and the exact `ssh` command `bssh` constructs when establishing the session.
+
+## Edit a connection
+
+Run `bssh edit` to modify existing settings. Only the flags you pass are updated; all other fields remain unchanged:
+
+```sh
+# Update SSH username and port
+bssh edit web-prod --user deployer --port 2200
+
+# Change the bastion host
+bssh edit db01 --bastion jump.example.com
+
+# Remove a bastion and switch to a direct connection
+bssh edit db01 --no-bastion
+```
+
+Update tags using `--add-tags` and `--remove-tags`:
+
+```sh
+# Add canary and remove legacy tags
+bssh edit staging --add-tags canary,api --remove-tags legacy
+```
+
+| Option | Description |
+| --- | --- |
+| `--name <NAME>` | Rename the connection. |
+| `--host <HOST>` | Change hostname or IP address. |
+| `--user <USER>` | Change SSH username. |
+| `--port <PORT>` | Change SSH port. |
+| `--key <FILE>` | Set or change the SSH private key path. |
+| `--bastion <HOST>` | Set or change the bastion host. |
+| `--bastion-user <USER>` | Change the bastion username. |
+| `--no-bastion` | Remove bastion and route directly. |
+| `--kerberos <BOOL>` | Enable or disable Kerberos (`true` or `false`). |
+| `--add-tags <TAG>` | Add tags (repeatable or comma-separated). |
+| `--remove-tags <TAG>` | Remove tags (repeatable or comma-separated). |
+
+## Duplicate a connection
+
+Run `bssh duplicate` to create a copy of an existing connection under a new name. All attributes—including port, user, keys, bastions, and tags—are preserved:
+
+```sh
+bssh duplicate web-prod web-staging
+```
+
+After duplicating, use `bssh edit` to adjust the hostname or environment tags:
+
+```sh
+bssh edit web-staging --host staging.example.com --add-tags staging --remove-tags prod
+```
+
+## Test reachability
+
+Run `bssh ping` to test SSH connectivity without opening an interactive session. `bssh` connects over TCP and performs an SSH handshake in batch mode:
+
+```sh
+# Test a single host
+bssh ping web-prod
+
+# Test all saved connections in parallel
+bssh ping --all
+
+# Test hosts matching a specific tag
+bssh ping -g prod -t 10
+```
+
+`bssh ping` respects jump hosts and interactive bastions configured on each host. The `-t` or `--timeout` option sets the connection timeout in seconds (default: `5`).
+
+## Group connections with tags
+
+Tags allow you to organize hosts by role, region, or environment. Run `bssh groups` to list all existing tag groups and the number of connections in each:
+
+```sh
+bssh groups
+```
+
+```text
+Available groups:
+  - prod (5 connections)
+  - staging (2 connections)
+  - web (3 connections)
+
+Use `bssh groups <name>` to see connections in a group.
+```
+
+To list all connections that belong to a specific group, provide the group name:
+
+```sh
+bssh groups prod
+```
+
+```text
+Connections in group 'prod':
+  - web-prod (deploy@web.example.com)
+  - db-prod (postgres@db.example.com)
+```
+
+## Remove connections
+
+Run `bssh remove` to delete a saved connection. Pass the connection name, alias, or ID:
+
+```sh
+bssh remove web-prod
+```
+
+`bssh` displays the host details and asks for confirmation. Pass `-f` or `--force` to skip the prompt:
+
+```sh
+bssh remove web-prod -f
+```
+
+You can remove multiple connections at once by tag:
+
+```sh
+# Delete all connections tagged staging
+bssh remove -t staging
+```
+
+`bssh` lists all matching connections and the total count before requesting confirmation. To delete immediately without prompting, add `-f`:
+
+```sh
+bssh remove -t staging -f
+```
+
+:::caution
+Removing a connection permanently deletes its associated session history in the active environment.
+:::
+
+## Next steps
+
+<CardGrid>
+  <LinkCard title="Search and ranking" description="Learn how fuzzy matching and Bayesian scoring rank your hosts." href="/guides/search-and-ranking/" />
+  <LinkCard title="Aliases" description="Create short nicknames for frequently used connections." href="/guides/aliases/" />
+</CardGrid>

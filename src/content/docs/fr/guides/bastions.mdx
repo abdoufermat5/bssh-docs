@@ -1,0 +1,148 @@
+---
+title: Hôtes bastions
+description: Acheminez vos connexions SSH via des hôtes de rebond et des bastions interactifs.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Les hôtes bastions (ou hôtes de rebond) vous permettent d'atteindre des serveurs situés derrière des pare-feux ou des réseaux privés isolés. Bayesian SSH prend en charge aussi bien les hôtes de rebond classiques utilisant la redirection de port TCP que les bastions interactifs nécessitant des protocoles de shell de rebond dédiés.
+
+## Configurer un bastion par défaut
+
+Lorsque la majorité de vos serveurs se trouvent derrière la même passerelle, configurez un bastion par défaut dans vos paramètres globaux :
+
+```sh
+bssh config --default-bastion bastion.example.com --default-bastion-user jump
+```
+
+Les nouvelles connexions ajoutées héritent automatiquement de ces paramètres :
+
+- `--default-bastion <HOST>` : Hôte passerelle appliqué aux nouvelles connexions.
+- `--default-bastion-user <USER>` : Nom d'utilisateur pour l'hôte passerelle.
+
+Affichez votre configuration actuelle en exécutant `bssh config` sans argument :
+
+```sh
+bssh config
+```
+
+```text
+Current settings:
+  Default user: ana
+  Default bastion: bastion.example.com
+  Default bastion user: jump
+  Default port: 22
+  Use Kerberos by default: No
+```
+
+Pour supprimer le bastion par défaut afin que les futures connexions soient directes par défaut, exécutez :
+
+```sh
+bssh config --clear-bastion
+```
+
+## Définir un bastion sur une connexion
+
+Vous pouvez configurer un bastion pour un hôte spécifique lors de l'ajout ou de la modification d'une connexion.
+
+<Tabs syncKey="surface">
+<TabItem label="Ligne de commande">
+
+Transmettez `-b` (ou `--bastion`) et facultativement `-B` (ou `--bastion-user`) lors de l'enregistrement d'un hôte :
+
+```sh
+bssh add db-prod 10.0.4.12 -b bastion.example.com -B jump
+```
+
+Si vous omettez `-B`, le nom d'utilisateur du bastion correspond par défaut à l'utilisateur de la connexion.
+
+Pour modifier ou ajouter un bastion sur une connexion existante :
+
+```sh
+bssh edit db-prod --bastion bastion.example.com --bastion-user jump
+```
+
+</TabItem>
+<TabItem label="Application de bureau">
+
+Dans l'application de bureau, ouvrez la fenêtre de connexion en cliquant sur **New host** ou en modifiant un hôte existant.
+
+Remplissez le champ **Jump host** avec l'adresse du bastion (telle que `bastion.example.com`) et le champ **Jump user** si l'identifiant du bastion diffère de celui de l'hôte. Les hôtes enregistrés acheminés via un bastion affichent un badge **Jump** dans la liste des hôtes.
+
+</TabItem>
+</Tabs>
+
+## Se connecter directement sans bastion
+
+Pour contourner tout bastion configuré :
+
+- **Lors de l'ajout d'un hôte** : Transmettez `--no-bastion` pour empêcher l'assignation du bastion par défaut global :
+  ```sh
+  bssh add direct-srv 192.168.1.50 --no-bastion
+  ```
+- **Lors de la modification d'un hôte** : Supprimez la configuration de bastion existante :
+  ```sh
+  bssh edit db-prod --no-bastion
+  ```
+- **Lors de la connexion** : Contournez le bastion enregistré pour une session unique :
+  ```sh
+  bssh connect db-prod --no-bastion
+  ```
+- **Lors de l'importation** : marquez chaque hôte importé comme connexion directe, pour qu'aucun n'utilise le bastion par défaut :
+  ```sh
+  bssh import --no-bastion
+  ```
+
+Vous pouvez également remplacer temporairement le bastion pour une seule session de connexion :
+
+```sh
+bssh connect db-prod -b temp-bastion.example.com -B jump
+```
+
+## Comment la route est choisie
+
+Lorsque vous initiez une connexion, `bssh` résout la route selon la hiérarchie suivante :
+
+1. **Options de session** : Les options transmises à `bssh connect` en ligne de commande (`-b`, `-B`, `--no-bastion`) prévalent sur les paramètres enregistrés.
+2. **Paramètres de connexion enregistrés** : Les valeurs stockées dans la connexion (`bastion` et `bastion_user`).
+3. **Valeurs par défaut globales** : Les valeurs `default_bastion` et `default_bastion_user` définies via `bssh config` sont appliquées lors de l'ajout de nouvelles connexions, sauf si `--no-bastion` ou un bastion explicite est spécifié.
+
+Une fois la route résolue, `bssh` choisit le mécanisme de transport :
+
+- **Connexion directe** : Lorsqu'aucun bastion n'est configuré et que Kerberos est désactivé, `bssh` se connecte directement avec son transport SSH Rust natif (`russh`).
+- **Hôte de rebond classique** : Lorsqu'un bastion est configuré et que Kerberos est désactivé (`use_kerberos: false`), `bssh` délègue à un sous-processus OpenSSH utilisant `ProxyCommand` (`ssh -W %h:%p`). Cela achemine le trafic TCP à travers le bastion tout en appliquant vos règles de vérification de clés d'hôte sur les deux sauts.
+- **Bastion interactif** : Lorsqu'un bastion et Kerberos sont tous deux configurés (`use_kerberos: true`), `bssh` applique le protocole de bastion interactif.
+
+## Bastions interactifs
+
+Certaines passerelles de sécurité n'autorisent pas le transfert TCP (`-W` ou `-J`). Elles fonctionnent comme des passerelles applicatives (comme « The Bastion » d'OVH exécutant `--osh`). Les utilisateurs s'authentifient auprès du bastion avec Kerberos, et le bastion ouvre un shell interactif recevant `target_user@target_host` en argument.
+
+Bayesian SSH identifie un bastion interactif dès qu'une connexion possède à la fois un bastion configuré et Kerberos activé :
+
+```sh
+bssh add secure-db 10.0.8.20 -b bastion.example.com -B jump -k true
+```
+
+### Sessions de shell interactives
+
+Lors d'une connexion interactive, `bssh` se connecte au port 22 du bastion et transmet la cible de destination en tant qu'argument de commande distante :
+
+```sh
+ssh -p 22 -- jump@bastion.example.com ana@10.0.8.20
+```
+
+La passerelle authentifie votre ticket Kerberos et vous place dans la session de l'hôte cible.
+
+### Commandes à distance et transferts de fichiers
+
+Comme les bastions interactifs refusent le relais standard d'arguments OpenSSH et le transfert de sous-systèmes :
+
+- **Exécution de commandes** : Pour exécuter des commandes non interactives ou lister des répertoires à travers un bastion interactif, `bssh` gère la communication PTY à l'aide de marqueurs de sortie pour séparer la sortie de la commande des bannières de connexion de la passerelle.
+- **Transferts de fichiers** : Les bastions interactifs bloquent les canaux du sous-système SFTP standard. Lors de l'envoi ou du téléchargement de fichiers, `bssh` détecte automatiquement la passerelle interactive et bascule vers SCP. Pour les passerelles de type OVH, `bssh` génère automatiquement un script wrapper dans `~/.local/share/bayesian-ssh/scp-wrapper.sh` qui traduit les requêtes SCP vers le protocole `--osh scp` de la passerelle.
+
+## Prochaines étapes
+
+<CardGrid>
+	<LinkCard title="Authentification" description="Clés SSH, transmission d'agent, Kerberos et vérification des clés d'hôte." href="/fr/guides/authentication/" />
+	<LinkCard title="Tunnels" description="Redirection de port et proxys dynamiques SOCKS5." href="/fr/guides/tunnels/" />
+</CardGrid>

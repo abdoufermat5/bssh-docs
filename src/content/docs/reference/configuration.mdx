@@ -1,0 +1,195 @@
+---
+title: Configuration reference
+description: Every bssh setting, its default, and where bssh keeps its configuration, database, recordings and desktop preferences.
+---
+
+`bssh` keeps everything on your machine. Settings are JSON files, the connections live in a SQLite database, and each environment has its own copy of both. This page lists every file, every setting and every environment variable the CLI reads.
+
+## Where bssh stores its data
+
+The configuration root is `~/.config/bayesian-ssh/`, or `$XDG_CONFIG_HOME/bayesian-ssh/` when that variable is set.
+
+Inside it:
+
+```text
+~/.config/bayesian-ssh/
+  active_env
+  desktop_settings.json
+  environments/
+    default/
+      config.json
+      history.db
+      backups/
+      recordings/
+    staging/
+      config.json
+      history.db
+      backups/
+      recordings/
+```
+
+| Path | Contents |
+| --- | --- |
+| `active_env` | Name of the active environment, as plain text. Absent or invalid means `default`. |
+| `desktop_settings.json` | Preferences of the desktop app (theme, terminal, SFTP). The CLI does not read it. |
+| `environments/<name>/config.json` | Settings for that environment. |
+| `environments/<name>/history.db` | SQLite database: connections, tags, aliases, session history, inventory sources, the recording index and Teams state. |
+| `environments/<name>/recordings/` | Session recordings, one `.cast` file per session. |
+| `environments/<name>/backups/` | Snapshots written by `bssh backup`, plus the safety copy `bssh restore` takes before overwriting the database. |
+
+Directories are created with mode `0700` and files with `0600`. `bssh audit --fix` repairs permissions that have become too open.
+
+:::note
+Older versions kept `config.json` and `history.db` directly in the configuration root. When `environments/default/` does not exist yet, `bssh` moves them into it.
+:::
+
+## Environments
+
+An environment is a complete, separate set of connections, history and settings. `bssh env` manages them:
+
+| Command | Effect |
+| --- | --- |
+| `bssh env list` | List every environment and mark the active one. |
+| `bssh env use <NAME>` | Make an environment active. |
+| `bssh env create <NAME>` | Create an empty environment with its own database. |
+| `bssh env remove <NAME>` | Delete an environment and all its stored connections. |
+
+The active environment is stored in `active_env`. To use another environment for a single command without switching, pass the global `--env` option:
+
+```sh
+bssh --env staging list
+bssh --env staging connect db01
+```
+
+Environment names are limited to 64 characters. They cannot contain `/`, `\`, `:`, control characters, or start with `.`, and they cannot have leading or trailing spaces.
+
+## Settings
+
+Each environment's `config.json` holds its settings. The file is JSON, pretty-printed, rewritten atomically, and created with defaults the first time the environment is used. `bssh config` updates the settings that have a flag; the others are edited in the file.
+
+```json
+{
+  "database_path": "/home/ana/.config/bayesian-ssh/environments/default/history.db",
+  "default_user": "ana",
+  "default_bastion": null,
+  "default_bastion_user": null,
+  "default_port": 22,
+  "use_kerberos_by_default": false,
+  "ssh_config_path": "/home/ana/.ssh/config",
+  "log_level": "info",
+  "auto_save_history": true,
+  "max_history_size": 1000,
+  "search_mode": "bayesian",
+  "transport": {
+    "force_subprocess": false,
+    "strict_host_key_checking": "accept-new"
+  },
+  "auth": {
+    "identity_files": [],
+    "use_agent": true,
+    "agent_socket": null
+  },
+  "recording": {
+    "enabled": false,
+    "tags": [],
+    "max_bytes_per_session": 52428800,
+    "retention_days": 90
+  },
+  "prediction": {
+    "enabled": true,
+    "capture_cwd": true,
+    "window_days": 180
+  }
+}
+```
+
+| Setting | Type | Default | Set with | Meaning |
+| --- | --- | --- | --- | --- |
+| `database_path` | path | `<environment dir>/history.db` | — | Database for this environment. A relative path, or one outside the environment directory, is replaced by `<environment dir>/history.db` when the file is loaded. |
+| `default_user` | string | your OS username | `--default-user` | SSH username for new connections. |
+| `default_bastion` | string or `null` | `null` | `--default-bastion`, `--clear-bastion` | Bastion applied to new connections. |
+| `default_bastion_user` | string or `null` | `null` | `--default-bastion-user` | Username on the default bastion. |
+| `default_port` | number | `22` | `--default-port` | SSH port for new connections. |
+| `use_kerberos_by_default` | boolean | `false` | `--use-kerberos` | Enable Kerberos (GSSAPI) for new connections. |
+| `ssh_config_path` | path or `null` | `~/.ssh/config` | — | File `bssh import` reads when `--file` is omitted. The desktop app can change it. |
+| `log_level` | string | `"info"` | `--log-level` | One of `trace`, `debug`, `info`, `warn`, `error`, `off`. |
+| `auto_save_history` | boolean | `true` | — | Whether the desktop app writes a session to history. |
+| `max_history_size` | number | `1000` | — | Default number of history entries the desktop app lists. |
+| `search_mode` | string | `"bayesian"` | `--search-mode` | `bayesian` ranks by usage; `fuzzy` matches substrings only. |
+| `transport.force_subprocess` | boolean | `false` | — | Always use the system `ssh` binary. Kerberos and bastion connections use it anyway. |
+| `transport.strict_host_key_checking` | string | `"accept-new"` | — | `strict`, `accept-new` (trust on first use), or `off`. `bssh audit` reports `off` as a finding. |
+| `auth.identity_files` | list of paths | `[]` | — | Extra private keys to offer, on top of the discovered ones. |
+| `auth.use_agent` | boolean | `true` | — | Use ssh-agent when one is available. |
+| `auth.agent_socket` | path or `null` | `null` | — | Explicit agent socket. `null` means read `SSH_AUTH_SOCK`. |
+| `recording.enabled` | boolean | `false` | `--recording` | Record session output. |
+| `recording.tags` | list of strings | `[]` | `--recording-tags` | Record only connections with one of these tags. Empty records all connections. |
+| `recording.max_bytes_per_session` | number | `52428800` (50 MiB) | — | Stop writing events once a recording reaches this size. |
+| `recording.retention_days` | number | `90` | — | Delete recordings older than this many days. `0` keeps them forever. Pruning runs when a session ends and with `bssh close --cleanup`. |
+| `prediction.enabled` | boolean | `true` | `--prediction` | Use context (repository, hour, previous connection) in ranking. |
+| `prediction.capture_cwd` | boolean | `true` | `--capture-cwd` | Capture the working directory and git root with each session. |
+| `prediction.window_days` | number | `180` | — | Days of history used for the context part of the score. |
+
+`bssh config` with no flags prints the current values and rewrites the file with the same settings.
+
+## Environment variables
+
+| Variable | Read by | Meaning |
+| --- | --- | --- |
+| `BSSH_TEAMS_PASSPHRASE` | `bssh teams` | Device passphrase, used instead of the prompt. Empty values are ignored. |
+| `SSH_AUTH_SOCK` | connections, `bssh doctor` | Agent socket when `auth.agent_socket` is `null`. |
+| `KRB5_CONFIG` | Kerberos checks | Path to `krb5.conf`, before `/etc/krb5.conf` and `/etc/krb5/krb5.conf`. |
+| `KRB5CCNAME` | Kerberos checks | Ticket cache to inspect, before the default cache from `krb5.conf`. |
+| `USER`, `LOGNAME`, `USERNAME` | Kerberos | Login name when no principal is configured. |
+| `UID` | agent discovery | Owner of the agent sockets to accept; falls back to `id -u`. |
+| `HOSTNAME` | `bssh teams init` | Default device name; falls back to `/etc/hostname`, then `device`. |
+| `TERM` | sessions | Terminal type requested for the remote PTY (default `xterm-256color`). |
+| `PATH` | `bssh doctor`, `bssh desktop` | Locating `ssh`, `kinit`, `klist`, and the desktop binary. |
+| `HOME` | config and key discovery | Resolving `~` for `ssh_config_path` and `~/.ssh`. |
+| `XDG_CONFIG_HOME` | configuration root | Replaces `~/.config` on Linux. |
+
+## Desktop app settings
+
+The desktop app stores its own preferences in `desktop_settings.json`, at the configuration root, shared by all environments. It writes the file itself; edit it only when the app is closed.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `theme` | `"dark"` | `dark`, `light` or `system`. |
+| `density` | `"comfortable"` | `compact`, `comfortable` or `spacious`. |
+| `auto_start_agent` | `false` | Start an ssh-agent with the app. |
+| `custom_agent_socket` | `SSH_AUTH_SOCK` at first run | Agent socket the app uses. |
+| `kerberos_warn_minutes` | `15` | Warn this many minutes before a ticket expires. |
+| `monitor_kerberos` | `true` | Show Kerberos status and expiry warnings. |
+| `default_user` | your OS username | Username prefilled for new connections. |
+| `default_port` | `22` | Port prefilled for new connections. |
+| `fuzzy_search` | `false` | Start the host search in fuzzy mode. |
+| `default_key_path` | `null` | Key prefilled for new connections. |
+| `timezone` | `"system"` | Timezone used to display timestamps. |
+| `onboarding_complete` | set by onboarding | Whether the first-run setup has been finished. |
+| `terminal_font_family` | JetBrains Mono, Fira Code, Cascadia Code, Ubuntu Mono, DejaVu Sans Mono, Liberation Mono, Consolas, monospace | Font stack of the terminal. |
+| `terminal_font_size` | `13` | Font size in pixels. |
+| `terminal_line_height` | `1.18` | Line height multiplier. |
+| `terminal_cursor_style` | `"block"` | Cursor shape. |
+| `terminal_cursor_blink` | `true` | Blink the cursor. |
+| `terminal_copy_on_select` | `false` | Copy selected text automatically. |
+| `terminal_smart_copy` | `false` | <kbd>Ctrl</kbd>+<kbd>C</kbd> copies when text is selected. |
+| `terminal_scrollback` | `10000` | Lines kept in the scrollback buffer. |
+| `sftp_show_hidden_files` | `true` | Show dotfiles in the file browser. |
+| `sftp_default_remote_path` | `"/"` | Directory the file browser opens in. |
+| `enable_sftp` | `true` | Show the file browser. |
+| `record_sessions` | `false` | Record sessions started from the app. |
+| `record_tags` | `[]` | Record only these tags; empty records all connections. |
+
+## Snap package
+
+The snap runs under strict confinement, so it cannot use your normal configuration directory. Its files live under `~/snap/bayesian-ssh/current/`:
+
+```text
+~/snap/bayesian-ssh/current/.config/bayesian-ssh/
+```
+
+That means the snap has its own environments, database and desktop settings, separate from a native install or from `install.sh`. `~/.ssh` is mounted read-only, so the snap cannot update `known_hosts` or generate keys into `~/.ssh`.
+
+## Next steps
+
+- [Command reference](/reference/cli/) for every command and option.
+- [Troubleshooting](/reference/troubleshooting/) when `bssh doctor` reports a problem.

@@ -1,0 +1,94 @@
+---
+title: Security
+description: Where bssh keeps your data, how releases are signed and verified, and how to report a vulnerability.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+bssh keeps its data on your machine, and it never sits between you and your servers. This page lists the files, what protects them, and how to check that a download is genuine.
+
+## Where your data lives
+
+On Linux, bssh's own data is under `~/.config/bayesian-ssh/`. Each environment has its own directory, `environments/<name>/`, so switching environments switches the database and the recordings.
+
+| Data | Location | Protection |
+| --- | --- | --- |
+| Connections, tags, session history, Teams state and this device's sealed Teams keys | `environments/<env>/history.db` | Directory mode 0700, file mode 0600 |
+| Settings | `environments/<env>/config.json` | Mode 0600, written atomically |
+| Session recordings | `environments/<env>/recordings/<session-id>.cast` | Mode 0600 |
+| Backups | `environments/<env>/backups/` or the path you pass to `bssh backup` | Mode 0600, not encrypted |
+| SSH keys, `known_hosts`, Kerberos tickets | `~/.ssh` and your operating system's credential cache | Managed by your OS and SSH tooling, never copied into bssh's files |
+
+`active_env`, in `~/.config/bayesian-ssh/`, holds the name of the active environment and is also mode 0600.
+
+bssh creates these directories with mode 0700 and these files with mode 0600, and re-applies the directory mode on every run. If something made the configuration directory, the database or a private key more open, `bssh audit` reports it and `bssh audit --fix` repairs it. See [Troubleshooting](/reference/troubleshooting/).
+
+The Snap build uses the same tree under `~/snap/bayesian-ssh/current/.config/bayesian-ssh/`, separate from a native install.
+
+## Never in the data path
+
+bssh opens connections from your machine to the host, as `ssh` does. There is no relay and no proxy service, so no third party can read or alter a session. Bastions, tunnels and the SOCKS proxy are routes you configure yourself, and your machine opens them directly.
+
+bssh Teams adds a sync server, but it only stores team data; it never carries SSH traffic. [Teams security](/teams/security/) explains what it can and cannot see.
+
+## Backups and encrypted exports
+
+`bssh backup` writes a snapshot of the database, not an encrypted container: the file is a plain SQLite database with mode 0600. It contains the same data as the live database, so store it with the same care.
+
+`bssh export` can encrypt what it writes. The passphrase is turned into a key with Argon2id, and the payload is sealed with AES-256-GCM:
+
+```sh
+bssh export --format json -p '<passphrase>' -o hosts.enc
+bssh import -f hosts.enc --passphrase '<passphrase>'
+```
+
+`--passphrase` requires `--output`, and the exported file is created with mode 0600. A wrong passphrase fails with `Decryption failed: invalid passphrase or corrupted file`; damaged ciphertext gives the same message, because decryption cannot tell the two apart.
+
+:::caution
+A passphrase given with `-p` is a command-line argument: it can end up in your shell history and is visible in the process list while the command runs. Remove the history entry if that matters on this machine.
+:::
+
+## Session recordings
+
+A recording is an asciicast file of what the terminal displayed during a session, including anything printed, echoed or pasted. Recordings can therefore contain secrets. They are plain files with mode 0600, never world-readable, and nothing encrypts them on disk.
+
+- Recording is off by default. Enable it with `bssh config --recording on`, optionally limit it to some connections with `bssh config --recording-tags prod`, and disable it again with `bssh config --recording off`.
+- Watch one with `bssh replay <session-id>`; `bssh history` finds the ID.
+- Delete the recording file to remove it. Recordings stay local; bssh has no command that uploads them.
+
+## Verify a release
+
+Every release asset is covered twice: a keyless signature over `SHA256SUMS` and a build provenance attestation. With `cosign` and the `gh` CLI installed, in the directory holding the downloaded files:
+
+```sh
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/abdoufermat5/bayesian-ssh/\.github/workflows/release\.yml@refs/(tags/v.+|heads/main)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+
+sha256sum --ignore-missing -c SHA256SUMS
+
+gh attestation verify bayesian-ssh-linux-x86_64.tar.gz --repo abdoufermat5/bayesian-ssh
+```
+
+The first command proves that `SHA256SUMS` was signed by this repository's release workflow, at a tag or on `main`. The second checks every file you downloaded against that signed list. The third checks the named file's build provenance for this repository.
+
+`install.sh` runs the `cosign` check automatically when `cosign` is installed, and always verifies `SHA256SUMS`.
+
+## Supported versions
+
+Security fixes go to the latest minor release only. Check what you run with `bssh --version` and update before reporting a problem that a newer release may have fixed.
+
+## Report a vulnerability
+
+Report it privately through GitHub: [report a vulnerability](https://github.com/abdoufermat5/bayesian-ssh/security/advisories/new). Do not open a public issue.
+
+You get an acknowledgement within 3 working days. Once a fix is released, the advisory is published with credit to you, unless you prefer to stay anonymous.
+
+## Teams
+
+If you use bssh Teams, read [Teams security](/teams/security/): it describes the trust model of the sync server, the cryptography, and what recovery is and is not possible.
+
+<CardGrid>
+	<LinkCard title="Teams security" description="What the sync server sees and how the team key works." href="/teams/security/" />
+	<LinkCard title="Configuration reference" description="Every setting, file and environment variable." href="/reference/configuration/" />
+</CardGrid>

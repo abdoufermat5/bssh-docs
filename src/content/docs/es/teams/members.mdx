@@ -1,0 +1,152 @@
+---
+title: Miembros y dispositivos
+description: Invita personas, intercambia huellas, concede la clave del equipo, revoca invitaciones y quita miembros.
+---
+
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Un equipo tiene miembros y dispositivos. Cada dispositivo tiene su propia clave y su huella, y un administrador solo concede la clave del equipo a un dispositivo después de ver esa huella enviada por su propietario. Esto impide que el servidor de sincronización añada un dispositivo propio.
+
+Solo los administradores pueden invitar personas, conceder claves, revocar invitaciones y quitar miembros.
+
+## Invitar a alguien
+
+<Tabs syncKey="surface">
+<TabItem label="Línea de comandos">
+
+<Steps>
+
+1. **Administrador:** invita al miembro.
+
+   ```sh
+   bssh teams invite platform ana@example.com
+   ```
+
+   bssh imprime dos comandos para Ana, con un token de un solo uso y la huella de tu dispositivo. Envíalos por un canal en el que sepas que es Ana.
+
+2. **Ana:** crea su cuenta con la invitación y luego se une, fijando la huella del administrador.
+
+   ```sh
+   bssh teams init --server https://teams.example.com --email ana@example.com --invite <TOKEN>
+   bssh teams join <TOKEN> --fingerprint <ADMIN FINGERPRINT>
+   ```
+
+   bssh se niega a confiar en el equipo si ningún dispositivo administrador de ese equipo tiene esa huella. Al unirse, imprime la huella del dispositivo de Ana.
+
+3. **Administrador:** concede la clave al dispositivo de Ana.
+
+   ```sh
+   bssh teams grant platform
+   ```
+
+   Esto enumera los dispositivos que esperan la clave. Concédela solo después de que Ana te envíe su huella:
+
+   ```sh
+   bssh teams grant platform --fingerprint <ANA'S FINGERPRINT>
+   ```
+
+4. **Ana:** sincroniza.
+
+   ```sh
+   bssh teams sync
+   ```
+
+   Las conexiones del equipo aparecen en `bssh list`.
+
+</Steps>
+
+</TabItem>
+<TabItem label="Aplicación de escritorio">
+
+<Steps>
+
+1. **Administrador:** abre el equipo, elige **Members & devices** y luego **Invite**. Introduce la dirección y elige **Create invite**. La aplicación muestra el mensaje que debes enviar, con los pasos para la aplicación y la línea de comandos, el token de un solo uso, tu huella y la caducidad. Elige **Copy message**.
+
+2. **Ana:** en una instalación nueva, elige **I was invited to a team** durante la puesta en marcha. Si no, abre **Teams**, elige **Join with invite** y pega el mensaje completo; la aplicación lee el token y la huella del administrador. Si Teams aún no está configurado, pega primero la invitación en la pantalla de configuración.
+
+3. **Administrador:** el dispositivo aparece en **Devices waiting for the key**. Elige **Verify and grant…**, pega la huella que te envió Ana y marca la confirmación. En este diálogo, la aplicación nunca muestra la huella que el servidor informa para el dispositivo en espera. Cuando la huella pegada coincide, se muestra en grupos de cuatro para que puedas leérsela a Ana. Elige **Grant key to …**.
+
+4. **Ana:** hasta que llegue la clave, la página muestra **Waiting for an admin to grant this device the key.** Su huella aparece al lado, con un botón **Copy**. Mientras la página está abierta, comprueba cada 30 segundos y sincroniza el equipo en cuanto llega la clave.
+
+</Steps>
+
+</TabItem>
+</Tabs>
+
+## Por qué las huellas se intercambian por otro canal
+
+La invitación lleva la huella del administrador, y el miembro la fija al unirse. Si la huella no pertenece a un dispositivo administrador del equipo, no se confía en nada: un servidor no puede hacerse pasar por el administrador del equipo. Del mismo modo, un administrador solo concede la clave a una huella que el miembro le envió directamente, para que un servidor no pueda colar un dispositivo propio.
+
+Envía las huellas por un chat que ya uses, en una llamada o en persona. No por el servidor de sincronización, y no leyéndolas en la pantalla de administración: la aplicación de escritorio oculta la huella que informa el servidor hasta que la pegada coincide.
+
+![Conceder la clave del equipo: la huella pegada coincide con el dispositivo en espera en el servidor](../../../../assets/screenshots/teams-grant.png)
+
+## Si la huella no coincide
+
+No se confió en nada y el token de invitación ya se usó. Termina la unión por id de equipo con la huella correcta:
+
+```sh
+bssh teams join --team <TEAM ID> --fingerprint <FINGERPRINT>
+```
+
+El mensaje de error imprime el comando exacto, con el id del equipo. Comprueba antes la huella con tu administrador: una discrepancia también puede significar que el servidor no es el que crees.
+
+En la aplicación de escritorio, el diálogo de unión explica la discrepancia y ofrece **Try again**, que termina la unión del mismo modo.
+
+## Invitaciones pendientes
+
+Una invitación pendiente ocupa un puesto hasta que se acepta o caduca, 7 días después de crearse.
+
+Los administradores ven las invitaciones pendientes con `bssh teams members platform`, y en la aplicación de escritorio en **Pending invites**, en la pestaña **Members & devices** del equipo.
+
+```sh
+bssh teams uninvite platform ana@example.com
+```
+
+Esto revoca la invitación: su token deja de funcionar y su puesto queda libre. En la aplicación de escritorio, elige **Revoke** junto a la invitación. Si se perdió el token, revoca la invitación y envía una nueva.
+
+## Hacer administrador a alguien
+
+```sh
+bssh teams invite platform sam@example.com --admin
+```
+
+Un administrador puede invitar personas, conceder claves, revocar invitaciones, quitar miembros y leer el registro de auditoría. En la aplicación de escritorio, marca **Make them an admin** antes de **Create invite**.
+
+## Quitar a un miembro
+
+<Tabs syncKey="surface">
+<TabItem label="Línea de comandos">
+
+```sh
+bssh teams remove platform ana@example.com
+```
+
+bssh pide confirmación, quita a Ana y rota la clave del equipo.
+
+</TabItem>
+<TabItem label="Aplicación de escritorio">
+
+Junto al miembro, elige **Remove…**. El diálogo muestra lo que va a cambiar: la siguiente versión de la clave, cuáles de sus dispositivos pierden el acceso, cuántos hosts ya sincronizó y qué dispositivos reciben la nueva clave. Escribe su correo para confirmar y elige **Remove and rotate key**.
+
+</TabItem>
+</Tabs>
+
+Tras la rotación, los dispositivos de Ana ya no pueden sincronizar, y nada de lo que se escriba después es legible para ella. Puede que aún tenga copias de lo que ya sincronizó, así que rota las credenciales que importen.
+
+Una rotación envuelve la nueva clave solo para los dispositivos que esta máquina de administración aprobó con `bssh teams grant`. Si el servidor enumera un dispositivo que nunca aprobaste, la rotación se detiene y lo nombra. En la línea de comandos, el miembro ya está quitado cuando aparece este mensaje; el equipo conserva su clave actual hasta que la rotación tenga éxito. Comprueba la huella del dispositivo con su propietario y concédela, y luego sincroniza de nuevo para terminar la rotación. El diálogo **Remove…** de la aplicación de escritorio enumera esos dispositivos y no permite quitar al miembro hasta que se conceda cada uno; si una rotación se detiene por otro motivo, el motivo permanece en el diálogo.
+
+Los dispositivos aún no se pueden revocar uno a uno. Para quitar un solo dispositivo, quita al miembro y vuelve a invitarlo.
+
+## Miembros y dispositivos
+
+```sh
+bssh teams members platform
+```
+
+Esto enumera cada miembro con su rol y la huella de cada uno de sus dispositivos, y luego las invitaciones pendientes si eres administrador. En la aplicación de escritorio, la pestaña **Members & devices** del equipo muestra lo mismo, con un medidor de puestos, los dispositivos que esperan la clave y un botón **Remove…** para cada miembro que no seas tú.
+
+## Siguientes pasos
+
+- [Sincroniza](/es/teams/sync/) después de una concesión, y para recoger los cambios pendientes.
+- [Registro de auditoría](/es/teams/audit-log/) para las sesiones que iniciaron los miembros en hosts del equipo.

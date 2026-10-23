@@ -1,0 +1,46 @@
+---
+title: Teams overview
+description: Share SSH connections with your team through an end-to-end encrypted vault, with verified devices and a signed audit log.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+bssh Teams shares connections with the people you work with. Everyone gets the same hosts in `bssh` and in the desktop app, and nobody has to pass server lists around in a chat or a wiki.
+
+Shared connections are encrypted on your device before they leave it. The sync server stores only ciphertext and a small amount of metadata: it never sees hostnames, users or tags, and it is never in the path of your SSH connections.
+
+## How it works
+
+1. **Each device has its own keys.** Setting up Teams creates a signing key and an encryption key on your machine, protected by a passphrase. They never leave the device.
+2. **A team has one key.** An admin gives it to each new device after checking that device's fingerprint, so the server cannot slip in a device of its own.
+3. **Entries are encrypted locally.** Sharing a connection encrypts it with the team key. The server stores the result and passes it on.
+4. **Teammates decrypt locally.** Each sync pulls new entries, verifies who wrote them, and adds them to your host list as `name@team`.
+5. **Connections are audited.** Connecting to a team host records a signed, hash-chained event. Admins can verify the whole log on their own machine.
+
+## What is shared
+
+A shared connection carries its host, user, port, bastion, Kerberos setting and tags.
+
+These are never shared:
+
+- **Keys, key paths and passwords.** Each person connects with their own credentials or agent.
+- **Your device keys and passphrase.**
+- **Session recordings and terminal output.** They stay on your machine.
+- **Connections you don't share.** Personal hosts stay in your local database.
+
+## Plans
+
+- **Free:** on the hosted service, every team has 3 seats for free, with all features.
+- **Paid:** for more seats, an admin subscribes for the whole team, billed per seat, monthly or yearly.
+- **Self-hosted:** run the sync server yourself; seats per team are set by the operator.
+
+Details in [Plans and billing](/teams/plans-and-billing/). To start a team on the hosted service or ask about self-hosting, [open an issue on GitHub](https://github.com/abdoufermat5/bayesian-ssh/issues).
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Set up Teams" description="Set up this device, create a team and share a connection." href="/teams/setup/" />
+	<LinkCard title="Members and devices" description="Invite people, verify fingerprints, remove members." href="/teams/members/" />
+	<LinkCard title="Security and trust model" description="What the server can and cannot see." href="/teams/security/" />
+	<LinkCard title="Plans and billing" description="Seats, subscriptions and read-only rules." href="/teams/plans-and-billing/" />
+</CardGrid>

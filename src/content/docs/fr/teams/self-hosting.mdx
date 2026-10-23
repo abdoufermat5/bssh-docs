@@ -1,0 +1,249 @@
+---
+title: Auto-héberger le serveur
+description: Exécutez le serveur de synchronisation bssh Teams sur votre propre infrastructure avec Docker et PostgreSQL.
+---
+
+import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Le serveur de synchronisation de bssh Teams est une seule image de conteneur, adossée à PostgreSQL. Le service hébergé exécute la même image : un serveur auto-hébergé se comporte donc de la même façon, avec les données sur votre infrastructure. Sans Stripe configuré, il n'y a pas de facturation : chaque équipe dispose d'un nombre fixe de sièges.
+
+Le serveur ne stocke que du texte chiffré et des métadonnées. Il ne détient jamais les noms d'hôtes, les notes, les clés privées ni le contenu des enregistrements, et il n'est jamais dans le chemin des données SSH. [Sécurité de Teams](/fr/teams/security/) décrit le modèle de confiance.
+
+## Ce qu'il faut
+
+- Un hôte Linux avec Docker et le plugin Compose.
+- PostgreSQL, par exemple `postgres:17` comme dans le fichier Compose ci-dessous.
+- Un nom DNS et un certificat TLS pour ce nom. Les clients refusent le HTTP en clair sauf pour un hôte de boucle locale, et ils exigent TLS 1.3.
+- Un accès depuis les machines de votre équipe vers ce nom.
+
+## Obtenir l'image
+
+L'image est distribuée sous forme d'archive Docker nommée `bssh-cloud-api_<version>.tar`, par exemple `bssh-cloud-api_0.2.0.tar`. Demandez l'accès dans un [ticket GitHub](https://github.com/abdoufermat5/bayesian-ssh/issues).
+
+Chargez l'archive sur le serveur :
+
+```sh
+docker load -i bssh-cloud-api_0.2.0.tar
+```
+
+L'image chargée porte le tag de sa version, par exemple `bssh-cloud-api:0.2.0`.
+
+## Configuration
+
+Tout se règle à l'exécution ; aucune valeur propre à un environnement n'est intégrée à l'image.
+
+| Variable | Valeur par défaut | Rôle |
+| --- | --- | --- |
+| `DATABASE_URL` / `DATABASE_URL_FILE` | requis | URL PostgreSQL, ou fichier qui la contient. Pour TLS, ajoutez `?sslmode=verify-full&sslrootcert=/path/ca.crt`. |
+| `BIND_ADDR` | `127.0.0.1:8080` (`0.0.0.0:8080` dans l'image) | Adresse d'écoute. |
+| `TLS_CERT_FILE`, `TLS_KEY_FILE` | non défini | Chaîne de certificats PEM et clé : le serveur sert lui-même le HTTPS. Définissez les deux ou aucune ; sans elles, il sert du HTTP en clair pour un proxy TLS placé devant. |
+| `SIGNUP_MODE` | `invite` | `invite` : seules les adresses invitées et celles de `SIGNUP_BOOTSTRAP_EMAILS` peuvent créer un compte. `open` accepte tout le monde et ne sert qu'au développement. |
+| `SIGNUP_BOOTSTRAP_EMAILS` / `SIGNUP_BOOTSTRAP_EMAILS_FILE` | vide | Adresses autorisées à créer un compte sans invitation : les créateurs d'équipe, intégrés à la main. Séparées par des virgules ou des retours à la ligne ; les deux sources sont fusionnées. |
+| `TRUST_PROXY_HEADERS` | désactivé | Enregistre l'IP du client dans le journal d'audit à partir de `X-Forwarded-For` / `X-Real-IP`. Uniquement derrière un proxy qui les écrase et qui est le seul point d'entrée. |
+| `DEFAULT_SEATS` | `5` | Sièges d'une nouvelle équipe lorsque la facturation est désactivée. |
+| `MIN_CLIENT_VERSION` | `0.0.0` | Plus ancienne version de client acceptée. |
+| `RUST_LOG` | non défini | Filtre de journalisation, par exemple `info`. |
+
+Les variantes `_FILE` désignent un fichier dont le contenu, espaces retirés, remplace la variable. Utilisez-les pour les secrets, qui restent alors hors de `docker inspect` et de l'environnement.
+
+## Créer les secrets
+
+<Steps>
+1. Créez les fichiers de secrets et écrivez un mot de passe de base de données :
+   ```sh
+   mkdir -p secrets
+   chmod 700 secrets
+
+   printf '%s' 'a-long-random-password' > secrets/postgres_password
+   printf '%s' 'postgres://bssh:a-long-random-password@postgres:5432/bssh' > secrets/database_url
+   printf '%s\n' 'ana@example.com' > secrets/bootstrap_emails
+
+   chmod 600 secrets/*
+   ```
+
+2. Le mot de passe de `database_url` doit être identique à celui de `postgres_password`, encodé pour l'URL s'il contient des caractères réservés. Pour utiliser un serveur PostgreSQL hors de Compose, changez l'hôte dans `database_url` et ajoutez les paramètres TLS.
+</Steps>
+
+L'API lit ces fichiers au démarrage ; redémarrez-la après en avoir modifié un.
+
+## Lancer avec Docker Compose
+
+```yaml
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: bssh
+      POSTGRES_DB: bssh
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./secrets/postgres_password:/run/secrets/postgres_password:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bssh -d bssh"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  api:
+    image: bssh-cloud-api:0.2.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL_FILE: /run/secrets/database_url
+      BIND_ADDR: 0.0.0.0:8080
+      SIGNUP_BOOTSTRAP_EMAILS_FILE: /run/secrets/bootstrap_emails
+      TRUST_PROXY_HEADERS: "true"
+      DEFAULT_SEATS: "5"
+      RUST_LOG: info
+    volumes:
+      - ./secrets/database_url:/run/secrets/database_url:ro
+      - ./secrets/bootstrap_emails:/run/secrets/bootstrap_emails:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+```
+
+```sh
+docker compose up -d
+docker compose logs -f api
+```
+
+L'API exécute ses migrations de base de données au démarrage, avant d'accepter des connexions, et journalise sa version, par exemple `bssh-cloud 0.2.0`. Si une migration échoue, le processus s'arrête et le journal en donne la raison.
+
+L'API n'est publiée que sur l'adresse de bouclage, car TLS est terminé devant elle. `curl http://127.0.0.1:8080/healthz` renvoie `ok` ; utilisez-le pour la supervision.
+
+## Placer TLS devant
+
+Soit vous laissez le serveur servir TLS en montant une chaîne de certificats et sa clé et en définissant `TLS_CERT_FILE` et `TLS_KEY_FILE`, soit vous laissez les deux non définies et terminez TLS dans un proxy inverse sur le même hôte. Dans les deux cas, l'API ne doit pas être joignable depuis l'extérieur, et le certificat doit être valide pour le nom qu'utilise votre équipe.
+
+Les clients exigent TLS 1.3 : le proxy doit donc le proposer. Ce bloc nginx est une configuration minimale :
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name teams.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/teams.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/teams.example.com/privkey.pem;
+    ssl_protocols TLSv1.3;
+
+    client_max_body_size 8m;   # un envoi de coffre fait au plus 4 MiB
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+Définissez `TRUST_PROXY_HEADERS: "true"` uniquement quand le proxy est le seul point d'entrée et écrase ces deux en-têtes. Le serveur enregistre la première adresse `X-Forwarded-For` dans le journal d'audit : un proxy qui ajoute à un en-tête fourni par le client laisserait donc les clients choisir l'adresse sous laquelle ils sont enregistrés.
+
+## Intégrer l'équipe
+
+Le serveur n'envoie pas d'e-mail : un administrateur transmet chaque invitation. La première personne, le créateur de l'équipe, n'a pas besoin d'invitation, car son adresse figure dans `SIGNUP_BOOTSTRAP_EMAILS`.
+
+<Steps>
+1. Ajoutez l'adresse du créateur à `secrets/bootstrap_emails`.
+
+2. Redémarrez l'API pour qu'elle relise le fichier :
+   ```sh
+   docker compose restart api
+   ```
+</Steps>
+
+Sur la machine du créateur, créez le compte et l'équipe :
+
+<Tabs syncKey="surface">
+	<TabItem label="Ligne de commande">
+		```sh
+		bssh teams init --server https://teams.example.com --email ana@example.com
+		bssh teams create platform
+		```
+	</TabItem>
+	<TabItem label="Application de bureau">
+		Ouvrez **Teams**, renseignez **Sync server** (`https://teams.example.com`), **Your email**, **Device name** et une **Passphrase**, puis choisissez **Set up this device** et **Create team**.
+	</TabItem>
+</Tabs>
+
+Invitez ensuite les autres membres depuis la machine de l'administrateur :
+
+```sh
+bssh teams invite platform sam@example.com
+```
+
+L'invitation contient l'URL du serveur et un jeton à usage unique, affiché une seule fois. L'invité rejoint avec ce jeton et l'empreinte de l'appareil de l'administrateur, puis l'administrateur accorde la clé d'équipe. [Membres et appareils](/fr/teams/members/) détaille l'échange. Ajoutez `--admin` pour faire de l'invité un administrateur.
+
+## Sièges
+
+Sur un serveur sans facturation, une nouvelle équipe reçoit `DEFAULT_SEATS` sièges, enregistrés avec l'équipe. Modifier la variable n'affecte que les équipes créées ensuite.
+
+Les membres et les invitations en attente comptent tous deux dans la limite. Quand une équipe est pleine, une nouvelle invitation échoue. Une invitation dont l'acceptation ne trouve aucun siège libre reste en attente et fonctionne dès qu'un siège se libère. Libérez un siège en retirant un membre ou en révoquant une invitation en attente :
+
+```sh
+bssh teams uninvite platform ana@example.com
+bssh teams remove platform ana@example.com
+```
+
+Sur un serveur sans facturation, une équipe n'est jamais en lecture seule et ses sièges ne changent jamais d'eux-mêmes.
+
+## Sauvegardes et restaurations
+
+Activez la récupération à un instant précis de PostgreSQL sur votre base, ou l'équivalent de votre fournisseur, et prenez régulièrement des exports logiques en seconde ligne :
+
+```sh
+docker compose exec -T postgres pg_dump -U bssh -d bssh > bssh-$(date +%F).sql
+```
+
+Une sauvegarde contient le texte chiffré et les métadonnées de toutes les équipes. Stockez-la là où seuls les opérateurs peuvent la lire, et chiffrez-la au repos.
+
+Testez les restaurations au lieu de leur faire confiance. Restaurez un export dans une base de travail, démarrez une seconde instance de l'API dessus, et vérifiez que `/healthz` répond et qu'un client peut se synchroniser :
+
+```sh
+docker compose exec -T postgres createdb -U bssh bssh_restore
+docker compose exec -T postgres psql -U bssh -d bssh_restore < bssh-2026-10-23.sql
+```
+
+## Mises à jour
+
+<Steps>
+1. Prenez une sauvegarde de la base.
+2. Chargez la nouvelle archive et vérifiez son tag :
+   ```sh
+   docker load -i bssh-cloud-api_<new-version>.tar
+   ```
+
+3. Mettez à jour le tag de l'image dans le fichier Compose, puis :
+   ```sh
+   docker compose up -d
+   ```
+</Steps>
+
+Les migrations s'exécutent automatiquement au démarrage, et l'API reste sous `/v1` : une mise à jour du serveur ne demande aucun changement côté client. Les clients plus anciens que `MIN_CLIENT_VERSION` sont refusés avec le code HTTP 426, et `bssh teams` affiche `the server needs a newer bssh; please upgrade`.
+
+L'image ne contient que des migrations ascendantes : revenir à une image plus ancienne suppose de restaurer la sauvegarde prise avant la mise à jour.
+
+## Ce que le serveur stocke
+
+Le serveur conserve du texte chiffré qu'il ne peut pas déchiffrer, plus les métadonnées qui rendent l'audit côté serveur possible :
+
+- identifiant d'équipe, adresses e-mail des membres et des invités, rôles et nombre de sièges, noms et clés publiques des appareils
+- identifiants opaques des entrées, numéros de révision et tailles des textes chiffrés
+- événements d'audit : *le membre M a utilisé l'entrée E à l'instant T depuis l'IP A*
+
+Les noms d'hôtes, noms d'utilisateur, ports, tags, notes et réglages de bastion sont chiffrés sur les clients. Les clés privées ne sont pas envoyées : une connexion partagée ne contient aucun chemin de clé, et la connexion personnelle de chaque membre garde son fichier de clé sur sa machine. Les mots de passe ne sont jamais stockés non plus ; la saisie se fait dans votre terminal. Traitez malgré tout la base et ses sauvegardes comme sensibles : sans les clés d'appareil d'un membre, elles ne révèlent pas le coffre, mais les métadonnées sont complètes.
+
+## Pour continuer
+
+<CardGrid>
+	<LinkCard title="Sécurité de Teams" description="Ce que le serveur peut voir ou non, et comment fonctionne la récupération." href="/fr/teams/security/" />
+	<LinkCard title="Dépannage" description="Résoudre une erreur de synchronisation, d'authentification ou d'audit." href="/fr/reference/troubleshooting/" />
+</CardGrid>

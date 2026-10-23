@@ -1,0 +1,42 @@
+---
+title: What is Bayesian SSH?
+description: A keyboard-first SSH manager for the command line and the desktop, with optional end-to-end encrypted team sharing.
+---
+
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+Bayesian SSH keeps your SSH hosts in one place and connects you to the right one with a few keystrokes. It runs as a command, `bssh`, and as a desktop app. Both use the same local database.
+
+```sh
+bssh connect prod
+```
+
+You don't need the exact name. `bssh` matches names, aliases, tags and hostnames, ignores separators (`webprod` finds `web-prod-server`), and ranks the results by how often and how recently you use each host. The host you meant is usually first.
+
+## What it does
+
+- **Saves connections** with their user, port, key, bastion, Kerberos setting and tags.
+- **Finds hosts fast** with fuzzy matching and a ranking that learns from your history.
+- **Handles the route**: default or per-host bastions, interactive bastions, and Kerberos tickets.
+- **Goes beyond the shell**: run commands on many hosts, transfer files, open tunnels and a SOCKS proxy.
+- **Remembers sessions**: history, statistics, and optional session recordings you can replay and search.
+- **Imports what you have**: your `~/.ssh/config`, and inventory sources that keep a host list in sync.
+
+## Local first
+
+Everything is stored on your machine. Bayesian SSH never sits between you and your servers: connections go straight from your computer to the host, as they would with `ssh`.
+
+## bssh Teams
+
+bssh Teams is the paid plan for sharing connections with colleagues. Shared connections are encrypted on your devices before they are synced, so the sync server never sees hostnames, users or notes. Each connection to a shared host is recorded in a signed audit log. Teams of up to 3 seats are free.
+
+<Aside type="tip">
+`bssh` is the short name of the `bayesian-ssh` command. Both are installed and behave the same; these docs use `bssh`.
+</Aside>
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Install" description="One-line installer, Linux packages, Snap or source." href="/start/installation/" />
+	<LinkCard title="Quick start" description="Save a host and connect." href="/start/quick-start/" />
+</CardGrid>

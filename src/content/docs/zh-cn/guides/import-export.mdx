@@ -1,0 +1,186 @@
+---
+title: 导入、导出、备份与恢复
+description: 从 OpenSSH 配置文件迁移主机，导出加密的主机列表，并为数据库生成高一致性的备份快照。
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Bayesian SSH 提供了两种数据导入导出方式：
+
+- **导入与导出**：以人类易读的格式（JSON、OpenSSH config，或导出专用的 TOML）传输连接配置与元数据，并支持可选的口令加密。
+- **备份与恢复**：捕获或还原完整的 SQLite 数据库快照，完整保留会话历史、使用统计、别名与标签。
+
+## 导入连接
+
+使用 `bssh import` 将现有主机导入到你的 Bayesian SSH 数据库中。
+
+### 导入 OpenSSH 配置文件
+
+默认情况下，`bssh import` 会读取你本地的 `~/.ssh/config` 文件（或 `config.json` 中通过 `ssh_config_path` 指定的路径）：
+
+```sh
+bssh import
+```
+
+```text
+✅ Successfully imported 14 connection(s) from SSH config
+```
+
+若需指定其他配置文件路径：
+
+```sh
+bssh import -f ~/.ssh/config.d/work
+```
+
+导入 SSH 配置时的核心行为：
+
+- **解析主机属性**：读取 `Host`、`HostName`、`User`、`Port` 和 `IdentityFile`。
+- **自动添加标签**：所有导入的主机均会自动附带 `imported` 标签，方便后续集中检索或管理。
+- **幂等性保障**：若数据库中已存在同名连接，`bssh` 会自动跳过该主机而不报错，保留你已有的配置。
+- **忽略跳板机**：若希望将所有主机作为直连连接导入，而不继承已配置的全局默认跳板机，可传入 `--no-bastion`：
+
+```sh
+bssh import --no-bastion
+```
+
+### 导入已加密的 JSON 备份
+
+如果你之前使用 `bssh export --passphrase` 导出了加密的连接列表，可以通过指定文件路径和口令完成导入：
+
+```sh
+bssh import -f hosts-backup.enc --passphrase "correct horse battery staple"
+```
+
+```text
+🔓 Decrypting import file with passphrase...
+✅ Imported 8 connection(s) from JSON backup (2 already existed).
+```
+
+## 导出连接
+
+使用 `bssh export` 共享主机列表、生成 OpenSSH 配置或创建加密备份。
+
+```sh
+# 将所有连接以 JSON 格式输出至标准输出
+bssh export
+
+# 导出到指定文件
+bssh export -o hosts.json
+```
+
+### 导出格式
+
+Bayesian SSH 通过 `--format` 选项支持三种导出格式：
+
+```sh
+# 导出为 JSON 格式（默认）
+bssh export --format json -o hosts.json
+
+# 导出为 TOML 格式
+bssh export --format toml -o hosts.toml
+
+# 导出为标准 OpenSSH 配置格式
+bssh export --format ssh-config -o ~/.ssh/config.d/bssh-hosts
+```
+
+| 格式 | 选项 | 描述 |
+| --- | --- | --- |
+| `json` | `--format json` | 完整的连接模型 JSON 数组（默认）。 |
+| `toml` | `--format toml` | 包含 `[[connections]]` 表格的 TOML 文档。 |
+| `ssh-config` | `--format ssh-config` | 标准 OpenSSH 配置格式（`Host`、`HostName`、`User`、`Port`、`IdentityFile`，若有跳板机则写入 `ProxyCommand`）。 |
+
+### 按标签过滤导出
+
+若只需导出带有特定标签的主机，请使用 `-t` 或 `--tag`：
+
+```sh
+bssh export -t prod -o prod-hosts.json
+```
+
+### 使用口令加密导出文件
+
+为保护导出的连接详情，可在指定 `-o` 时搭配 `-p` 或 `--passphrase`：
+
+```sh
+bssh export -o hosts-backup.enc --passphrase "correct horse battery staple"
+```
+
+```text
+🔒 Encrypting export with passphrase...
+✅ Exported 28 connections to hosts-backup.enc
+```
+
+#### 加密机制与安全性
+
+加密导出采用经认证的加密方案，同时确保数据的保密性与完整性：
+
+- **密钥派生**：采用 [Argon2id](https://www.rfc-editor.org/rfc/rfc9106.html) 算法（64 MiB 内存开销、3 轮迭代、1 个并行通道）从你的口令派生出 256 位加密密钥。
+- **认证加密算法**：采用 AES-256-GCM，配合 12 字节随机 Nonce 和 16 字节认证标签。
+- **存储文件结构**：以 `BSSH` 标识头开头，后接版本字节（`0x02`）、16 字节盐值、12 字节 Nonce，以及追加了 GCM 标签的密文。
+- **安全落盘**：文件先以严格的 `0600`（`-rw-------`）权限写入目标目录下的临时文件，随后原子重命名至最终目标路径。
+
+## 数据库备份
+
+`bssh export` 仅序列化连接定义，而 `bssh backup` 则能够捕获完整的 SQLite 数据库快照，包括会话历史、排名权重和别名。
+
+```sh
+bssh backup
+```
+
+```text
+✅ Database successfully backed up to: /home/user/.local/share/bayesian-ssh/backups/backup-2026-10-23-093000.db
+```
+
+### 备份存储路径
+
+默认情况下，备份会写入环境目录下的 `backups/` 子文件夹中，并以时间戳命名：`backup-YYYY-MM-DD-HHMMSS.db`。
+
+若需指定备份输出文件路径：
+
+```sh
+bssh backup -o ~/backups/bssh-snapshot.db
+```
+
+:::tip
+`bssh backup` 使用 SQLite 的在线备份接口（`VACUUM INTO`）而非简单的文件系统复制。即使数据库处于 WAL（预写式日志）模式且有活跃的连接正在运行，也能保证备份快照的数据一致性。
+:::
+
+备份目标文件在创建时即限制为 `0600` 权限（`-rw-------`），且 `bssh backup` 拒绝覆盖已经存在的文件。
+
+## 数据库恢复
+
+使用 `bssh restore` 命令，可以用先前的备份快照替换当前正在使用的数据库。
+
+```sh
+bssh restore ~/backups/bssh-snapshot.db
+```
+
+```text
+⚠️  WARNING: This will replace your current database with:
+    ~/backups/bssh-snapshot.db
+    Your existing database will be safely backed up first.
+
+Are you sure you want to restore? [y/N] y
+✅ Database successfully restored from: ~/backups/bssh-snapshot.db
+```
+
+若在自动化脚本中需要跳过交互确认，请添加 `-f` 或 `--force`：
+
+```sh
+bssh restore ~/backups/bssh-snapshot.db -f
+```
+
+### 安全性与验证保障
+
+1. **完整性校验**：在修改当前活动数据库之前，`bssh` 会先校验目标文件确为完整的 SQLite 数据库，并包含 Bayesian SSH 所需的全部数据表。
+2. **恢复前快照**：若当前数据库文件已存在，`bssh` 会在覆盖前自动对当前状态执行一次内部备份（`VACUUM INTO`）。
+3. **原子替换**：恢复流程先将数据写入 `0600` 临时文件，随后原子重命名到位，避免半写入损坏。
+4. **清理附属文件**：旧数据库关联的预写式日志文件（`-wal`、`-shm` 和 `-journal`）会被彻底清理，防止污染新恢复的数据。
+5. **自动架构迁移**：打开恢复的数据库时，`bssh` 会自动执行所有待处理的数据表迁移，使较旧版本的备份能够平滑过渡。
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="已保存的连接" description="添加、编辑、删除与标记管理你的连接。" href="/zh-cn/guides/connections/" />
+	<LinkCard title="安全参考" description="查看本地数据库存储权限与密码学实现细节。" href="/zh-cn/reference/security/" />
+</CardGrid>

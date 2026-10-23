@@ -1,0 +1,155 @@
+---
+title: 搜索与排序
+description: 了解 Bayesian SSH 如何匹配主机、学习使用习惯并为连接排序。
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+当你运行 `bssh connect <查询文本>` 或在桌面应用中搜索时，`bssh` 会将你的查询内容与名称、主机名以及标签进行匹配，随后使用贝叶斯评分模型对候选结果进行排序。你无需死记硬背确切的主机名：`bssh` 会根据你的工作习惯与当前上下文，将你所需的主机排在最前面。
+
+## 匹配机制
+
+`bssh` 会同时应用多种匹配策略：
+
+- **子字符串匹配**：在连接名称和主机名中进行不区分大小写的搜索。例如，`prod` 能同时匹配 `web-prod` 和 `db.prod.example.com`。
+- **忽略分隔符**：连字符（`-`）、下划线（`_`）和句点（`.`）会在匹配时从查询文本与连接名称中剔除。输入 `webprod` 即可匹配 `web-prod` 和 `web_prod`。
+- **多词查询**：以空格分隔的多个词语，只要每个词都出现在连接名称中即算匹配。输入 `web prod` 可匹配 `web-backend-prod`。
+- **首字母缩写匹配**：当查询字符达到两个或以上时，`bssh` 会检查由连字符、下划线或空格分隔的各词首字母。输入 `wp` 可匹配 `web-prod` 或 `web-prod-server`。
+- **字母数字前缀匹配**：检查主机名中的字母数字字符是否以你的查询字符串开头。
+
+### 标签查询
+
+若要专门在标签中检索，请为查询加上 `tag:` 或 `@` 前缀：
+
+```sh
+# 仅匹配带有 prod 标签的连接
+bssh connect tag:prod
+
+# 使用 @ 前缀的等效写法
+bssh connect @staging
+```
+
+常规搜索也会检索标签，但显式的标签查询会严格限定在标签数据库中进行筛选，忽略主机名与连接名称。
+
+## 贝叶斯排序
+
+已保存的连接通过概率模型而非静态权重进行排序：
+
+```text
+score = prior × likelihood × recency × success × context_factor
+```
+
+各项因子分别评估使用历史的不同维度：
+
+- **频率先验（prior）**：衡量你连接到该主机的频率占所有已存主机的比例。使用拉普拉斯平滑（Laplace smoothing）计算，确保新建连接依然易于检索：
+  ```text
+  prior = (sessions + 1) / (total_connections + 10)
+  ```
+- **匹配似然（likelihood）**：衡量查询的精准度。完全匹配得分 `1.0`，名称前缀匹配 `0.9`，完整词匹配 `0.85`，词前缀匹配 `0.75`，子字符串匹配 `0.6`，忽略分隔符匹配 `0.5`，标签匹配 `0.45`，主机名匹配 `0.4`，首字母缩写匹配 `0.35`，兜底匹配 `0.1`。
+- **近期度（recency）**：根据自上次连接以来的流逝小时数应用指数衰减：
+  ```text
+  recency = max(0.1, exp(-0.005 × hours_since_used))
+  ```
+  从未连接过的主机获得默认近期度得分 `0.3`。
+- **成功率（success）**：根据正常退出（退出码为 `0` 或 `NULL`）的会话比例在 `0.5` 至 `1.0` 之间缩放：
+  ```text
+  success = 0.5 + 0.5 × (successes / total_sessions)
+  ```
+
+## 预测连接与上下文
+
+每次启动 SSH 会话时，`bssh` 都会在本地采集环境上下文，无需常驻后台服务：
+
+- **Git 仓库与工作目录**（`git_root`）：从终端当前路径向上查找父级目录自动识别。
+- **本地时间**（`hour`）：当天的本地小时数（`0–23`），并结合循环相邻时间（`±1` 小时，即 `23`、`0` 和 `1` 视为相邻）进行比对。
+- **上一连接**（`prev_connection_id`）：在过去 30 分钟内连接过的主机。
+
+在 180 天的滑动时间窗口（`window_days`）内，`bssh` 会计算每个活跃上下文特征的平滑似然比：
+
+```text
+lr = ((feature_hits + 1) / (connection_window_sessions + 2)) / ((global_feature_hits + 1) / (global_window_sessions + 2))
+```
+
+上下文特征仅在全局所有会话中出现至少 3 次（`N ≥ 3`）时才会被应用。最终计算所得的上下文系数 `context_factor` 被限制在 `0.25` 到 `8.0` 之间。
+
+## 快速连接
+
+直接运行不带参数的 `bssh` 会启动预测式快速连接。它将分析当前的终端上下文，并展示排名前 3 的预测连接以及推荐每台主机的关键原因：
+
+```sh
+bssh
+```
+
+```text
+Suggested connections
+ 1. web-prod      deploy@web1.example.com   · 12/15 of your sessions from ~/work/billing
+ 2. db-prod       postgres@db1              · usually opened right after web-prod
+ 3. bastion-eu    admin@bastion             · used often around 09:00
+Enter = 1 · number · text to search · q to quit:
+```
+
+- 按下 <kbd>Enter</kbd> 键立即连接至第 1 项推荐。
+- 按下数字键 <kbd>1</kbd>、<kbd>2</kbd> 或 <kbd>3</kbd> 选择对应推荐。
+- 输入任意文本即可在全部连接中执行交互式搜索。
+- 按下 <kbd>q</kbd> 或 <kbd>Ctrl</kbd>+<kbd>D</kbd> 退出。
+
+## 使用 bssh why 查看评分明细
+
+运行 `bssh why` 可查看指定连接在当前上下文下的逐项评分明细与排序：
+
+```sh
+bssh why web-prod
+```
+
+```text
+web-prod — score 3.42 (rank 1 of 37 in the current context)
+  frequency prior      0.73   (15 sessions)
+  recency              0.91   (last used 4h ago)
+  success rate         0.97
+  repo ~/work/billing  ×4.10  (12 of 15 sessions)
+  hour 09:00 ±1        ×1.30  (6 of 15)
+  after db-prod        —      (no previous session in the last 30 min)
+  context factor       ×5.33
+```
+
+每一行均显示了对最终得分的加权贡献：
+
+- **frequency prior**：基于全局使用频率的基础得分。
+- **recency**：基于上次会话时间戳的时间衰减。
+- **success rate**：反映会话退出码表现的倍率。
+- **repo**、**hour**、**after previous**：各上下文特征似然比计算出的倍率。
+- **context factor**：所有活跃上下文特征相乘并受范围限制后的总系数。
+
+## 搜索配置
+
+你可以使用 `bssh config` 配置搜索行为与隐私偏好：
+
+```sh
+# 在贝叶斯排序与简单模糊子字符串匹配之间切换
+bssh config --search-mode bayesian
+bssh config --search-mode fuzzy
+
+# 开启或关闭基于上下文的预测排序
+bssh config --prediction on
+bssh config --prediction off
+
+# 开启或关闭对当前工作目录及 Git 仓库的采集
+bssh config --capture-cwd on
+bssh config --capture-cwd off
+```
+
+这些设置保存在当前活跃环境目录下的 `config.json` 文件中：
+
+| 设置项 | CLI 选项 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `search_mode` | `--search-mode` | `bayesian` | 搜索结果的排序算法（`bayesian` 或 `fuzzy`）。 |
+| `prediction.enabled` | `--prediction` | `true` | 是否将时间、目录与会话转换纳入排序考量。 |
+| `prediction.capture_cwd` | `--capture-cwd` | `true` | 是否在会话启动时记录工作目录与 Git 根路径。 |
+| `prediction.window_days` | — | `180` | 用于计算上下文比率的会话历史天数。 |
+
+## 后续步骤
+
+<CardGrid>
+  <LinkCard title="连接" description="保存与管理 SSH 主机条目。" href="/zh-cn/guides/connections/" />
+  <LinkCard title="别名" description="为高频使用的主机创建简短别名。" href="/zh-cn/guides/aliases/" />
+</CardGrid>

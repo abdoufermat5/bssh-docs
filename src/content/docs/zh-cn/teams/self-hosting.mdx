@@ -1,0 +1,249 @@
+---
+title: 自托管服务器
+description: 使用 Docker 和 PostgreSQL 在自己的基础设施上运行 bssh Teams 同步服务器。
+---
+
+import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+bssh Teams 同步服务器是一个由 PostgreSQL 支持的单容器镜像。托管服务运行同一个镜像，因此自托管服务器的行为完全相同，只是数据位于你自己的基础设施上。未配置 Stripe 时没有计费：每个团队的席位数固定。
+
+服务器只保存密文和元数据。它从不持有主机名、备注、私钥或录制内容，也从不位于 SSH 数据路径中。[Teams 安全](/zh-cn/teams/security/) 说明了信任模型。
+
+## 需求
+
+- 一台装有 Docker 和 Compose 插件的 Linux 主机。
+- PostgreSQL，例如下方 Compose 文件中的 `postgres:17`。
+- 一个 DNS 名称及其 TLS 证书。除回环地址外，客户端拒绝明文 HTTP，并且要求 TLS 1.3。
+- 团队机器能够访问该名称。
+
+## 获取镜像
+
+镜像以 Docker 镜像归档的形式分发，文件名为 `bssh-cloud-api_<version>.tar`，例如 `bssh-cloud-api_0.2.0.tar`。请通过 [GitHub issue](https://github.com/abdoufermat5/bayesian-ssh/issues) 申请访问权限。
+
+在服务器上加载该归档：
+
+```sh
+docker load -i bssh-cloud-api_0.2.0.tar
+```
+
+加载后的镜像带有版本标签，例如 `bssh-cloud-api:0.2.0`。
+
+## 配置
+
+所有设置都在运行时生效；镜像中不包含任何与环境相关的值。
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `DATABASE_URL` / `DATABASE_URL_FILE` | 必填 | PostgreSQL URL，或保存它的文件。要使用 TLS，添加 `?sslmode=verify-full&sslrootcert=/path/ca.crt`。 |
+| `BIND_ADDR` | `127.0.0.1:8080`（镜像中为 `0.0.0.0:8080`） | 监听地址。 |
+| `TLS_CERT_FILE`, `TLS_KEY_FILE` | 未设置 | PEM 证书链和私钥：由服务器自行提供 HTTPS。两个都设置，或都不设置；不设置时以明文 HTTP 提供服务，由前面的 TLS 代理终止。 |
+| `SIGNUP_MODE` | `invite` | `invite`：只有被邀请的邮箱和 `SIGNUP_BOOTSTRAP_EMAILS` 中的邮箱可以创建账户。`open` 接受任何人，仅用于开发。 |
+| `SIGNUP_BOOTSTRAP_EMAILS` / `SIGNUP_BOOTSTRAP_EMAILS_FILE` | 空 | 无需邀请即可创建账户的邮箱：由运维方手动加入的团队创建者。以逗号或换行分隔；两个来源会合并。 |
+| `TRUST_PROXY_HEADERS` | 关闭 | 从 `X-Forwarded-For` / `X-Real-IP` 记录审计日志中的客户端 IP。仅当前置代理会覆写这些头且是唯一入口时使用。 |
+| `DEFAULT_SEATS` | `5` | 计费关闭时新团队的席位数。 |
+| `MIN_CLIENT_VERSION` | `0.0.0` | 接受的最旧客户端版本。 |
+| `RUST_LOG` | 未设置 | 日志过滤，例如 `info`。 |
+
+`_FILE` 变体指向一个文件，其内容（去掉首尾空白）会替代该变量。用它们保存机密，这样它们不会出现在 `docker inspect` 和环境变量中。
+
+## 创建机密文件
+
+<Steps>
+1. 创建机密文件并写入数据库密码：
+   ```sh
+   mkdir -p secrets
+   chmod 700 secrets
+
+   printf '%s' 'a-long-random-password' > secrets/postgres_password
+   printf '%s' 'postgres://bssh:a-long-random-password@postgres:5432/bssh' > secrets/database_url
+   printf '%s\n' 'ana@example.com' > secrets/bootstrap_emails
+
+   chmod 600 secrets/*
+   ```
+
+2. `database_url` 中的密码必须与 `postgres_password` 中的一致；如果包含保留字符，请进行 URL 编码。若要使用 Compose 之外的 PostgreSQL 服务器，请修改 `database_url` 中的主机并添加 TLS 参数。
+</Steps>
+
+API 在启动时读取这些文件；修改后请重启。
+
+## 使用 Docker Compose 运行
+
+```yaml
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: bssh
+      POSTGRES_DB: bssh
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./secrets/postgres_password:/run/secrets/postgres_password:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bssh -d bssh"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  api:
+    image: bssh-cloud-api:0.2.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL_FILE: /run/secrets/database_url
+      BIND_ADDR: 0.0.0.0:8080
+      SIGNUP_BOOTSTRAP_EMAILS_FILE: /run/secrets/bootstrap_emails
+      TRUST_PROXY_HEADERS: "true"
+      DEFAULT_SEATS: "5"
+      RUST_LOG: info
+    volumes:
+      - ./secrets/database_url:/run/secrets/database_url:ro
+      - ./secrets/bootstrap_emails:/run/secrets/bootstrap_emails:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+```
+
+```sh
+docker compose up -d
+docker compose logs -f api
+```
+
+API 在启动时、开始接受连接之前执行数据库迁移，并记录版本，例如 `bssh-cloud 0.2.0`。如果迁移失败，进程会退出，日志会说明原因。
+
+API 只发布在回环地址上，因为 TLS 在它前面终止。`curl http://127.0.0.1:8080/healthz` 返回 `ok`；可用于监控。
+
+## 在前面配置 TLS
+
+要么挂载证书链和私钥并设置 `TLS_CERT_FILE` 和 `TLS_KEY_FILE`，让服务器自行提供 TLS；要么两者都不设置，在同一主机上的反向代理中终止 TLS。无论哪种方式，API 都不能从外部访问，证书必须对团队使用的名称有效。
+
+客户端要求 TLS 1.3，因此代理必须支持它。以下 nginx 配置块是最小示例：
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name teams.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/teams.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/teams.example.com/privkey.pem;
+    ssl_protocols TLSv1.3;
+
+    client_max_body_size 8m;   # 一次保险库推送最多 4 MiB
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+仅当代理是唯一入口并覆写这两个头时，才设置 `TRUST_PROXY_HEADERS: "true"`。服务器会把第一个 `X-Forwarded-For` 地址写入审计日志；如果代理在客户端提供的头上追加，客户端就能选择自己被记录的地址。
+
+## 接入团队
+
+服务器不发送邮件：管理员负责转交每份邀请。第一个人是团队创建者，不需要邀请，因为其邮箱位于 `SIGNUP_BOOTSTRAP_EMAILS` 中。
+
+<Steps>
+1. 将创建者的邮箱加入 `secrets/bootstrap_emails`。
+
+2. 重启 API 使其重新读取文件：
+   ```sh
+   docker compose restart api
+   ```
+</Steps>
+
+在创建者的机器上创建账户和团队：
+
+<Tabs syncKey="surface">
+	<TabItem label="命令行">
+		```sh
+		bssh teams init --server https://teams.example.com --email ana@example.com
+		bssh teams create platform
+		```
+	</TabItem>
+	<TabItem label="桌面应用">
+		打开 **Teams**，填写 **Sync server**（`https://teams.example.com`）、**Your email**、**Device name** 和 **Passphrase**，然后选择 **Set up this device** 和 **Create team**。
+	</TabItem>
+</Tabs>
+
+然后从管理员的机器邀请其他人：
+
+```sh
+bssh teams invite platform sam@example.com
+```
+
+邀请中包含服务器 URL 和一次性令牌，令牌只显示一次。被邀请者用该令牌和管理员设备的指纹加入，随后管理员授予团队密钥。[成员与设备](/zh-cn/teams/members/) 详述了这一过程。添加 `--admin` 可将被邀请者设为管理员。
+
+## 席位
+
+在没有计费的服务器上，新团队获得 `DEFAULT_SEATS` 个席位，并与团队一起保存。修改该变量只影响之后创建的团队。
+
+成员和待处理的邀请都计入上限。团队满员时，新建邀请会失败。接受邀请时若没有空缺席位，邀请会保持待处理，并在有席位空出后生效。通过移除成员或撤销待处理的邀请来释放席位：
+
+```sh
+bssh teams uninvite platform ana@example.com
+bssh teams remove platform ana@example.com
+```
+
+在没有计费的服务器上，团队永远不会变为只读，席位数也不会自行变化。
+
+## 备份与恢复
+
+在数据库上启用 PostgreSQL 时间点恢复，或使用你的服务商的等效功能，并定期做逻辑转储作为第二道防线：
+
+```sh
+docker compose exec -T postgres pg_dump -U bssh -d bssh > bssh-$(date +%F).sql
+```
+
+备份包含所有团队的密文和元数据。请存放在只有运维方可以读取的位置，并在静态时加密。
+
+要实际测试恢复，而不是想当然。将转储恢复到一个临时数据库，对其启动第二个 API 实例，确认 `/healthz` 有响应且客户端可以同步：
+
+```sh
+docker compose exec -T postgres createdb -U bssh bssh_restore
+docker compose exec -T postgres psql -U bssh -d bssh_restore < bssh-2026-10-23.sql
+```
+
+## 升级
+
+<Steps>
+1. 备份数据库。
+2. 加载新归档并检查其标签：
+   ```sh
+   docker load -i bssh-cloud-api_<new-version>.tar
+   ```
+
+3. 在 Compose 文件中更新镜像标签，然后：
+   ```sh
+   docker compose up -d
+   ```
+</Steps>
+
+迁移在启动时自动运行，API 始终位于 `/v1` 下，因此升级服务器不需要客户端做任何改动。低于 `MIN_CLIENT_VERSION` 的客户端会收到 HTTP 426，`bssh teams` 会显示 `the server needs a newer bssh; please upgrade`。
+
+镜像只包含向前迁移，因此回退到旧镜像意味着恢复升级前所做的数据库备份。
+
+## 服务器保存什么
+
+服务器保存它无法解密的密文，以及实现服务端审计所需的元数据：
+
+- 团队 id、成员和受邀者的邮箱、角色和席位数、设备名称和公钥
+- 不透明的条目 id、修订号和密文大小
+- 审计事件：*成员 M 在时间 T 从 IP A 使用了条目 E*
+
+主机名、用户名、端口、标签、备注和跳板机设置都在客户端加密。私钥不会上传：共享连接不包含密钥路径，每位成员自己的连接把密钥文件留在自己的机器上。密码同样不会被保存，提示发生在你的终端里。即便如此，仍应将数据库及其备份视为敏感数据：没有成员的设备密钥，它们不会泄露保险库内容，但元数据是完整的。
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="Teams 安全" description="服务器能看见和看不见什么，以及恢复如何运作。" href="/zh-cn/teams/security/" />
+	<LinkCard title="故障排查" description="解决同步、认证或审计错误。" href="/zh-cn/reference/troubleshooting/" />
+</CardGrid>

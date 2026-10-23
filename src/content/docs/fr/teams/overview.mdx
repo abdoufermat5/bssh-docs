@@ -1,0 +1,46 @@
+---
+title: Vue d'ensemble de Teams
+description: Partagez des connexions SSH avec votre équipe via un coffre chiffré de bout en bout, avec des appareils vérifiés et un journal d'audit signé.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+bssh Teams partage des connexions avec les personnes avec qui vous travaillez. Tout le monde dispose des mêmes hôtes dans `bssh` et dans l'application de bureau, sans avoir à s'échanger des listes de serveurs par messagerie ou sur un wiki.
+
+Les connexions partagées sont chiffrées sur votre appareil avant de le quitter. Le serveur de synchronisation ne stocke que du texte chiffré et une petite quantité de métadonnées : il ne voit jamais les noms d'hôte, les utilisateurs ni les tags, et ne se trouve jamais sur le trajet de vos connexions SSH.
+
+## Fonctionnement
+
+1. **Chaque appareil possède ses propres clés.** La configuration de Teams crée une clé de signature et une clé de chiffrement sur votre machine, protégées par une phrase secrète. Elles ne quittent jamais l'appareil.
+2. **Une équipe possède une clé.** Un administrateur la transmet à chaque nouvel appareil après avoir vérifié l'empreinte de cet appareil, empêchant ainsi le serveur d'ajouter un appareil de son choix.
+3. **Les entrées sont chiffrées localement.** Partager une connexion la chiffre avec la clé d'équipe. Le serveur stocke le résultat et le transmet.
+4. **Les membres de l'équipe déchiffrent localement.** Chaque synchronisation récupère les nouvelles entrées, vérifie leur auteur et les ajoute à votre liste d'hôtes sous la forme `nom@équipe`.
+5. **Les connexions sont auditées.** Se connecter à un hôte d'équipe enregistre un événement signé et chaîné par empreintes. Les administrateurs peuvent vérifier l'intégralité du journal sur leur propre machine.
+
+## Ce qui est partagé
+
+Une connexion partagée transporte son hôte, utilisateur, port, bastion, paramètre Kerberos et tags.
+
+Ces éléments ne sont jamais partagés :
+
+- **Clés, chemins de clés et mots de passe.** Chaque personne se connecte avec ses propres identifiants ou son propre agent.
+- **Les clés de votre appareil et votre phrase secrète.**
+- **Enregistrements de session et sorties de terminal.** Ils restent sur votre machine.
+- **Connexions que vous ne partagez pas.** Les hôtes personnels restent dans votre base de données locale.
+
+## Formules
+
+- **Gratuite :** sur le service hébergé, chaque équipe dispose de 3 sièges gratuits, avec toutes les fonctionnalités.
+- **Payante :** pour plus de sièges, un administrateur souscrit un abonnement pour toute l'équipe, facturé par siège, au mois ou à l'année.
+- **Auto-hébergée :** exécutez vous-même le serveur de synchronisation ; le nombre de sièges par équipe est défini par l'opérateur.
+
+Détails dans [Formules et facturation](/fr/teams/plans-and-billing/). Pour lancer une équipe sur le service hébergé ou vous renseigner sur l'auto-hébergement, [ouvrez un ticket sur GitHub](https://github.com/abdoufermat5/bayesian-ssh/issues).
+
+## Pour continuer
+
+<CardGrid>
+	<LinkCard title="Configurer Teams" description="Configurez cet appareil, créez une équipe et partagez une connexion." href="/fr/teams/setup/" />
+	<LinkCard title="Membres et appareils" description="Invitez des personnes, vérifiez les empreintes, retirez des membres." href="/fr/teams/members/" />
+	<LinkCard title="Sécurité et modèle de confiance" description="Ce que le serveur peut voir et ne peut pas voir." href="/fr/teams/security/" />
+	<LinkCard title="Formules et facturation" description="Sièges, abonnements et règles du mode lecture seule." href="/fr/teams/plans-and-billing/" />
+</CardGrid>

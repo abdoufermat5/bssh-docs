@@ -1,0 +1,230 @@
+---
+title: 故障排查
+description: 用 doctor 和 audit 诊断 bssh，并修复常见的连接、Kerberos 和 Teams 故障。
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+先运行两个内置检查：用于本地安装的 `bssh doctor`，以及用于权限和连接规范的 `bssh audit`。许多故障会出现在其中之一。
+
+## 运行检查
+
+`bssh doctor` 依次检查六项：
+
+- **Configuration**：当前环境和其数据库路径。
+- **Database**：打开并初始化数据库文件。
+- **SSH client**：`ssh` 位于 `PATH` 中。
+- **SSH config**：配置的 SSH 配置文件路径存在。
+- **SSH agent**：当 `auth.use_agent` 开启时，`auth.agent_socket` 或 `SSH_AUTH_SOCK` 的 agent socket 存在。
+- **Kerberos**：当默认启用 Kerberos 时，`klist` 和 `kinit` 位于 `PATH` 中。
+
+每项检查输出 `[OK]`、`[WARN]` 或 `[FAILED]`、一行详情，以及未通过时的一行 `Suggestion:`。运行以 `Summary: no blocking problems found.` 或 `Summary: N blocking problem(s) found.` 结束；只要有检查失败，命令就以非零状态退出。`WARN` 不会导致失败。
+
+`bssh audit` 报告同一台机器的安全状况：传输层的主机密钥策略、配置目录和数据库文件的权限、`~/.ssh` 中的私钥（包括弱 DSA 密钥）、依赖密码的连接，以及上次使用超过 90 天的连接。它会给出百分制评分，然后为每个发现列出一条记录，包含说明和修复建议。
+
+```text
+==================================================
+        Bayesian SSH Security Audit Report        
+==================================================
+Environment: default
+
+Security Score: 100/100 (Grade: A+, Rating: EXCELLENT)
+
+Audit Breakdown (Total Findings: 0)
+
+No security issues found! Your SSH environment is cleanly configured.
+```
+
+`bssh audit --fix` 修复配置目录、数据库、`~/.ssh` 和私钥上过于开放的权限。它绝不会放宽更严格的权限，并跳过 `~/.ssh` 中的符号链接。
+
+## Kerberos：票据缺失或已过期
+
+Kerberos 连接会先检查 `klist -s`。没有有效票据时，`bssh` 会在终端中运行 `kinit -f` 并等待密码。失败时，命令以 `Failed to create Kerberos ticket:` 加上 Kerberos 客户端自己的消息停止。
+
+自行检查和续期票据：
+
+```sh
+klist
+kinit
+klist -s    # 票据有效时返回 0
+```
+
+`klist -s` 成功后再次连接。要为单次会话跳过 Kerberos：
+
+```sh
+bssh connect web-prod -k false
+```
+
+如果缺少 `klist` 或 `kinit`，`bssh doctor` 会把 Kerberos 检查显示为 `WARN`，并建议安装客户端工具或关闭 `use_kerberos_by_default`。
+
+## 连接被拒绝或超时
+
+直接连接报告其自身客户端的错误，例如 `TCP/SSH connect failed: ...`。通过 `ssh` 的连接（跳板机或 Kerberos）报告 OpenSSH 的消息，例如 `Connection refused` 或 `Connection timed out`。
+
+检查 bssh 保存的内容以及端口是否有响应：
+
+```sh
+bssh show web-prod
+bssh ping web-prod -t 5
+```
+
+`bssh ping` 运行带 `BatchMode=yes` 的 `ssh`，因此只有连接和认证都成功，主机才算可达。每次探测的上限是 `-t` 值的两倍加五秒：使用 `-t 5` 时，卡住的主机会报告 `timed out after 15s`。只要有主机不可达，命令就以非零状态退出。拒绝通常意味着 SSH 守护进程没有监听该端口；超时说明防火墙、未连接的 VPN 或错误的跳板机。
+
+要检查某个标签下的所有主机：
+
+```sh
+bssh ping -g prod
+```
+
+## 认证失败
+
+看到的错误取决于连接的建立方式。
+
+直接连接使用 bssh 自带的 SSH 客户端。它依次尝试配置的身份密钥文件、连接的密钥，以及 `~/.ssh` 中的默认密钥名。受口令保护的密钥会被跳过；如果没有任何密钥可用，bssh 会提示输入密码（`deploy@web-prod.example.com's password:`）。密码也被拒绝时，命令以 `Authentication failed` 停止。
+
+通过跳板机或 Kerberos 的连接运行 OpenSSH 客户端，因此 agent 和 `~/.ssh/config` 会生效，服务器消息原样返回，例如 `Permission denied (publickey)`。
+
+检查连接使用的密钥，然后确认密钥存在：
+
+```sh
+bssh show web-prod
+bssh key list
+```
+
+`bssh key list` 列出 `~/.ssh` 中带公钥的密钥，以及它们的指纹和私钥权限检查。密钥文件必须只有你可读；`bssh audit --fix` 会修复。
+
+如果保存的密钥不对，为单次会话替换：
+
+```sh
+bssh connect web-prod -i ~/.ssh/id_ed25519
+```
+
+既没有密钥也没有 Kerberos 的连接会停在密码提示，`bssh audit` 会将其列出。
+
+## 跳板机故障
+
+不使用 Kerberos 时，跳板机按跳转方式工作：`bssh` 启动 `ssh`，通过 `ProxyCommand` 打开跳板机并转发到目标。第一个失败的一跳会报告错误，因此要看清它指出的主机。
+
+- 单独测试跳板机，例如若已保存则运行 `bssh connect bastion`。
+- 直接连接目标以确认其余路由：`bssh connect web-prod --no-bastion`。
+- 用 `-B deploy` 更改跳板机用户，或用 `-b bastion2.example.com` 更改跳板机。
+
+同时使用 Kerberos 和跳板机时，跳板机作为交互式堡垒机：`bssh` 在其上打开会话并把目标作为参数传入，因此跳板机自己的拒绝会出现在终端中。[跳板机](/zh-cn/guides/bastions/) 涵盖两种模式和默认跳板机设置。
+
+## 主机密钥已更改
+
+通过 bssh 自带客户端的连接，其密钥与 `known_hosts` 不再匹配时会被拒绝，错误中包含两个指纹以及 `This could indicate a man-in-the-middle attack.` 和 `Remove the old key from known_hosts if this is expected.` 两行。通过 OpenSSH 的连接改用 OpenSSH 自己的主机密钥检查。
+
+<Steps>
+1. 询问主机所有者密钥是否已更改，例如重建或重装之后。只有确实更改时才继续。
+2. 删除旧条目：
+   ```sh
+   ssh-keygen -R web-prod.example.com
+   ```
+3. 再次连接。在默认的 `accept-new` 策略下，bssh 自带客户端会显示新指纹并将其加入 `known_hosts`。
+</Steps>
+
+在 `known_hosts` 中标记为 `@revoked` 的密钥始终被拒绝，并显示 `REVOKED host key presented by` 和 `The key is marked @revoked in known_hosts; refusing to connect.`。使用 bssh 自带客户端时，`strict_host_key_checking=strict` 也会拒绝未知主机。该设置位于环境配置的 `transport.strict_host_key_checking` 中；参见[配置参考](/zh-cn/reference/configuration/)。
+
+不要为了绕过这个错误而把它设为 `off`：这也会禁用刚刚保护你的检查，`bssh audit` 会将其列为严重发现。
+
+## 数据库被锁定或损坏
+
+SQLite 同一时间只允许一个写入者。`bssh` 等待写锁五秒，然后报告 SQLite 的 `database is locked`。命令行和桌面应用共用同一个数据库文件，因此一方的长时间操作可能阻塞另一方。
+
+关闭另一个窗口或命令后重试。多进程同时写入，例如一批并行传输，最容易触发该限制。
+
+如果数据库完全无法打开，`bssh doctor` 会把 Database 检查显示为 `FAILED`，并给出 `could not initialize <path>: <reason>`。恢复备份；如果数据库仍能打开，先做一次新的备份：
+
+```sh
+bssh backup
+bssh restore ~/.config/bayesian-ssh/environments/default/backups/backup-2026-10-23-120000.db
+```
+
+`bssh restore` 在接触当前数据库之前验证文件，只有以只读方式作为 SQLite 打开（`is not a valid SQLite database`）、通过 `PRAGMA quick_check`（`failed the SQLite integrity check`）且包含 `connections` 表（`is not a bayesian-ssh database (no 'connections' table)`）时才接受。覆盖之前，它会在数据库的 `backups/` 目录中写入名为 `pre-restore-<timestamp>.db` 的安全备份，然后删除过期的 `-journal`、`-wal` 和 `-shm` 文件，以免它们被重放到恢复后的文件上。
+
+## Snap 限制
+
+Snap 在严格限制下运行。安装后，在你连接一次接口之前，它看不到 `~/.ssh`：
+
+```sh
+sudo snap connect bayesian-ssh:ssh-keys
+```
+
+即便如此，`~/.ssh` 也是只读挂载，这有两个后果：
+
+- `bssh key generate` 无法把密钥写入 `~/.ssh`。请在 snap 之外用 `ssh-keygen` 生成密钥，或安装原生包，并用 `-i` 指向该文件。
+- 新的主机密钥无法追加到 `known_hosts`，因此无法从 snap 内接受未知主机。先用原生 `ssh` 连接一次，它会写入同一个 `~/.ssh`。
+
+在 snap 内创建的票据可直接使用。要复用主机上创建的票据，请连接 Kerberos 接口：
+
+```sh
+sudo snap connect bayesian-ssh:kerberos-tickets
+```
+
+这只适用于由 `KRB5CCNAME=FILE:/tmp/krb5cc_*` 指定的文件缓存；KCM 和 KEYRING 缓存（SSSD 以及 Fedora、RHEL 的默认方式）在严格 snap 中不可见。这种情况请使用原生安装。
+
+Snap 把配置和数据库放在 `~/snap/bayesian-ssh/current/.config/bayesian-ssh/`，与原生安装相互独立。从原生安装运行的命令看不到 snap 的连接，反之亦然。
+
+## Teams 错误
+
+### 口令无法解锁设备
+
+命令行显示 `wrong Teams passphrase`；桌面应用显示 **That passphrase didn't unlock this device's keys.**
+
+口令保护此设备的 Teams 密钥，无法重置。请仔细重新输入。如果设置了 `BSSH_TEAMS_PASSPHRASE`，它会替代提示，因此 shell 中的旧值会产生同样的错误：
+
+```sh
+env | grep BSSH_TEAMS_PASSPHRASE
+```
+
+如果口令丢失，该设备上的密钥将保持锁定：无法恢复，也没有人能重置。恢复方式是重新设置一台设备，并由管理员向新设备授予团队密钥。
+
+### 管理员指纹不匹配
+
+加入团队会固定管理员设备的指纹。当没有任何管理员设备带有该指纹时，bssh 会拒绝并指出团队：`Nothing was trusted. Check the fingerprint with your admin (a mismatch can also mean the server is not the one you think)`。加入自托管服务器时最后一句尤其重要：也请确认服务器 URL。
+
+管理员用 `bssh teams whoami` 显示自己的指纹。用错误中的团队 id 完成加入：
+
+```sh
+bssh teams join --team <TEAM_ID> --fingerprint <FINGERPRINT>
+```
+
+### 设备正在等待团队密钥
+
+加入后，`bssh teams sync` 会显示 `waiting for an admin to grant this device the team key`。把你的指纹发给管理员；管理员列出等待中的设备并授予你的设备：
+
+```sh
+bssh teams whoami                                  # 成员
+bssh teams grant platform                          # 管理员：列出等待中的设备
+bssh teams grant platform --fingerprint <FINGERPRINT>
+```
+
+### 团队为只读或没有空缺席位
+
+这两个错误都来自服务器，并带有可操作的消息，`bssh` 会原样显示。
+
+- `the team has no free seat`：管理员用 `bssh teams billing <team> --checkout` 订阅，或在团队已有订阅时用 `--manage` 在计费门户中修改席位数。在没有计费的自托管服务器上，通过移除成员或撤销待处理邀请来释放席位。
+- `the team is read-only`：团队的成员数超过席位上限，因为订阅已失效，或支付的席位少于成员数。管理员用 `bssh teams billing <team> --checkout` 或 `--manage` 修复。团队为只读时，拉取和授予密钥仍然可用。
+
+### 审计链无法验证
+
+当设备先前上传的事件不再位于链中时，服务器返回 `audit chain broken at seq <number>: <reason>`。`bssh` 随后补充：`The server's copy of your audit log is missing events this device uploaded before. That can mean they were deleted on the server: tell your team admin.`
+
+在 `bssh teams sync` 成功之前保持设备在线，使其队列中的事件到达服务器。管理员可随时检查日志：
+
+```sh
+bssh teams audit platform
+```
+
+有事件验证失败时，命令以非零状态退出。[审计日志](/zh-cn/teams/audit-log/) 说明了链能证明什么。
+
+### 服务器需要更新的客户端
+
+服务器返回 HTTP 426，`bssh` 显示 `the server needs a newer bssh; please upgrade`。运维方提高了最低客户端版本。按安装方式更新命令行和桌面应用。
+
+## 获取帮助
+
+提交 [issue](https://github.com/abdoufermat5/bayesian-ssh/issues)，并附上 `bssh --version` 和 `bssh doctor` 的输出。发布前先阅读输出：路径和环境名称通常没问题，主机名和命令输出则未必。
+
+对于自托管 Teams 服务器，还请附上故障前后的 API 日志行。

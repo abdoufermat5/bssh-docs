@@ -1,0 +1,153 @@
+---
+title: 会话录制与回放
+description: 将终端输出保存为 asciicast 格式，全文检索历史输出，并在终端或桌面应用中进行回放。
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Bayesian SSH 可以将 SSH 会话的终端屏幕输出保存为 asciicast v2 格式文件。你可以通过全文搜索检索历史会话输出，在终端或桌面应用中进行回放，并通过配置保留策略有效管理磁盘存储空间。
+
+:::caution
+录制功能会如实保存终端屏幕上输出的内容。如果运行的命令在屏幕上打印了敏感机密、访问令牌或私钥，这些内容将被写入录制文件并建立本地搜索索引。键盘按键输入本身绝不会被记录。
+:::
+
+## 启用会话录制
+
+会话录制功能默认处于关闭状态。你可以全局启用它、仅对特定标签的主机启用，或在连接时针对单次会话进行切换。
+
+<Tabs syncKey="surface">
+	<TabItem label="命令行">
+		全局启用录制：
+
+		```sh
+		bssh config --recording on
+		```
+
+		仅对包含特定标签的主机进行录制：
+
+		```sh
+		bssh config --recording-tags prod,critical
+		```
+
+		如需再次全局关闭录制：
+
+		```sh
+		bssh config --recording off
+		```
+
+		你也可以在连接时通过 `--record` 或 `--no-record` 选项覆盖全局配置：
+
+		```sh
+		# 即使全局录制已关闭，也录制本次会话
+		bssh connect web-prod --record
+
+		# 即使全局录制已开启，也不录制本次会话
+		bssh connect web-prod --no-record
+		```
+	</TabItem>
+	<TabItem label="桌面应用">
+		从侧边栏打开 **Settings**，并进入 **Session recording**：
+
+		1. 勾选 **Record sessions** 以对所有连接启用录制。
+		2. 在 **Only for tags** 中输入用逗号分隔的标签列表（例如 `prod, staging`），以便仅录制匹配的主机。留空则表示录制所有连接。
+	</TabItem>
+</Tabs>
+
+### 配置文件选项
+
+你可以在当前环境的 `config.json` 文件中的 `recording` 键下精细调整录制参数：
+
+```json
+{
+  "recording": {
+    "enabled": false,
+    "tags": ["prod"],
+    "max_bytes_per_session": 52428800,
+    "retention_days": 90
+  }
+}
+```
+
+- **`max_bytes_per_session`**：防止失控的日志输出耗尽你的磁盘空间。如果某个会话的输出达到此限制（默认：50 MiB），`bssh` 会写入 `[bssh: recording truncated]` 并停止继续录制该会话的后续输出。
+- **`retention_days`**：旧录制文件及其搜索索引在多少天后被自动清理（默认：90 天）。
+
+## 存储位置与文件权限
+
+录制文件保存在当前环境数据目录下的 `recordings/` 文件夹中（Linux 上默认为 `~/.local/share/bayesian-ssh/recordings/`）。
+
+- **格式**：每个会话保存为一个 [asciicast v2](https://github.com/asciinema/asciicast-format) 文件，命名为 `<session_id>.cast`。这些文件可以直接使用 `bssh replay` 或任何支持 asciicast 的播放器播放。
+- **权限**：文件在写入任何字节之前即以严格的 `0600`（`-rw-------`）模式创建。你计算机上的其他本地系统用户无权读取这些录制文件。
+
+## 回放已录制的会话
+
+若要在终端中回放录制好的会话，请将该会话的 ID 或唯一前缀（至少 6 个字符）传给 `bssh replay`：
+
+```sh
+bssh replay 3f2a91c0
+```
+
+你可以自定义播放倍速，并限制长时间的空闲等待：
+
+```sh
+# 以 2 倍速播放
+bssh replay 3f2a91c0 --speed 2.0
+
+# 将按键或输出之间的空闲暂停限制在最多 1 秒内（默认：2 秒）
+bssh replay 3f2a91c0 --idle-cap 1.0
+```
+
+| 选项 | 默认值 | 描述 |
+| --- | --- | --- |
+| `-s, --speed <FACTOR>` | `1` | 播放倍速乘数（例如设置为 `2` 表示双倍速）。 |
+| `--idle-cap <SECONDS>` | `2` | 空闲等待期间单次暂停的最大持续秒数。 |
+
+在桌面应用中，打开 **History** 视图，点击带有录制图标的会话即可唤起内置的回放播放器。桌面播放器支持播放、暂停、进度条拖动、多档倍速调节（1x、2x、4x）以及直接跳转至会话末尾。
+
+## 检索会话输出文本
+
+Bayesian SSH 使用 SQLite FTS5（全文检索）模块为已录制会话的输出文本建立索引。在建立索引之前，系统会剔除 ANSI 终端颜色转义字符和光标控制序列，确保你能直接匹配纯文本输出。
+
+要在所有录制中搜索某个关键词或短语：
+
+```sh
+bssh history --grep "kernel panic"
+```
+
+```text
+CONNECTION           STARTED              SESSION    SNIPPET
+────────────────────────────────────────────────────────────────────────────────────────
+web-prod             2026-10-23 09:14:22  3f2a91c0   ...systemd-journald: kernel panic - not syncing...
+staging-api          2026-10-22 17:05:12  f4a10e82   ...kernel panic detected in crashdump...
+```
+
+你可以将 `--grep` 与连接名称或日期过滤器结合使用：
+
+```sh
+bssh history -c web-prod --days 14 --grep "certificate expired"
+```
+
+## 清理过期录制
+
+当录制文件达到配置的 `retention_days` 期限（默认：90 天）时，`bssh` 会自动删除过期的 `.cast` 文件，并从数据库及 FTS5 搜索索引中清除对应记录。
+
+清理会在以下时机自动执行：
+
+- 每次 SSH 会话正常结束时。
+- 执行 `bssh close --cleanup` 时。
+
+```sh
+bssh close --cleanup
+```
+
+```text
+🗑️  Pruned 3 expired recording(s) (older than 90 days)
+```
+
+若希望永久保存录制文件，请在 `config.json` 中设置 `"retention_days": 0`。
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="会话历史" description="过滤历史记录、排查退出码并查看使用统计。" href="/zh-cn/guides/sessions/" />
+	<LinkCard title="配置参考" description="查看 config.json 中关于录制的所有配置选项。" href="/zh-cn/reference/configuration/" />
+</CardGrid>

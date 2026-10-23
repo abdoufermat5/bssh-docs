@@ -1,0 +1,123 @@
+---
+title: 配置 Teams
+description: 在一台设备上配置 bssh Teams，创建团队并共享第一条连接。
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+bssh Teams 与团队中的成员共享连接。每台设备保留自己的密钥，团队连接在同步前先在你的设备上加密，同步服务器只保存密文和元数据。每台设备只需配置一次 Teams。
+
+Teams 需要一个同步服务器。使用托管服务时，如果你是被邀请的成员，URL 在邀请中。如果你是创建团队的人，运维方会为你登记，URL 在开通时提供。自托管服务器的 URL 由其运维方提供。
+
+## 配置这台设备
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+```sh
+bssh teams init --server https://teams.example.com --email you@example.com
+```
+
+bssh 会要求你设置口令，然后创建你的账号和这台设备的密钥。
+
+- `--invite <TOKEN>`：在只接受受邀账号的服务器上创建账号。令牌在你的邀请中。
+- `--device-name <NAME>`：向团队管理员显示这台设备的名称。默认使用机器的主机名。
+
+口令用于加密这台设备的 Teams 密钥，至少需要 8 个字符。它不会离开这台设备，也没有人能够重置它。如果忘记口令，这台设备的密钥会保持锁定，无法恢复。请让管理员把团队密钥授予一台新设备。
+
+使用这台设备密钥的命令都会要求输入口令。在脚本中，请改为设置 `BSSH_TEAMS_PASSPHRASE`。
+
+</TabItem>
+<TabItem label="桌面应用">
+
+在侧边栏打开 **Teams**。配置界面会要求填写同步服务器、你的邮箱、设备名称和口令。
+
+如果你有邀请，请把整条消息粘贴到 **Got an invite? Paste it here (optional)**。它会填入服务器和你的邮箱，配置完成后继续加入流程。否则填写各字段并选择 **Set up this device**。
+
+</TabItem>
+</Tabs>
+
+## 检查这台设备
+
+```sh
+bssh teams whoami
+```
+
+命令会显示你的账号、服务器、这台设备的 ID 和指纹。指纹向团队管理员标识这台设备的密钥；管理员授予团队密钥时，你需要把它发给他们。在桌面应用中，同一个指纹位于 **Teams** 顶部的设备面板中，并带有 **Copy** 按钮。
+
+## 创建团队
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+```sh
+bssh teams create platform
+```
+
+你会成为团队的管理员。团队也会成为 `bssh list` 中的一个来源：它的连接会像你自己的连接一样出现在那里，来源为 `platform`。
+
+</TabItem>
+<TabItem label="桌面应用">
+
+在 Teams 页面顶部选择 **Create team**，输入名称并选择 **Create team**。你会成为它的管理员。
+
+</TabItem>
+</Tabs>
+
+## 共享连接
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+```sh
+bssh teams share db-prod --team platform
+```
+
+共享的连接包含主机、用户、端口、跳板机（包括其用户）、Kerberos 设置和标签。它绝不包含密钥路径或密码：每位成员使用自己的密钥连接。团队中的所有成员会在下次同步后看到这条连接，连接到该主机会记入团队的审计日志。
+
+在你的设备上，团队的副本会以 `db-prod@platform` 列在你自己的 `db-prod` 旁边。
+
+</TabItem>
+<TabItem label="桌面应用">
+
+在 **Hosts** 视图中，打开主机的菜单并选择 **Share with a team…**，或在选中的主机上按 <kbd>S</kbd>。选择团队，确认共享的字段，然后选择 **Share with platform**。对话框会列出这些字段：主机、用户、端口、跳板机、Kerberos 和标签。
+
+你也可以从团队页面共享：打开团队，进入 **Hosts**，在 **Share a host with platform** 下选择一个主机并选择 **Share**。
+
+</TabItem>
+</Tabs>
+
+## 修改共享的连接
+
+编辑团队的副本，然后在下次同步前重新共享。否则同步会恢复保险库中的版本：
+
+```sh
+bssh edit db-prod@platform --user deploy
+bssh teams share db-prod@platform --team platform
+```
+
+在桌面应用中，编辑该主机并在其菜单中选择 **Update in platform**。
+
+## 移除共享的连接
+
+```sh
+bssh teams unshare db-prod@platform
+```
+
+bssh 会要求确认。这条连接会从团队保险库中删除，对所有人生效，成员在下次同步时不再看到它；服务器会保留其历史。如果无法连接服务器，删除会排队到下次同步。在桌面应用中，打开团队的 **Hosts** 标签页，在连接旁选择 **Unshare**，然后选择 **Remove for everyone**。
+
+:::caution
+服务器会保留该条目的历史，尚未同步的成员在下一次同步前仍会看到这条连接。
+:::
+
+## 解锁和锁定
+
+在命令行中，使用这台设备密钥的命令会要求输入口令，或读取 `BSSH_TEAMS_PASSPHRASE`。
+
+桌面应用会在启动后第一次打开 **Teams** 时要求输入口令。密钥会一直以解锁状态保存在内存中，直到你在 Teams 顶部选择 **Lock** 或退出应用。Teams 锁定时，团队主机仍然可以连接；它们的会话事件会在解锁后的下次同步时签名并上传。
+
+## 下一步
+
+- [邀请团队成员](/zh-cn/teams/members/)，并把密钥授予每台设备。
+- [同步](/zh-cn/teams/sync/)，了解离线修改和冲突如何处理。
+- [套餐与计费](/zh-cn/teams/plans-and-billing/)了解席位和订阅。

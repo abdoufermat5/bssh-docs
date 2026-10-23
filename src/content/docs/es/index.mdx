@@ -1,0 +1,51 @@
+---
+title: Bayesian SSH
+description: Un gestor SSH pensado para el teclado que aprende a qué host quieres conectarte. Línea de comandos y aplicación de escritorio, con uso compartido en equipo cifrado de extremo a extremo.
+template: splash
+hero:
+  title: Cada host, a una tecla.
+  tagline: Bayesian SSH es un gestor SSH pensado para el teclado, en la línea de comandos y en el escritorio. Aprende a qué host quieres conectarte y comparte conexiones con tu equipo mediante una bóveda cifrada de extremo a extremo.
+  actions:
+    - text: Empezar
+      link: /es/start/quick-start/
+      icon: right-arrow
+    - text: Instalar
+      link: /es/start/installation/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import hosts from '../../../assets/screenshots/app-hosts.png';
+
+```sh frame="terminal"
+curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash
+bssh add web-prod web-prod.example.com --tags prod,web
+bssh connect prod
+```
+
+<CardGrid>
+	<Card title="Encuentra el host que buscas" icon="magnifier">
+		Escribe parte de un nombre, una etiqueta o una abreviatura. Los resultados se ordenan según la frecuencia y lo reciente de tu uso.
+	</Card>
+	<Card title="Bastiones y Kerberos integrados" icon="server">
+		Hosts de salto, bastiones interactivos y tickets Kerberos se gestionan por ti, por conexión o por defecto.
+	</Card>
+	<Card title="Terminal y escritorio" icon="laptop">
+		Los mismos hosts en `bssh` y en la aplicación de escritorio, con terminales, transferencia de archivos e historial de sesiones.
+	</Card>
+	<Card title="Compartido con tu equipo" icon="padlock">
+		bssh Teams sincroniza las conexiones mediante una bóveda cifrada en tus dispositivos, con un registro de auditoría firmado.
+	</Card>
+</CardGrid>
+
+<Image src={hosts} alt="La aplicación de escritorio de Bayesian SSH con los hosts guardados, sus etiquetas y su último uso" class="landing-shot" />
+
+## Siguientes pasos
+
+<CardGrid>
+	<LinkCard title="Inicio rápido" description="Guarda un host y conéctate en dos minutos." href="/es/start/quick-start/" />
+	<LinkCard title="Guías" description="Conexiones, bastiones, túneles, transferencias y la aplicación de escritorio." href="/es/guides/connections/" />
+	<LinkCard title="bssh Teams" description="Comparte conexiones con cifrado de extremo a extremo y audita cada sesión." href="/es/teams/overview/" />
+	<LinkCard title="Referencia de comandos" description="Todos los comandos y opciones." href="/es/reference/cli/" />
+</CardGrid>

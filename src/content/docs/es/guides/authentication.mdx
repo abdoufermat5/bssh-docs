@@ -1,0 +1,176 @@
+---
+title: Autenticación
+description: Gestiona claves SSH, sockets de ssh-agent, tickets de Kerberos y verificación de claves de host.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH es compatible con autenticación por clave pública, detección automática de sockets de ssh-agent, inicio de sesión único con Kerberos y verificación estricta de claves de host. La autenticación se puede configurar de forma global, por conexión o sobrescribirse en tiempo de ejecución.
+
+## Gestionar claves SSH
+
+El subcomando `bssh key` administra claves SSH locales en `~/.ssh/` e instala claves públicas en servidores remotos.
+
+### Listar claves locales
+
+Para consultar tus claves locales y sus permisos de archivo:
+
+```sh
+bssh key list
+```
+
+```text
+SSH Key Inventory (~/.ssh/)
+--------------------------------------------------
+Key: id_ed25519
+  Type:        ssh-ed25519
+  Fingerprint: SHA256:7v8Wk9...
+  Comment:     ana@example.com
+  Private Key: /home/ana/.ssh/id_ed25519
+  Permission:  0600 (SECURE)
+```
+
+`bssh` comprueba que las claves privadas tengan permisos de archivo seguros (`0600`). Si otros usuarios locales pueden leer una clave, `bssh` muestra una advertencia.
+
+### Generar un par de claves
+
+Crea un nuevo par de claves directamente en `~/.ssh/`:
+
+```sh
+bssh key generate --name id_ed25519_prod
+```
+
+Por defecto, `bssh` genera un par de claves Ed25519. Para generar una clave RSA de 4096 bits en su lugar, añade `-t rsa`:
+
+```sh
+bssh key generate --name id_rsa_legacy -t rsa
+```
+
+Al generar claves, `bssh` asegura automáticamente que el directorio `~/.ssh/` tenga permisos `0700` y que el archivo de la clave privada tenga permisos `0600`.
+
+### Copiar claves públicas a servidores remotos
+
+Para instalar tu clave pública en el archivo `~/.ssh/authorized_keys` de un host remoto:
+
+```sh
+bssh key copy web-prod
+```
+
+`bssh key copy` busca automáticamente `~/.ssh/id_ed25519.pub`, después `~/.ssh/id_rsa.pub`, o utiliza la clave asignada a la conexión guardada. También puedes indicar una clave pública específica:
+
+```sh
+bssh key copy web-prod -k ~/.ssh/id_ed25519_prod.pub
+```
+
+El comando se conecta al destino (a través del bastión configurado si existe), escapa la clave para evitar inyecciones en la shell, crea el directorio `~/.ssh` con permisos `0700` si es necesario, añade la clave y establece permisos `0600` en `~/.ssh/authorized_keys`.
+
+<Tabs syncKey="surface">
+<TabItem label="Línea de comandos">
+
+Utiliza `bssh key list`, `bssh key generate` y `bssh key copy` en tu terminal.
+
+</TabItem>
+<TabItem label="Aplicación de escritorio">
+
+En la aplicación de escritorio, abre la vista **Keys** en la barra lateral. Esta vista muestra todas las claves detectadas, sus huellas, tipos y estado de permisos.
+
+- Pulsa en **Generate key** para crear un par de claves Ed25519 o RSA.
+- Pulsa en **Deploy** en cualquier clave para elegir un servidor de destino e instalar la clave pública.
+- Si alguna clave privada tiene permisos inseguros, aparece un aviso con una orden para corregirlos con un solo clic.
+
+</TabItem>
+</Tabs>
+
+## Configurar una clave por conexión
+
+Puedes vincular una clave privada específica a cualquier host guardado.
+
+- **Al añadir una conexión**:
+  ```sh
+  bssh add db-prod 10.0.4.12 -i ~/.ssh/id_ed25519_db
+  ```
+- **Al editar una conexión**:
+  ```sh
+  bssh edit db-prod --key ~/.ssh/id_ed25519_db
+  ```
+- **Al conectar**: Sobrescribe la clave para una única sesión:
+  ```sh
+  bssh connect db-prod -i ~/.ssh/id_ed25519_temp
+  ```
+
+Si una conexión no tiene una clave configurada, `bssh` recurre a tu agente SSH en ejecución o a los archivos de identidad predeterminados de OpenSSH.
+
+## Usar ssh-agent
+
+`bssh` localiza los sockets activos de agentes SSH en tu sistema sin requerir configuración manual.
+
+Para evitar ataques de adopción de sockets —en los que un usuario local no confiable crea un socket en `/tmp` para interceptar solicitudes de firma—, `bssh` comprueba que el archivo del socket pertenezca a tu identificador de usuario antes de conectarse.
+
+Sigue este orden de comprobación:
+
+1. **Directorios temporales estándar de OpenSSH**: `/tmp/ssh-*/agent.*`
+2. **Directorios de tiempo de ejecución del usuario y agentes de escritorio**:
+   - `/run/user/<uid>/ssh-agent.socket` (servicio de usuario de systemd)
+   - `/run/user/<uid>/gcr/ssh` (GNOME Keyring)
+   - `/run/user/<uid>/keyring/ssh`
+   - `/run/user/<uid>/openssh_agent`
+   - `/run/user/<uid>/1password/t/agent.sock` y `~/.1password/agent.sock` (agente SSH de 1Password)
+3. **Variables de entorno de procesos**: Examina `/proc/*/environ` buscando valores de `SSH_AUTH_SOCK` que pertenezcan a tu identificador de usuario.
+4. **Puente SSH del agente GPG**: `/run/user/<uid>/gnupg/S.gpg-agent.ssh` y `~/.gnupg/S.gpg-agent.ssh`.
+
+## Autenticación Kerberos
+
+Bayesian SSH incluye soporte nativo para Kerberos (GSSAPI).
+
+### Activar Kerberos
+
+- **Globalmente por defecto**:
+  ```sh
+  bssh config --use-kerberos true
+  ```
+- **Por conexión**:
+  ```sh
+  bssh add krb-srv krb.example.com -k true
+  bssh edit krb-srv --kerberos true
+  ```
+- **Por sesión**:
+  ```sh
+  bssh connect krb-srv -k true
+  bssh connect krb-srv -k false
+  ```
+
+### Verificación de tickets
+
+Antes de conectar a un host con Kerberos, `bssh` inspecciona la caché de credenciales local (resolviendo `KRB5CCNAME` o la caché por defecto indicada en `/etc/krb5.conf`). Comprueba que dispongas de un Ticket Granting Ticket (TGT) activo, valida el nombre del principal y te avisa si el ticket ha caducado.
+
+En la aplicación de escritorio, se muestra un indicador de estado de Kerberos en la barra lateral. Haz clic en él para revisar la caducidad del ticket o abrir la ventana de obtención para ejecutar `kinit`.
+
+## Verificación de claves de host
+
+Las claves de host previenen ataques de intermediario. `bssh` verifica las claves remotas contra `~/.ssh/known_hosts`, admitiendo tanto entradas en texto plano como entradas con hash de OpenSSH (`|1|salt|hash`).
+
+### Resultados de la comprobación
+
+Al validar la clave de un host remoto, `bssh` clasifica el resultado en uno de cuatro estados:
+
+- **KnownGood**: El host y la clave coinciden con una entrada en `known_hosts`. La conexión continúa con normalidad.
+- **Unknown**: El host aún no está registrado en `known_hosts`.
+- **Mismatch**: Existe una entrada para el host, pero la clave presentada no coincide. Esto indica un cambio de clave en el host o un posible ataque de intermediario.
+- **Revoked**: La clave está marcada como `@revoked` en `known_hosts`. `bssh` rechaza la conexión de inmediato.
+
+### Políticas de verificación
+
+La verificación de claves de host se rige por el parámetro de configuración de transporte `strict_host_key_checking`:
+
+- `accept-new` (por defecto): Confía y añade automáticamente las claves de hosts desconocidos a `~/.ssh/known_hosts` en la primera conexión (Trust on First Use). Rechaza claves modificadas o revocadas.
+- `strict`: Rechaza la conexión con cualquier host cuya clave no esté presente de antemano en `known_hosts`.
+- `off`: Ignora las discrepancias en las claves de host.
+
+Ejecuta `bssh audit` para detectar configuraciones inseguras. Si `strict_host_key_checking` está en `off`, el comando de auditoría señalará un problema crítico.
+
+## Próximos pasos
+
+<CardGrid>
+	<LinkCard title="Hosts bastión" description="Enruta conexiones a través de hosts de salto y bastiones interactivos." href="/es/guides/bastions/" />
+	<LinkCard title="Referencia de seguridad" description="Arquitectura de seguridad, permisos y almacenamiento de credenciales." href="/es/reference/security/" />
+</CardGrid>

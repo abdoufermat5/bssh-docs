@@ -1,0 +1,895 @@
+---
+title: 命令参考
+description: bssh 的所有命令、用法行、选项和默认值。
+---
+
+本页列出 `bssh` 的全部命令、它们接受的选项以及可用的取值。命令按用途分组。
+
+## 全局选项
+
+```text
+Usage: bssh [OPTIONS] [COMMAND]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `--env <ENV_NAME>` | 本次调用改用指定环境（不会改变当前环境）。 |
+| `-h, --help` | 显示帮助。放在命令之后时，显示该命令的帮助。 |
+| `-V, --version` | 显示版本。 |
+
+所有命令也接受 `--env` 和 `-h, --help`。在任意命令后加上 `-h` 即可查看它的帮助，例如 `bssh connect -h`。`bssh help <COMMAND>` 输出同样的内容。
+
+有五个命令带短别名：`bssh gui` 等同 `desktop`，`bssh run` 等同 `exec`，`bssh tunnel` 等同 `forward`，`bssh socks` 等同 `proxy`，`bssh kill` 等同 `close`。
+
+## 连接
+
+保存、查看和修改你要连接的主机，管理它们使用的密钥，并从终端直接连上。
+
+### bssh connect
+
+打开到已保存连接的 SSH 会话。目标会按名称、别名或主机名进行模糊匹配，再由贝叶斯排序选出最佳匹配。下面的选项会为本次会话覆盖已保存的设置。
+
+```text
+Usage: bssh connect [OPTIONS] <TARGET>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TARGET>` | 连接名称、别名或主机名（模糊匹配）。 |
+| `-u, --user <USER>` | 覆盖本次会话的 SSH 用户名。 |
+| `-p, --port <PORT>` | 覆盖本次会话已保存的 SSH 端口。 |
+| `-k, --kerberos <BOOL>` | 为本次会话强制开启或关闭 Kerberos 认证。可选值：`true`、`false`。 |
+| `-b, --bastion <HOST>` | 经由该跳板机连接。 |
+| `--no-bastion` | 绕过已配置的跳板机，直接连接。 |
+| `-B, --bastion-user <USER>` | 跳板机上的用户名。 |
+| `-i, --key <FILE>` | 要使用的 SSH 私钥路径。 |
+| `--record` | 录制本次会话的输出（覆盖配置）。 |
+| `--no-record` | 不录制本次会话的输出（覆盖配置）。 |
+
+### bssh add
+
+把一条新的命名连接保存到数据库。名称就是你在 `connect`、`exec`、`upload` 等命令中传入的标识。
+
+```text
+Usage: bssh add [OPTIONS] <NAME> <HOST>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<NAME>` | 这条连接便于识别的名称（必须唯一）。 |
+| `<HOST>` | 服务器主机名或 IP 地址。 |
+| `-u, --user <USER>` | SSH 用户名（否则使用配置默认值或 `$USER`）。 |
+| `-p, --port <PORT>` | SSH 端口（默认值：配置的默认端口，通常为 22）。 |
+| `-k, --kerberos <BOOL>` | 启用 Kerberos（GSSAPI）认证。可选值：`true`、`false`。 |
+| `-b, --bastion <HOST>` | 经由该跳板机连接。 |
+| `--no-bastion` | 标记为直接连接（忽略默认跳板机）。 |
+| `-B, --bastion-user <USER>` | 跳板机上的用户名。 |
+| `-i, --key <FILE>` | SSH 私钥路径。 |
+| `-t, --tags <TAG>` | 用于分组和筛选的标签（可重复，或用逗号分隔）。 |
+
+### bssh list
+
+显示当前环境中的所有已保存连接，按贝叶斯分数排序（最常用的在前）。
+
+```text
+Usage: bssh list [OPTIONS]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `-t, --tag <TAG>` | 只显示带该标签的连接。 |
+| `-r, --recent` | 只显示最近使用过的连接。 |
+| `-d, --detailed` | 显示完整详情（主机、端口、跳板机、认证方式）。 |
+
+### bssh show
+
+显示一条已保存连接的全部详情。
+
+```text
+Usage: bssh show [OPTIONS] <TARGET>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TARGET>` | 连接名称、别名或 ID。 |
+
+### bssh edit
+
+修改已保存连接的字段。只有你传入的字段会被更新，其余保持不变。
+
+```text
+Usage: bssh edit [OPTIONS] <TARGET>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TARGET>` | 要修改的连接名称、别名或 ID。 |
+| `--name <NAME>` | 重命名连接。 |
+| `--host <HOST>` | 修改主机名或 IP。 |
+| `--user <USER>` | 修改 SSH 用户名。 |
+| `--port <PORT>` | 修改 SSH 端口。 |
+| `--kerberos <BOOL>` | 启用或停用 Kerberos 认证。可选值：`true`、`false`。 |
+| `--bastion <HOST>` | 设置或修改跳板机。 |
+| `--no-bastion` | 移除跳板机（改为直接连接）。 |
+| `--bastion-user <USER>` | 修改跳板机上的用户名。 |
+| `--key <FILE>` | 设置或修改 SSH 私钥路径。 |
+| `--add-tags <TAG>` | 添加标签（可重复，或用逗号分隔）。 |
+| `--remove-tags <TAG>` | 移除标签（可重复，或用逗号分隔）。 |
+
+### bssh remove
+
+删除一条已保存连接，或删除带某个标签的所有连接。
+
+```text
+Usage: bssh remove [OPTIONS] [TARGET]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[TARGET]` | 要删除的连接名称、别名或 ID。 |
+| `-t, --tag <TAG>` | 删除带该标签的连接。 |
+| `-f, --force` | 跳过确认提示。 |
+
+### bssh duplicate
+
+以新名称复制一条已保存连接。所有设置（主机、端口、跳板机、标签等）都会保留。
+
+```text
+Usage: bssh duplicate [OPTIONS] <SOURCE> <NEW_NAME>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<SOURCE>` | 要复制的连接名称。 |
+| `<NEW_NAME>` | 新连接的名称。 |
+
+### bssh ping
+
+尝试 TCP 连接（以及可选的 SSH 握手），检查主机是否可达。可以指定单个目标、使用 `--all`，或按标签选择。
+
+```text
+Usage: bssh ping [OPTIONS] [TARGET]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[TARGET]` | 连接名称、别名或主机名。 |
+| `-a, --all` | 并行测试所有已保存连接。 |
+| `-g, --tag <TAG>` | 测试带该标签的连接。 |
+| `-t, --timeout <SECS>` | 连接超时秒数（默认值：5）。 |
+
+### bssh groups
+
+列出标签分组，或显示某个分组中的连接。
+
+```text
+Usage: bssh groups [OPTIONS] [GROUP_NAME]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[GROUP_NAME]` | 用于筛选的标签名（省略则列出所有分组）。 |
+
+### bssh alias
+
+为连接创建、删除或列出简短别名。
+
+```text
+Usage: bssh alias [OPTIONS] <COMMAND>
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `add` | 把简短别名映射到已有连接名称。 |
+| `remove` | 删除别名。 |
+| `list` | 列出别名（可只看某条连接的别名）。 |
+
+### bssh alias add
+
+```text
+Usage: bssh alias add [OPTIONS] <ALIAS> <TARGET>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<ALIAS>` | 要创建的别名（例如 `wp`）。 |
+| `<TARGET>` | 该别名指向的连接名称。 |
+
+### bssh alias remove
+
+```text
+Usage: bssh alias remove [OPTIONS] <ALIAS>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<ALIAS>` | 要删除的别名。 |
+
+### bssh alias list
+
+```text
+Usage: bssh alias list [OPTIONS] [TARGET]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[TARGET]` | 只显示该连接的别名（省略则显示全部）。 |
+
+### bssh key
+
+管理 SSH 密钥：列出本地密钥、生成密钥对，或把公钥复制到服务器。
+
+```text
+Usage: bssh key [OPTIONS] <COMMAND>
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `list` | 列出 `~/.ssh/` 中的本地 SSH 密钥及其指纹和权限检查结果。 |
+| `generate` | 生成新的 SSH 密钥对（Ed25519 或 RSA），并设置安全的权限。 |
+| `copy` | 把公钥复制到远程服务器（`~/.ssh/authorized_keys`）。 |
+
+### bssh key list
+
+```text
+Usage: bssh key list [OPTIONS]
+```
+
+除全局选项外没有其他选项。
+
+### bssh key generate
+
+```text
+Usage: bssh key generate [OPTIONS] --name <NAME>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `-n, --name <NAME>` | 密钥文件名（例如 `id_ed25519` 或 `my_company_key`）。 |
+| `-t, --key-type <TYPE>` | 密钥类型：`ed25519` 或 `rsa`（默认值：`ed25519`）。 |
+
+### bssh key copy
+
+```text
+Usage: bssh key copy [OPTIONS] <TARGET>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TARGET>` | 连接名称或别名目标。 |
+| `-k, --key <FILE>` | 公钥文件路径（默认值：自动查找 `~/.ssh/id_*.pub`）。 |
+
+## 搜索与会话
+
+找到正确的主机，理解它的排序，并回顾你做过的事。
+
+### bssh why
+
+逐项拆解一条已保存连接的贝叶斯排序分数：频率先验、最近使用、成功率，以及上下文似然比（代码仓库、时段和上一条连接）。
+
+```text
+Usage: bssh why [OPTIONS] <TARGET>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TARGET>` | 连接名称、别名或 ID。 |
+
+### bssh stats
+
+显示使用统计：连接总数、会话数和最常用的主机。
+
+```text
+Usage: bssh stats [OPTIONS]
+```
+
+除全局选项外没有其他选项。
+
+### bssh history
+
+显示过去 SSH 会话的日志，包括连接名称、开始时间、时长和退出状态。
+
+```text
+Usage: bssh history [OPTIONS]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `-c, --connection <NAME>` | 只显示该连接的会话。 |
+| `-n, --limit <COUNT>` | 最多显示的条目数（默认值：20）。 |
+| `-D, --days <DAYS>` | 只显示最近 N 天的会话。 |
+| `-f, --failed` | 只显示以错误结束的会话。 |
+| `-g, --grep <TEXT>` | 在会话录制输出中搜索文本。 |
+
+### bssh replay
+
+在终端中回放 asciicast v2 格式的会话录制。用 `bssh history` 或 `bssh history --grep <text>` 查找会话 ID。
+
+```text
+Usage: bssh replay [OPTIONS] <SESSION>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<SESSION>` | 会话 ID 或唯一前缀（至少 6 个字符）。 |
+| `-s, --speed <FACTOR>` | 回放速度倍数（默认值：1）。 |
+| `--idle-cap <SECONDS>` | 把空闲停顿限制为不超过这么多秒（默认值：2）。 |
+
+### bssh close
+
+终止由 `bssh` 启动的 SSH 会话。不带参数时列出当前活动会话。
+
+```text
+Usage: bssh close [OPTIONS] [TARGET]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[TARGET]` | 要关闭的连接名称（省略则列出活动会话）。 |
+| `-a, --all` | 一次关闭所有活动会话。 |
+| `--cleanup` | 清除过期的会话记录（已不再运行的 PID）。 |
+| `-f, --force` | 跳过确认提示。 |
+
+## 远程命令与传输
+
+无需打开交互式 shell 即可运行命令和传输文件。
+
+### bssh exec
+
+通过 SSH 执行一次性命令。支持单台主机、所有主机或按标签选择。用 `--` 把远程命令与 `bssh` 的选项分开。
+
+```text
+Usage: bssh exec [OPTIONS] [TARGET] -- <COMMAND>...
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[TARGET]` | 连接名称、别名或主机名。 |
+| `<COMMAND>...` | 远程命令及其参数（在命令前放 `--`）。 |
+| `-a, --all` | 在所有已保存连接上并行执行命令。 |
+| `-t, --tag <TAG>` | 在带该标签的连接上执行命令。 |
+| `--dry-run` | 只预览目标主机和命令，不执行。 |
+
+### bssh upload
+
+把本地文件或目录并行传输到一台或多台主机。目标是以逗号分隔的名称、别名或主机，例如 `web1,web2,db1`。
+
+```text
+Usage: bssh upload [OPTIONS] [TARGETS] <LOCAL> <REMOTE>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[TARGETS]` | 目标主机，以逗号分隔。 |
+| `<LOCAL>` | 要发送的本地文件或目录。 |
+| `<REMOTE>` | 远程主机上的目标路径。 |
+| `-a, --all` | 并行上传到所有已保存连接。 |
+| `-t, --tag <TAG>` | 上传到带该标签的连接。 |
+| `--dry-run` | 只预览目标主机和解析后的远程路径，不建立连接。 |
+| `-j, --parallel <N>` | 同时上传的最大主机数（默认值：16）。 |
+| `--offset <BYTES>` | 从该字节位置续传中断的上传（仅限单台主机）（默认值：0）。 |
+| `--mode <OCTAL>` | 设置远程文件的权限（八进制，例如 `0o644`）（默认值：`0o644`）。 |
+| `-r, --recursive` | 递归上传整个目录树。 |
+
+原生连接使用 SFTP 传输，经由交互式堡垒机时会自动改用 SCP。
+
+### bssh download
+
+把远程文件或目录传输到本机。
+
+```text
+Usage: bssh download [OPTIONS] <TARGET> <REMOTE> <LOCAL>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TARGET>` | 连接名称、别名或主机名。 |
+| `<REMOTE>` | 远程主机上的文件或目录路径。 |
+| `<LOCAL>` | 本地目标路径。 |
+| `-r, --recursive` | 递归下载整个目录树。 |
+
+## 隧道
+
+访问只在远端监听的服务。
+
+### bssh forward
+
+创建 SSH 本地端口转发（`-L` 风格）。发往本地绑定地址的流量会被隧道转发到远程目标。格式为 `[bind_addr:]bind_port:remote_host:remote_port`；省略 `bind_addr` 时默认为 `127.0.0.1`。
+
+```text
+Usage: bssh forward [OPTIONS] -L <SPEC> <TARGET>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TARGET>` | 用于建立隧道的连接名称、别名或主机名。 |
+| `-L <SPEC>` | 转发规则：`[bind_addr:]bind_port:remote_host:remote_port`。 |
+
+### bssh proxy
+
+打开 SSH 动态端口转发（`-D` 风格），在本机充当 SOCKS5 代理。把浏览器或应用的代理指向本地端口，即可让流量经远程主机转发。
+
+```text
+Usage: bssh proxy [OPTIONS] -D <PORT> <TARGET>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TARGET>` | 用于建立代理的连接名称、别名或主机名。 |
+| `-D <PORT>` | SOCKS5 监听的本地端口。 |
+| `--bind <ADDR>` | SOCKS5 监听的绑定地址（默认值：`127.0.0.1`）。 |
+
+## 导入与备份
+
+从其他工具导入主机，并为数据库保留副本。
+
+### bssh import
+
+解析 OpenSSH 配置文件或加密的 JSON 备份，把每台主机导入为一条连接。省略 `--file` 时默认读取 `~/.ssh/config`。
+
+```text
+Usage: bssh import [OPTIONS]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `-f, --file <FILE>` | SSH 配置文件或备份文件的路径（默认值：`~/.ssh/config`）。 |
+| `--no-bastion` | 把所有主机导入为直接连接：它们从不使用默认跳板机。 |
+| `-p, --passphrase <PASSPHRASE>` | 用于解密加密备份的口令。 |
+
+### bssh export
+
+把已保存连接序列化为 JSON、TOML 或 OpenSSH 配置格式。默认写入标准输出；用 `-o` 写入文件。
+
+```text
+Usage: bssh export [OPTIONS]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `--format <FMT>` | 输出格式：`json`、`toml` 或 `ssh-config`（默认值：`json`）。 |
+| `-o, --output <FILE>` | 写入该文件而不是标准输出。 |
+| `-t, --tag <TAG>` | 只导出带该标签的连接。 |
+| `-p, --passphrase <PASSPHRASE>` | 用口令加密导出内容。需要 `--output`。 |
+
+### bssh backup
+
+把连接数据库备份到文件。
+
+```text
+Usage: bssh backup [OPTIONS]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `-o, --output <FILE>` | 目标路径（默认值：`ENV_DIR/backups/backup-TIMESTAMP.db`）；该文件必须尚不存在。 |
+
+### bssh restore
+
+从先前的备份恢复连接数据库。覆盖前会先把当前数据库的安全副本写入环境的 `backups/` 目录。
+
+```text
+Usage: bssh restore [OPTIONS] <FILE>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<FILE>` | 要恢复的备份文件路径。 |
+| `-f, --force` | 跳过确认提示。 |
+
+## 环境与清单源
+
+维护彼此独立的连接集合，并让 `bssh` 从清单中发现主机。
+
+### bssh env
+
+管理多环境配置，每个环境都有自己的连接数据库。
+
+```text
+Usage: bssh env [OPTIONS] <COMMAND>
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `list` | 列出所有环境并标出当前环境。 |
+| `use` | 切换当前环境（连接按环境隔离）。 |
+| `create` | 创建一个拥有独立连接数据库的新环境。 |
+| `remove` | 删除一个环境及其保存的所有连接。 |
+
+### bssh env list
+
+```text
+Usage: bssh env list [OPTIONS]
+```
+
+### bssh env use
+
+```text
+Usage: bssh env use [OPTIONS] <NAME>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<NAME>` | 要启用的环境名称。 |
+
+### bssh env create
+
+```text
+Usage: bssh env create [OPTIONS] <NAME>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<NAME>` | 新环境的名称（必须唯一）。 |
+
+### bssh env remove
+
+```text
+Usage: bssh env remove [OPTIONS] <NAME>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<NAME>` | 要删除的环境名称。 |
+
+### bssh source
+
+配置可从中发现连接的清单。清单源记住如何找到主机（SSH 配置、Ansible、Tailscale、AWS、GCP）。添加清单源不会导入任何内容：运行 `bssh source sync <NAME>` 把它发现的主机与连接数据库对齐。
+
+```text
+Usage: bssh source [OPTIONS] <COMMAND>
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `add` | 注册新的清单源（不会同步）。 |
+| `list` | 列出已配置的清单源及其主机数量。 |
+| `sync` | 把清单源的主机与连接数据库对齐。 |
+| `remove` | 删除清单源，可选择保留或删除它的连接。 |
+
+### bssh source add
+
+```text
+Usage: bssh source add [OPTIONS] <NAME> <KIND>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<NAME>` | 该清单源的唯一名称。 |
+| `<KIND>` | 清单源类型：`ssh-config`、`ansible`、`tailscale`、`aws` 或 `gcp`。 |
+| `--path <FILE>` | SSH 配置文件路径（仅 `ssh-config`）。 |
+| `--inventory <FILE>` | Ansible 清单文件路径（仅 `ansible`，必填）。 |
+| `--profile <PROFILE>` | 要使用的 AWS 配置档（仅 `aws`）。 |
+| `--region <REGION>` | 要扫描的 AWS 区域（仅 `aws`，可重复或用逗号分隔）。 |
+| `--address <MODE>` | 连接使用的地址：AWS 为 `private`/`public`/`dns`，GCP 为 `internal`/`external`。 |
+| `--project <PROJECT>` | GCP 项目 ID（仅 `gcp`，必填）。 |
+| `--user <USER>` | 发现的主机使用的默认 SSH 用户名。 |
+| `--bastion <HOST>` | 应用到已发现连接的跳板机。 |
+| `--bastion-user <USER>` | 跳板机上的用户名。 |
+| `--include-offline` | 包含离线节点（仅 `tailscale`）。 |
+
+### bssh source list
+
+```text
+Usage: bssh source list [OPTIONS]
+```
+
+### bssh source sync
+
+```text
+Usage: bssh source sync [OPTIONS] [NAME]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[NAME]` | 要同步的清单源（配合 `--all` 时省略）。 |
+| `-a, --all` | 同步所有已配置的清单源，某个失败后继续。 |
+| `--dry-run` | 只打印计划中的改动，不写入任何内容。 |
+| `--prune` | 删除过期超过 `--prune-after` 天的主机。 |
+| `--prune-after <DAYS>` | 过期主机被删除前的天数（默认值：30）。 |
+
+### bssh source remove
+
+```text
+Usage: bssh source remove [OPTIONS] <NAME>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<NAME>` | 要删除的清单源名称。 |
+| `--delete-hosts` | 删除该清单源拥有的连接，而不是把它们分离出来。 |
+| `-f, --force` | 跳过确认提示。 |
+
+## 设置与诊断
+
+修改全局默认值，并检查一切是否正常。
+
+### bssh config
+
+读取或修改 `bssh` 的全局默认值。不带选项时打印当前设置；传入一个或多个选项则更新对应值。
+
+```text
+Usage: bssh config [OPTIONS]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `--default-user <USER>` | 新连接的默认 SSH 用户名。 |
+| `--default-bastion <HOST>` | 应用到新连接的默认跳板机。 |
+| `--default-bastion-user <USER>` | 跳板机上的默认用户名。 |
+| `--default-port <PORT>` | 新连接的默认 SSH 端口。 |
+| `--use-kerberos <BOOL>` | 为新连接默认启用 Kerberos 认证。可选值：`true`、`false`。 |
+| `--log-level <LEVEL>` | 应用日志级别。可选值：`trace`、`debug`、`info`、`warn`、`error`、`off`。 |
+| `--clear-bastion` | 移除默认跳板机，使新连接为直接连接。 |
+| `--search-mode <MODE>` | 连接搜索算法：`bayesian`（按使用排序）或 `fuzzy`（子串匹配）。 |
+| `--recording <STATE>` | 启用或停用会话输出录制（`on` 或 `off`）。 |
+| `--recording-tags <TAGS>` | 只录制带这些逗号分隔标签的连接（空字符串表示清除）。 |
+| `--prediction <STATE>` | 启用或停用基于上下文的预测排序（`on` 或 `off`）。 |
+| `--capture-cwd <STATE>` | 启用或停用对工作目录和 git 根目录的捕获（`on` 或 `off`）。 |
+
+这里没有选项的设置保存在环境的 `config.json` 中；参见[配置参考](/zh-cn/reference/configuration/)。
+
+### bssh doctor
+
+运行 `bssh` 的本地健康检查。检查当前配置、数据库初始化、SSH 客户端是否可用、可选的 SSH 配置路径、ssh-agent 环境以及 Kerberos 辅助命令。
+
+```text
+Usage: bssh doctor [OPTIONS]
+```
+
+除全局选项外没有其他选项。
+
+### bssh audit
+
+审计安全配置、主机密钥、密钥权限和连接健康状况。
+
+```text
+Usage: bssh audit [OPTIONS]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `-f, --fix` | 自动修复过于宽松的文件和目录权限。 |
+
+## Teams
+
+通过端到端加密的保险库与团队共享连接。同步服务器只保存密文。团队连接会像其他主机一样出现在 `bssh list` 和 `bssh connect` 中。连接到团队主机的行为会在下一次同步时记入团队签名的审计日志。你的设备密钥受口令保护，口令会提示输入，或从 `BSSH_TEAMS_PASSPHRASE` 读取。
+
+### bssh teams
+
+```text
+Usage: bssh teams [OPTIONS] <COMMAND>
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `init` | 设置这台机器：创建你的账号和本设备的密钥。 |
+| `whoami` | 显示这台机器的账号、设备和指纹。 |
+| `create` | 创建团队；你将成为它的管理员。 |
+| `list` | 列出这台机器上的团队。 |
+| `invite` | 通过电子邮件邀请某人（管理员）。 |
+| `uninvite` | 撤销待处理的邀请（管理员）：其令牌立即失效，席位随之释放。 |
+| `join` | 用邀请令牌和管理员设备的指纹加入团队。 |
+| `grant` | 把团队密钥交给等待中的设备（管理员）；不带 `--fingerprint` 时列出这些设备。 |
+| `sync` | 同步一个团队，或所有团队。 |
+| `share` | 把一条已保存连接共享给团队（或把对团队连接的修改推送上去）。 |
+| `unshare` | 为团队中的所有人删除一条团队连接。 |
+| `members` | 列出团队成员及其设备。 |
+| `billing` | 显示团队的方案和席位；订阅或管理订阅（管理员）。 |
+| `remove` | 移除成员并轮换团队密钥（管理员）。 |
+| `audit` | 显示并验证团队的审计日志（管理员）。任何一项验证失败即以非零状态退出。 |
+
+### bssh teams init
+
+设置这台机器：创建你的账号和本设备的密钥。
+
+```text
+Usage: bssh teams init [OPTIONS] --server <URL> --email <EMAIL>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `--server <URL>` | 同步服务器 URL（https；只有 localhost 可用 http）。 |
+| `--email <EMAIL>` | 你的电子邮件地址（邀请会发送到这里）。 |
+| `--device-name <NAME>` | 本设备的名称，管理员可以看到（默认值：主机名）。 |
+| `--invite <TOKEN>` | 管理员给你的邀请令牌（只接受受邀账号的服务器需要它）。 |
+
+### bssh teams whoami
+
+显示这台机器的账号、设备和指纹。
+
+```text
+Usage: bssh teams whoami [OPTIONS]
+```
+
+### bssh teams create
+
+创建团队；你将成为它的管理员。
+
+```text
+Usage: bssh teams create [OPTIONS] <NAME>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<NAME>` | 团队名称，也用作 `bssh list` 中的清单源名称。 |
+
+### bssh teams list
+
+列出这台机器上的团队。
+
+```text
+Usage: bssh teams list [OPTIONS]
+```
+
+### bssh teams invite
+
+通过电子邮件邀请某人（管理员）。
+
+```text
+Usage: bssh teams invite [OPTIONS] <TEAM> <EMAIL>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TEAM>` | 团队名称。 |
+| `<EMAIL>` | 被邀请人的电子邮件地址。 |
+| `--admin` | 让对方成为管理员而不是成员。 |
+
+### bssh teams uninvite
+
+撤销待处理的邀请（管理员）：其令牌立即失效，席位随之释放。
+
+```text
+Usage: bssh teams uninvite [OPTIONS] <TEAM> <EMAIL>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TEAM>` | 团队名称。 |
+| `<EMAIL>` | 邀请发送到的电子邮件地址。 |
+
+### bssh teams join
+
+用邀请令牌和管理员设备的指纹加入团队。
+
+```text
+Usage: bssh teams join [OPTIONS] --fingerprint <SHA256:...> [TOKEN]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[TOKEN]` | 邀请令牌（一次性使用）。 |
+| `--team <TEAM_ID>` | 指纹校验失败后，按团队 ID 完成加入。 |
+| `--fingerprint <SHA256:...>` | 随邀请收到的管理员指纹。 |
+
+### bssh teams grant
+
+把团队密钥交给等待中的设备（管理员）。不带 `--fingerprint` 时列出正在等待的设备。
+
+```text
+Usage: bssh teams grant [OPTIONS] <TEAM>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TEAM>` | 团队名称。 |
+| `--fingerprint <SHA256:...>` | 成员加入后发给你的指纹。 |
+
+### bssh teams sync
+
+同步一个团队，或所有团队。
+
+```text
+Usage: bssh teams sync [OPTIONS] [TEAM]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[TEAM]` | 要同步的团队（默认值：全部）。 |
+
+### bssh teams share
+
+把一条已保存连接共享给团队，或把对团队连接的修改推送上去。
+
+```text
+Usage: bssh teams share [OPTIONS] --team <TEAM> <CONNECTION>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<CONNECTION>` | 连接名称或别名。 |
+| `--team <TEAM>` | 共享到哪个团队。 |
+
+### bssh teams unshare
+
+为团队中的所有人删除一条团队连接。
+
+```text
+Usage: bssh teams unshare [OPTIONS] <CONNECTION>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<CONNECTION>` | 连接名称或别名。 |
+
+### bssh teams members
+
+列出团队成员及其设备。
+
+```text
+Usage: bssh teams members [OPTIONS] <TEAM>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TEAM>` | 团队名称。 |
+
+### bssh teams billing
+
+显示团队的方案和席位；订阅或管理订阅（管理员）。
+
+```text
+Usage: bssh teams billing [OPTIONS] <TEAM>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TEAM>` | 团队名称。 |
+| `--checkout` | 打开结账页面为团队订阅（管理员）。 |
+| `--seats <SEATS>` | 要订阅的席位数（默认值：当前使用的席位数，且至少比免费方案多一个）。 |
+| `--yearly` | 按年付费而不是按月。 |
+| `--manage` | 打开账单门户：银行卡、发票、席位、取消（管理员）。 |
+
+### bssh teams remove
+
+移除成员并轮换团队密钥（管理员）。
+
+```text
+Usage: bssh teams remove [OPTIONS] <TEAM> <EMAIL>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TEAM>` | 团队名称。 |
+| `<EMAIL>` | 要移除成员的电子邮件地址。 |
+
+### bssh teams audit
+
+显示并验证团队的审计日志（管理员）。任何一项验证失败即以非零状态退出。
+
+```text
+Usage: bssh teams audit [OPTIONS] <TEAM>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<TEAM>` | 团队名称。 |
+| `--host <CONNECTION>` | 只显示该团队连接的事件。 |
+| `--member <EMAIL>` | 只显示该成员的事件。 |
+| `--since <DATE>` | 只显示该日期之后收到的事件（`YYYY-MM-DD` 或 RFC 3339）。 |
+| `--limit <LIMIT>` | 最多显示的事件数（默认值和上限均为 1000）。 |
+
+## 桌面与 shell
+
+打开应用，并让 `bssh` 在你的 shell 中自动补全。
+
+### bssh desktop
+
+在后台启动桌面应用，与终端脱离。
+
+```text
+Usage: bssh desktop [OPTIONS]
+```
+
+### bssh completions
+
+把补全脚本打印到标准输出。加载或安装它，即可在你的 shell 中启用 Tab 补全。
+
+```text
+Usage: bssh completions [OPTIONS] <SHELL>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<SHELL>` | 目标 shell。可选值：`bash`、`elvish`、`fish`、`powershell`、`zsh`。 |

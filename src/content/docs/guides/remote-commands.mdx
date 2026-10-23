@@ -1,0 +1,192 @@
+---
+title: Remote commands and transfers
+description: Run commands and transfer files across one or many hosts in parallel.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH includes commands to execute scripts across multiple hosts and transfer files in parallel. It handles batch targeting, progress tracking, and automatic fallback between SFTP and SCP.
+
+## Run commands with bssh exec
+
+The `bssh exec` command runs one-off commands over SSH without opening an interactive shell session.
+
+Always place `--` before the remote command to separate `bssh` flags from command arguments.
+
+### Single host execution
+
+Run a command on a specific host:
+
+```sh
+bssh exec web-prod -- uname -a
+```
+
+When targeting a single host, `bssh exec` streams stdout and stderr directly to your terminal and exits with the remote process's exit code.
+
+### Multi-host execution
+
+You can target multiple servers in parallel by tag or run a command across your entire inventory.
+
+**Target hosts by tag:**
+
+```sh
+bssh exec -t prod -- systemctl status nginx
+```
+
+**Target all saved connections:**
+
+```sh
+bssh exec --all -- uptime
+```
+
+Multi-host execution runs concurrently across up to 16 hosts at a time. Each host's output is separated by a header block:
+
+```text
+🚀 Executing 'uptime' across 2 host(s)...
+
+==================================================
+Host: web-prod (deploy@web.example.com)
+==================================================
+ 12:45:10 up 45 days,  3:12,  1 user,  load average: 0.15, 0.08, 0.02
+(Exit Code: 0)
+
+==================================================
+Host: db-prod (deploy@10.0.4.12)
+==================================================
+ 12:45:10 up 90 days, 14:02,  0 users,  load average: 0.42, 0.38, 0.30
+(Exit Code: 0)
+```
+
+If a command outputs to stderr, the output is captured in a separate `[STDERR]` block. If any host fails, `bssh exec` exits with an error indicating how many hosts failed.
+
+### Preview execution with --dry-run
+
+To inspect which hosts will be contacted before executing commands:
+
+```sh
+bssh exec -t prod --dry-run -- systemctl restart nginx
+```
+
+```text
+🔍 [DRY-RUN PREVIEW]
+Command to execute: systemctl restart nginx
+Target hosts (2):
+  - web01 (deploy@10.0.4.10)
+  - web02 (deploy@10.0.4.11)
+
+Dry-run complete. No remote commands were executed.
+```
+
+<Tabs syncKey="surface">
+<TabItem label="Command line">
+
+Use `bssh exec [TARGET] -- <COMMAND>...` directly from your terminal.
+
+</TabItem>
+<TabItem label="Desktop app">
+
+In the desktop app, click **Batch run** in the host list header or press <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd>Cmd</kbd>+<kbd>K</kbd> on macOS) to open the command palette and select **Run command on hosts**. You can select target hosts by tag, enter a script, and view execution output per host.
+
+</TabItem>
+</Tabs>
+
+## Upload files with bssh upload
+
+The `bssh upload` command transfers a local file or directory to one or more remote hosts in parallel.
+
+```sh
+bssh upload web-prod ./app.tar.gz /opt/app/
+```
+
+### Target multiple hosts
+
+You can target hosts explicitly, by tag, or across all saved connections:
+
+- **Comma-separated list**:
+  ```sh
+  bssh upload web1,web2 ./app.tar.gz /opt/app/
+  ```
+- **By tag**:
+  ```sh
+  bssh upload -t prod ./app.tar.gz /opt/app/
+  ```
+- **All saved connections**:
+  ```sh
+  bssh upload --all ./app.tar.gz /opt/app/
+  ```
+
+### Upload options
+
+- `-r, --recursive`: Recursively upload an entire directory tree.
+  ```sh
+  bssh upload web-prod -r ./config/ /etc/myapp/
+  ```
+- `--mode <OCTAL>`: Set remote file permissions (default: `0o644`).
+  ```sh
+  bssh upload web-prod ./deploy-key.pem /root/.ssh/id_rsa --mode 0o600
+  ```
+- `-j, --parallel <N>`: Maximum number of concurrent host uploads (default: `16`).
+  ```sh
+  bssh upload -t prod -j 8 ./release.tar.gz /var/www/
+  ```
+- `--offset <BYTES>`: Resume an interrupted transfer starting at a byte offset (single-host only).
+- `--dry-run`: Preview matching hosts and resolved destination paths without transferring files.
+
+### Progress and protocol handling
+
+When run in an interactive terminal, `bssh upload` displays multi-bar progress showing byte counts, transfer rates, and estimated time remaining for each host.
+
+`bssh` uses native SFTP for direct connections. When uploading through a bastion or a Kerberos session, it automatically falls back to SCP. On interactive bastions (such as OVH "The Bastion"), it executes via an auto-generated wrapper script using the `--osh scp` protocol.
+
+<Tabs syncKey="surface">
+<TabItem label="Command line">
+
+Use `bssh upload [OPTIONS] [TARGETS] <LOCAL> <REMOTE>` in your terminal.
+
+</TabItem>
+<TabItem label="Desktop app">
+
+In the desktop app, click **Files** in the sidebar to open the SFTP file manager. You can browse remote directories, drag and drop files to upload, or open the **Upload files** modal from the host list to send files to multiple hosts simultaneously.
+
+</TabItem>
+</Tabs>
+
+## Download files with bssh download
+
+The `bssh download` command transfers files or directories from a remote server to your local machine.
+
+```sh
+bssh download web-prod /var/log/nginx/access.log ./access.log
+```
+
+### Download options
+
+- `-r, --recursive`: Recursively download an entire remote directory tree:
+  ```sh
+  bssh download db-prod -r /backups/daily/ ./local-backups/
+  ```
+
+### Protocol handling
+
+Like uploads, `bssh download` uses native SFTP on direct connections and falls back to SCP when connecting through bastions or when SFTP subsystems are unavailable.
+
+In interactive terminals, a progress bar shows transfer progress, speed, and completed byte counts.
+
+## Command options reference
+
+| Flag | Commands | Description |
+| --- | --- | --- |
+| `-a, --all` | `exec`, `upload` | Target all saved connections in parallel. |
+| `-t, --tag <TAG>` | `exec`, `upload` | Target connections carrying this tag. |
+| `--dry-run` | `exec`, `upload` | Preview target hosts without running or transferring. |
+| `-r, --recursive` | `upload`, `download` | Recursively process directory trees. |
+| `--mode <OCTAL>` | `upload` | Set remote file permissions (default: `0o644`). |
+| `-j, --parallel <N>` | `upload` | Maximum concurrent uploads (default: `16`). |
+| `--offset <BYTES>` | `upload` | Resume upload from byte offset (single host only). |
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Bastion hosts" description="Route connections through jump hosts and interactive bastions." href="/guides/bastions/" />
+	<LinkCard title="Tunnels" description="Port forwarding and SOCKS5 dynamic proxies." href="/guides/tunnels/" />
+</CardGrid>

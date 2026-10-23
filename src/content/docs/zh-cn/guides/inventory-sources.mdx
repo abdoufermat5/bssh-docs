@@ -1,0 +1,223 @@
+---
+title: 清单源
+description: 连接动态云平台、Ansible 清单与 SSH 配置文件，自动同步并发现主机。
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+清单源允许 Bayesian SSH 从外部基础设施平台（如 AWS、Google Cloud、Tailscale、Ansible 和 OpenSSH 配置文件）中自动发现并同步主机。
+
+你无需手动逐台录入服务器，只需配置一次清单源，便可在基础设施发生变动时随时同步最新的主机列表。
+
+## 清单源工作原理
+
+1. **注册**：使用 `bssh source add` 添加清单源配置。注册清单源仅保存连接参数，并不会立即拉取并导入主机。
+2. **同步**：运行 `bssh source sync` 查询远端实例，将其映射为 Bayesian SSH 连接，并应用变更。
+3. **追踪**：每台同步的主机均会获得一个唯一外部标识 `external_id`（如 EC2 实例 ID 或 Tailscale 节点 ID）。当实例的 IP 地址或属性发生变更时，`bssh` 会直接更新现有连接，而不是创建重复条目。
+
+## 支持的清单源类型
+
+Bayesian SSH 支持五种标准清单源类型，以及团队保险库：
+
+| 类型 | 命令参数 | 前置条件 | 描述 |
+| --- | --- | --- | --- |
+| OpenSSH | `ssh-config` | 配置文件路径 | 从 OpenSSH 配置文件中读取主机定义。 |
+| Ansible | `ansible` | `ansible-inventory` | 查询 Ansible 清单文件或动态清单脚本。 |
+| Tailscale | `tailscale` | `tailscale` 客户端 | 发现 Tailscale 私有网络中的在线设备。 |
+| AWS EC2 | `aws` | `aws` CLI 及凭据 | 扫描指定 AWS 区域内正在运行的 EC2 实例。 |
+| Google Cloud | `gcp` | `gcloud` CLI 及授权 | 发现指定 GCP 项目中正在运行的 Compute Engine 实例。 |
+| 团队保险库 | `team` | bssh Teams 账号 | 通过 [bssh Teams](/zh-cn/teams/overview/) 使用 `bssh teams sync` 集中同步。 |
+
+### OpenSSH 配置
+
+如需持续同步 OpenSSH 配置文件中的主机：
+
+```sh
+# 从默认的 ~/.ssh/config 同步
+bssh source add local-config ssh-config
+
+# 从自定义路径同步
+bssh source add office-hosts ssh-config --path ~/.ssh/config.d/office
+```
+
+### Ansible 清单
+
+`ansible` 清单源调用 `ansible-inventory -i <file> --list` 解析主机变量与分组归属。Ansible 分组会自动映射为 Bayesian SSH 标签：
+
+```sh
+bssh source add prod-infra ansible --inventory ~/infra/hosts.ini
+```
+
+### Tailscale
+
+`tailscale` 清单源通过运行 `tailscale status --json` 发现私有网络中的活跃机器：
+
+```sh
+# 发现活跃的 Tailscale 节点
+bssh source add my-tailnet tailscale
+
+# 包含处于离线状态的节点
+bssh source add my-tailnet tailscale --include-offline
+```
+
+### 亚马逊云科技（AWS EC2）
+
+`aws` 清单源调用 `aws ec2 describe-instances` 发现正在运行的 EC2 实例。你必须通过 `--region` 指定至少一个区域：
+
+```sh
+bssh source add aws-prod aws \
+  --region us-east-1,eu-west-1 \
+  --profile production \
+  --address private \
+  --user ubuntu \
+  --bastion bastion.example.com
+```
+
+- `--region <REGION>`：一个或多个 AWS 区域（逗号分隔或重复指定）。
+- `--profile <PROFILE>`：可选的 AWS CLI 凭据配置文件名称。
+- `--address <private|public|dns>`：用于连接的网络地址类型（默认：`private`）。
+- `--user <USER>`：发现实例的默认 SSH 用户名。
+- `--bastion <HOST>` 与 `--bastion-user <USER>`：应用于该源所发现实例的可选跳板机。
+
+### 谷歌云平台（GCP）
+
+`gcp` 清单源调用 `gcloud compute instances list` 发现特定项目中运行的计算实例：
+
+```sh
+bssh source add gcp-prod gcp \
+  --project my-gcp-project-123 \
+  --address internal \
+  --user debian
+```
+
+- `--project <PROJECT>`：GCP 项目 ID（必填）。
+- `--address <internal|external>`：用于连接的网络地址类型（默认：`internal`）。
+- `--user <USER>`：发现实例的默认 SSH 用户名。
+- `--bastion <HOST>` 与 `--bastion-user <USER>`：应用于该源所发现实例的可选跳板机。
+
+### 团队保险库
+
+当你在 bssh Teams 中创建或加入团队时，系统会自动注册一个类型为 `team` 的清单源。团队保险库采用端到端加密，通过 `bssh teams sync` 而非 `bssh source sync` 进行同步。详情请参阅 [bssh Teams 概述](/zh-cn/teams/overview/)。
+
+## 查看已配置的清单源
+
+运行 `bssh source list` 查看所有已配置的清单源、主机总数、陈旧主机数量以及上次同步状态：
+
+```sh
+bssh source list
+```
+
+```text
+📦 Inventory sources
+NAME                 KIND          HOSTS STALE  LAST SYNC        ERROR
+aws-prod             aws              42     2  15m ago          
+my-tailnet           tailscale        18     0  2h ago           
+prod-infra           ansible          25     1  1d ago           
+team-core            team             12     0  10m ago          
+```
+
+## 同步清单源
+
+运行 `bssh source sync` 后跟清单源名称，将远端主机与你的本地数据库进行对齐：
+
+```sh
+bssh source sync aws-prod
+```
+
+```text
+Syncing 'aws-prod' (aws):
++ added web-api-1 (10.0.4.12)
++ added web-api-2 (10.0.4.13)
+~ updated worker-01 (host 10.0.4.50 → 10.0.4.55)
+- stale legacy-cache
+Added 2, updated 1, marked 1 stale, restored 0.
+```
+
+### 演练预览变更
+
+若要在不写入数据库的情况下预先查看同步将产生的变更，请添加 `--dry-run`：
+
+```sh
+bssh source sync aws-prod --dry-run
+```
+
+### 同步所有源
+
+若需按顺序同步所有已配置的清单源：
+
+```sh
+bssh source sync --all
+```
+
+若其中某个清单源遇到网络或认证错误，`bssh` 会继续同步其余源，并在最后汇总展示所有失败项。
+
+## 同步主机的呈现方式
+
+通过清单源同步的主机会无缝融入常规操作：
+
+- **列表视图**：在 `bssh list` 中，同步主机会在 INFO 列显示中括号标注的来源（如 `[aws-prod]`）。
+- **详细信息**：执行 `bssh list -d` 时，会在 `│ source:` 行显示所属源名称。
+- **命名稳定性**：首次发现主机时，`bssh` 会为其分配一个唯一名称。若本地已有同名连接，新主机会添加 `@source` 后缀进行区分（例如 `web-01@aws-prod`）。该名称一旦生成便保持固定，后续同步不会随意重命名。
+- **动态 IP 更新**：主机依据不可变的 `external_id` 进行跟踪，因此云平台重新分配 IP 时会自动就地更新，而不会产生重复主机。
+
+## 陈旧主机与清理策略
+
+当云端实例被停止、销毁或从清单中移除时，Bayesian SSH 不会立即将其物理删除。
+
+1. **标记为陈旧**：在下次同步时，缺失的主机会被标记为 `stale`，并记录 `stale_since` 时间戳。
+2. **状态标识**：在 `bssh list` 中，陈旧主机名称后会标注 `(stale)`（例如 `legacy-cache (stale)`）。
+3. **连接警告**：你依然可以发起连接。运行 `bssh connect legacy-cache` 时，`bssh` 会在连接前打印告警：
+   ```text
+   ⚠️  not seen in the last sync of aws-prod (since 2026-10-15)
+   ```
+4. **自动复原**：若该实例在未来的某次同步中重新出现，`bssh` 会自动解除其陈旧标记（`↺ back legacy-cache`）。
+
+### 清理过期的陈旧主机
+
+若要永久清除已长期处于陈旧状态的主机，请使用 `--prune`：
+
+```sh
+# 清理陈旧超过默认 30 天的主机
+bssh source sync aws-prod --prune
+
+# 自定义陈旧天数阈值（例如 14 天）
+bssh source sync aws-prod --prune --prune-after 14
+```
+
+## 只读与可编辑连接
+
+- **远端优先原则**：同步的连接归属于外部清单源管理。虽然你可以使用 `bssh edit` 修改本地字段，但下一次执行 `bssh source sync` 时，源提供商拥有的属性（主机地址、端口、用户、密钥和标签）仍会被远端数据覆盖。
+- **自定义专属配置**：若希望基于同步主机创建持久自定义配置，可以使用 `bssh duplicate` 克隆一份：
+  ```sh
+  bssh duplicate web-api-1 my-custom-api
+  ```
+  克隆出的连接将成为脱离清单源管理的独立本地主机，不再受未来同步的影响。
+
+## 删除清单源
+
+若需注销已配置的清单源，请使用 `bssh source remove`：
+
+```sh
+bssh source remove aws-prod
+```
+
+```text
+⚠️  WARNING: Remove source 'aws-prod' (aws), 42 host connection(s) will be detached.
+Remove source 'aws-prod'? [y/N] y
+✅ Source 'aws-prod' removed.
+```
+
+默认情况下，删除清单源会**脱钩（detach）**其关联的主机。这些连接将保留在数据库中作为普通的本地主机继续存在，并清除来源标记与陈旧状态。
+
+若希望在删除清单源配置的同时，彻底清除其所发现的所有主机，请添加 `--delete-hosts`：
+
+```sh
+bssh source remove aws-prod --delete-hosts -f
+```
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="已保存的连接" description="连接、检索与管理你的本地保存主机。" href="/zh-cn/guides/connections/" />
+	<LinkCard title="bssh Teams 概述" description="与团队共享端到端加密的连接保险库。" href="/zh-cn/teams/overview/" />
+</CardGrid>

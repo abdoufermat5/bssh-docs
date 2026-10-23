@@ -1,0 +1,136 @@
+---
+title: 环境
+description: 将连接、历史记录与设置隔离至独立的配置环境中。
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+环境（Profiles）允许你在 `bssh` 中管理多个相互隔离的独立配置环境。每个环境各自维护独立的数据库，保存连接条目、标签、别名、历史会话以及默认配置。
+
+## 隔离的内容
+
+每个环境都存储在 `~/.config/bayesian-ssh/environments/<名称>/` 目录下的专属路径中：
+
+- **`history.db`**：独立的 SQLite 数据库，包含：
+  - 已保存的连接与认证凭据
+  - 标签与分组
+  - 简短别名
+  - 历史会话记录与时长
+  - 已配置的清单源
+- **`config.json`**：该环境专用的配置文件，包含：
+  - 默认 SSH 用户名与端口
+  - 默认跳板机与跳板机用户名
+  - 搜索模式（`bayesian` 或 `fuzzy`）
+  - 会话录制偏好
+  - 上下文预测设置
+
+系统内置的初始环境名为 `default`。当前活跃的环境由 `~/.config/bayesian-ssh/active_env` 文件进行记录。
+
+## 管理环境
+
+### 列出环境
+
+运行 `bssh env list` 查看所有可用环境。当前处于活跃状态的环境旁会标有星号：
+
+```sh
+bssh env list
+```
+
+```text
+Environments:
+    client-a
+  * default (active)
+```
+
+### 创建新环境
+
+运行 `bssh env create` 并传入唯一的环境名称进行初始化：
+
+```sh
+bssh env create client-a
+```
+
+```text
+✅ Created new environment 'client-a'
+To start using it, run: bayesian-ssh env use client-a
+```
+
+创建环境时，系统会自动生成干净的 `history.db` 数据库，以及填有默认设置的全新 `config.json` 配置文件。
+
+### 切换环境
+
+运行 `bssh env use` 切换当前活跃的环境：
+
+```sh
+bssh env use client-a
+```
+
+```text
+✅ Now using environment 'client-a'
+```
+
+切换之后，后续的所有 `bssh` 命令都将在所选环境的数据库上运行，直至再次切换。
+
+### 删除环境
+
+运行 `bssh env remove` 删除指定环境及其数据库：
+
+```sh
+bssh env remove client-a
+```
+
+```text
+🗑️ Removed environment 'client-a'
+```
+
+`bssh` 在删除环境时遵循以下安全约束：
+- 不能删除当前处于活跃状态的环境。若要删除，需先切换至其他环境。
+- 不能删除系统内置的 `default` 环境。
+
+:::caution
+删除环境将永久抹除其专属目录、SQLite 数据库、已存连接以及所有历史会话数据。
+:::
+
+## 桌面应用支持
+
+<Tabs syncKey="surface">
+  <TabItem label="命令行">
+    ```sh
+    # 从终端切换配置环境
+    bssh env use client-a
+    ```
+  </TabItem>
+  <TabItem label="桌面应用">
+    在桌面应用中，点击侧边栏顶部的配置文件选择器即可在不同配置文件之间切换，或选择 **Manage profiles…** 添加或删除配置文件。
+  </TabItem>
+</Tabs>
+
+## 单次执行覆盖
+
+若要在不改变全局活跃环境的前提下，临时在另一环境中执行单条命令，可传入 `--env` 选项：
+
+```sh
+# 列出 client-b 环境中的连接
+bssh --env client-b list
+
+# 连接至保存在 client-b 中的主机
+bssh --env client-b connect db-prod
+
+# 检查 client-b 环境中主机的可达性
+bssh --env client-b ping --all
+```
+
+`--env` 选项仅对当前这条命令生效，你的默认活跃环境不会发生任何更改。
+
+## 典型使用场景
+
+- **按客户隔离**：顾问与外包团队可以为不同客户分别维护专属环境（如 `client-acme`、`client-beta`）。各客户的主机连接、跳板机路径与别名绝不会相互混淆或出现在其他客户的搜索候选列表中。
+- **工作与个人分离**：将家庭实验室（Homelab）或个人 VPS 与公司的生产环境彻底隔离开来。
+- **合规审计与测试**：在 `production` 环境中配置严格的会话录制与强制跳板机，同时保留一个不受限制的 `sandbox` 测试环境。
+
+## 后续步骤
+
+<CardGrid>
+  <LinkCard title="连接" description="保存与管理 SSH 主机条目。" href="/zh-cn/guides/connections/" />
+  <LinkCard title="配置参考" description="查看全部配置项与文件存储路径。" href="/zh-cn/reference/configuration/" />
+</CardGrid>

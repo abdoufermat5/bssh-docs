@@ -1,0 +1,42 @@
+---
+title: 什么是 Bayesian SSH？
+description: 一款以键盘为先的 SSH 管理器，支持命令行与桌面应用，并提供可选的端到端加密团队共享。
+---
+
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+Bayesian SSH 将你的所有 SSH 主机集中管理，只需敲击几次键盘即可连接到正确的主机。它既可以作为命令行工具 `bssh` 运行，也提供了桌面应用。两者共用同一个本地数据库。
+
+```sh
+bssh connect prod
+```
+
+你无需输入完整的精确名称。`bssh` 会匹配名称、别名、标签和主机名，并自动忽略连字符等分隔符（例如 `webprod` 能匹配到 `web-prod-server`），然后根据你对每台主机的使用频率和最近使用时间对结果进行排序。你真正想要连接的主机通常排在第一位。
+
+## 核心功能
+
+- **保存连接**：记录用户名、端口、密钥、跳板机、Kerberos 设置和标签。
+- **快速查找主机**：通过模糊匹配和根据历史记录不断学习的排序算法快速定位。
+- **路由处理**：支持默认或针对单台主机的跳板机、交互式堡垒机以及 Kerberos 票据。
+- **超越传统终端**：跨多台主机批量执行命令、传输文件、开启隧道以及 SOCKS 代理。
+- **记录会话**：会话历史、使用统计，以及可选的可回放和搜索的会话录制。
+- **导入已有配置**：导入你的 `~/.ssh/config`，并支持清单源自动保持主机列表同步。
+
+## 本地优先
+
+所有数据均保存在你的本地计算机上。Bayesian SSH 绝不会作为中间人介入你与服务器之间：连接直接从你的计算机发往目标主机，与原生 `ssh` 完全一致。
+
+## bssh Teams
+
+bssh Teams 是面向团队共享连接的付费方案。共享的连接在设备端完成加密后再进行同步，因此同步服务器永远无法获取主机名、用户名或备注。每次对共享主机的连接都会记录在带有签名的审计日志中。支持最多 3 个席位的团队免费使用。
+
+<Aside type="tip">
+`bssh` 是 `bayesian-ssh` 命令的简写。两者均已安装且功能完全一致；本文档统一使用 `bssh`。
+</Aside>
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="安装" description="单行安装脚本、Linux 软件包、Snap 或源码编译。" href="/zh-cn/start/installation/" />
+	<LinkCard title="快速开始" description="保存一台主机并连接。" href="/zh-cn/start/quick-start/" />
+</CardGrid>

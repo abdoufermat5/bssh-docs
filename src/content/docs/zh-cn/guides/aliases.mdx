@@ -1,0 +1,118 @@
+---
+title: 别名
+description: 为连接创建简短别名，并在所有 bssh 命令中自由使用。
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+别名是映射到已存连接的简短、易记的昵称。你无需输入诸如 `production-payment-gateway-01` 这样冗长的主机名，只需定义一个类似 `pay` 的别名，即可在所有 `bssh` 命令中通用。
+
+## 创建别名
+
+运行 `bssh alias add` 并传入新别名以及目标连接名称、别名或 ID：
+
+```sh
+bssh alias add wp web-prod
+```
+
+```text
+✅ Added alias 'wp' → 'web-prod'
+   You can now use: bssh connect wp
+```
+
+你可以为同一个连接指定多个别名：
+
+```sh
+bssh alias add prod web-prod
+bssh alias add primary web-prod
+```
+
+`bssh` 会校验别名以避免命名冲突：
+- 别名不能与现有的连接名称重复。
+- 别名不能与已经注册的别名重复。
+
+## 列出别名
+
+运行 `bssh alias list` 查看当前活跃环境中的所有别名（按主机分组展示）：
+
+```sh
+bssh alias list
+```
+
+```text
+📝 All Connection Aliases
+
+  web-prod (web.example.com)
+    └─ wp
+    └─ prod
+
+  db01 (10.0.1.5)
+    └─ db
+```
+
+若只需查看关联到特定连接的别名，传入连接名称即可：
+
+```sh
+bssh alias list web-prod
+```
+
+```text
+📝 Aliases for 'web-prod':
+   • wp
+   • prod
+```
+
+## 删除别名
+
+运行 `bssh alias remove` 并传入别名名称进行删除：
+
+```sh
+bssh alias remove wp
+```
+
+删除别名仅会移除该快捷映射关系，底层的连接本身、连接配置以及会话历史记录均不受任何影响。
+
+## 别名解析规则
+
+在 `bssh` 接受目标连接的任何位置，别名均可正常解析。任何支持 `<TARGET>` 参数的命令都可以直接使用别名：
+
+```sh
+# 连接至远程主机
+bssh connect wp
+
+# 查看连接详情
+bssh show wp
+
+# 编辑连接配置
+bssh edit wp --port 2222
+
+# 测试 SSH 连通性
+bssh ping wp
+
+# 查看贝叶斯排序评分明细
+bssh why wp
+
+# 远程执行命令
+bssh exec wp -- uptime
+
+# 上传文件
+bssh upload wp -r ./dist /var/www/html
+
+# 转发本地端口
+bssh forward wp -L 8080:localhost:80
+```
+
+### 优先级顺序
+
+当你输入目标标识符时，`bssh` 会优先匹配确切的连接名称。若未找到匹配的连接名称，则匹配别名。若仍未找到匹配的别名，则在已存连接中启动交互式模糊匹配。
+
+### 环境作用域
+
+别名保存在当前活跃环境的本地 SQLite 数据库（`history.db`）中。每个环境各自维护独立的别名列表，确保在一个配置环境中所定义的别名不会与另一环境产生冲突或泄漏。
+
+## 后续步骤
+
+<CardGrid>
+  <LinkCard title="连接" description="保存、查看、编辑与组织 SSH 连接。" href="/zh-cn/guides/connections/" />
+  <LinkCard title="环境" description="将连接与别名隔离到独立的配置环境中。" href="/zh-cn/guides/environments/" />
+</CardGrid>

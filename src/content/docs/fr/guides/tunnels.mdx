@@ -1,0 +1,130 @@
+---
+title: Tunnels
+description: Redirigez des ports locaux et ouvrez des proxys dynamiques SOCKS5 via SSH.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH inclut des commandes pour ouvrir des tunnels de redirection de port locale et des proxys dynamiques SOCKS5 sans manipuler les options complexes d'OpenSSH. Les tunnels s'exécutent au premier plan et s'arrêtent proprement lorsqu'ils sont interrompus.
+
+## Redirection de port locale
+
+La commande `bssh forward` crée un tunnel de redirection de port SSH locale (type `-L`). Le trafic dirigé vers un port d'écoute local est acheminé à travers l'hôte SSH distant vers une adresse de destination.
+
+```sh
+bssh forward db01 -L 5432:localhost:5432
+```
+
+### Format de spécification
+
+La spécification `-L` respecte la syntaxe standard d'OpenSSH :
+
+```text
+[bind_addr:]bind_port:remote_host:remote_port
+```
+
+- `bind_addr` : Adresse IP locale sur laquelle écouter. Vaut par défaut `127.0.0.1` si omise.
+- `bind_port` : Port local sur lequel `bssh` écoute les connexions entrantes.
+- `remote_host` : Adresse de l'hôte distant telle qu'elle est jointe depuis le serveur SSH distant.
+- `remote_port` : Port de destination sur `remote_host`.
+
+Les adresses IPv6 peuvent être entourées de crochets :
+
+```sh
+bssh forward web-prod -L [::1]:8080:[fe80::1]:80
+```
+
+### Exemples courants
+
+**Rediriger une base de données distante vers votre machine locale :**
+
+```sh
+bssh forward db01 -L 5432:localhost:5432
+```
+
+Vous pouvez à présent pointer vos outils locaux (tels que `psql` ou des clients de base de données) vers `localhost:5432`.
+
+**Accéder à un service interne via un hôte de rebond :**
+
+```sh
+bssh forward bastion -L 8080:internal-api.corp:80
+```
+
+Les requêtes locales vers `http://localhost:8080` sont acheminées via `bastion` vers le port 80 de `internal-api.corp`.
+
+**Écouter sur toutes les interfaces réseau locales :**
+
+```sh
+bssh forward web-prod -L 0.0.0.0:8080:localhost:80
+```
+
+Spécifier `0.0.0.0` permet aux autres machines de votre réseau local d'accéder au port redirigé.
+
+## Proxy dynamique SOCKS5
+
+La commande `bssh proxy` ouvre une redirection de port dynamique SSH (type `-D`) agissant comme un proxy SOCKS5 local. Toute application prenant en charge les proxys SOCKS5 peut acheminer son trafic à travers l'hôte SSH distant.
+
+```sh
+bssh proxy web-prod -D 1080
+```
+
+### Options
+
+- `-D <PORT>` : Port local pour le listener du proxy SOCKS5 (requis).
+- `--bind <ADDR>` : Adresse d'écoute locale (facultatif, par défaut : `127.0.0.1`).
+
+Pour rendre le proxy SOCKS5 accessible depuis votre réseau local :
+
+```sh
+bssh proxy bastion -D 9050 --bind 0.0.0.0
+```
+
+### Configurer les clients
+
+Configurez vos applications pour diriger leur trafic vers `socks5://127.0.0.1:1080`.
+
+Par exemple, testez le proxy à l'aide de `curl` :
+
+```sh
+curl --socks5-hostname 127.0.0.1:1080 https://api.ipify.org
+```
+
+L'adresse IP renvoyée correspond à celle de l'hôte SSH distant et non à votre adresse réseau locale.
+
+## Exécution et acheminement des tunnels
+
+Lorsque vous lancez `bssh forward` ou `bssh proxy` :
+
+1. `bssh` résout la connexion cible grâce à la recherche approximative et au classement bayésien.
+2. Il affiche l'état de la connexion et les informations d'écoute :
+   ```text
+   →  SOCKS5 proxy on 127.0.0.1:1080 via web-prod (native)
+      Configure your client: socks5://127.0.0.1:1080
+      Press Ctrl+C to stop.
+   ```
+3. Les connexions directes sans Kerberos ni bastion utilisent le transport SSH Rust natif (`russh`).
+4. Les connexions transitant par un bastion ou exigeant Kerberos basculent automatiquement vers un sous-processus OpenSSH (`ssh -L` ou `ssh -D`), préservant l'acheminement par rebond et la gestion des identifiants.
+
+## Arrêter un tunnel ou un proxy
+
+`bssh forward` et `bssh proxy` s'exécutent tous deux en tant que processus interactifs au premier plan.
+
+Pour interrompre un tunnel :
+
+1. Dans le terminal exécutant la commande, appuyez sur <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+2. `bssh` intercepte le signal d'interruption, arrête proprement le listener local, ferme les canaux SSH distants et s'arrête :
+   ```text
+   Shutting down proxy…
+   Done.
+   ```
+
+## Application de bureau
+
+Les tunnels et proxys sont gérés depuis l'interface en ligne de commande. L'application de bureau se concentre sur les sessions de terminal interactives, les transferts de fichiers via SFTP, la gestion des hôtes enregistrés, l'historique des sessions et le partage en équipe ; elle ne dispose pas actuellement d'une vue dédiée aux tunnels.
+
+## Prochaines étapes
+
+<CardGrid>
+	<LinkCard title="Hôtes bastions" description="Acheminez vos connexions via des hôtes de rebond et des bastions interactifs." href="/fr/guides/bastions/" />
+	<LinkCard title="Commandes à distance" description="Exécutez des commandes et transférez des fichiers sur plusieurs hôtes." href="/fr/guides/remote-commands/" />
+</CardGrid>

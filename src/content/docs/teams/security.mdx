@@ -1,0 +1,82 @@
+---
+title: Security and trust model
+description: Trust boundaries, threat mitigations, cryptographic primitives, and key management in bssh Teams.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+bssh Teams is designed with a zero-knowledge architecture: the sync server is untrusted for confidentiality, but trusted for availability and event ordering. Sensitive host information is encrypted on your devices before leaving your machine.
+
+All client-side cryptography and wire protocol handlers are open source in the public repository for independent inspection.
+
+## Trust perimeter
+
+The sync server never has access to the cryptographic keys needed to decrypt your vault.
+
+| Server can see | Server cannot see |
+| --- | --- |
+| Team ID, member emails, roles, and seat count | Hostnames, IP addresses, usernames, ports, tags, and notes |
+| Opaque entry IDs, revision numbers, and ciphertext sizes | Passwords, SSH private keys, and bastion routing configurations |
+| Audit events: *member M used entry E at time T from IP A* | The team key, or any member's device private keys |
+
+<Aside type="note">
+The metadata visible to the server is intentional: it allows the server to index revisions, order synchronization streams, and support administrative audit queries without ever inspecting plaintext contents.
+</Aside>
+
+## Threat model
+
+The security model protects team data against infrastructure compromise, unauthorized access, and rogue participants:
+
+| Threat | Mitigation |
+| --- | --- |
+| **Server database or storage breach** | Sensitive data is encrypted on the client before transmission. An attacker obtaining server storage acquires only ciphertext and metadata. |
+| **Compromised server operator** | Clients pin the public keys of team administrators. The server cannot inject an unauthorized member device without an administrator's cryptographic signature. |
+| **Revoked member** | Removing a member rotates the team key immediately. Subsequent writes are encrypted with the new key. (See limitation below regarding cached data.) |
+| **Stolen laptop or device** | Local databases and Teams device keys are encrypted with Argon2id and AES-256-GCM. An administrator can revoke the compromised device remotely. |
+| **Network eavesdropper (MITM)** | Transport is strictly TLS 1.3, combined with end-to-end payload encryption. Plain HTTP connections are rejected. |
+| **Tampered audit log** | Each event is signed with the member's Ed25519 device key and chained to previous events using SHA-256 hashes. Verification tools detect forged, reordered, or deleted events. |
+| **Malicious member or client** | The server validates role permissions, team scopes, and rate limits on all writes. Clients verify signatures on every payload they pull. |
+
+## Cryptography
+
+bssh Teams relies on established, standard cryptographic primitives:
+
+- **Symmetric encryption**: AES-256-GCM encrypts vault entries. Each payload uses a unique random 96-bit nonce and an explicit version byte.
+- **Key derivation**: Argon2id protects local device passphrases against brute-force attacks. HKDF-SHA256 derives operational subkeys.
+- **Key agreement and wrapping**: X25519 key agreement wraps the shared team key individually for each approved member device.
+- **Digital signatures**: Ed25519 keypairs sign membership changes, device grants, and audit log events.
+- **Session recordings**: Terminal output and session recordings stay entirely on your local machine. They are never uploaded to the sync server or shared with the team.
+- **Memory protection**: Sensitive cryptographic keys in memory are automatically wiped when dropped using zeroization.
+
+## Device verification and out-of-band fingerprints
+
+To ensure the sync server cannot inject an impostor device into your team, device approval requires out-of-band verification:
+
+1. When a user joins a team, their device computes a public fingerprint (`SHA256:...`).
+2. The user shares this fingerprint with a team administrator over an independent, trusted channel (such as a secure chat, phone call, or in person).
+3. The administrator approves the device (`bssh teams grant`) only after verifying that the fingerprint matches the one received through the trusted channel.
+4. Once verified, the administrator's device wraps the team key to the new device's public key.
+
+## Key rotation and its limits
+
+When an administrator removes a member (`bssh teams remove`), bssh rotates the team key:
+
+- A new team key is generated and wrapped only for the remaining approved devices.
+- All new and modified connection entries are encrypted using the new key.
+- The removed member's device can no longer pull updates or decrypt new entries.
+
+<Aside type="caution">
+**Cached copies**: Key rotation prevents access to future updates, but a removed member retains any data already synchronized to their local machine prior to revocation. If a departed colleague should no longer have access to specific servers, rotate the credentials on those servers (passwords, SSH authorized keys, and tokens).
+</Aside>
+
+## Recovery rules
+
+bssh Teams deliberately contains **no server-side recovery mechanism**:
+
+- There are no administrative backdoors, master recovery keys, or reset workflows on the server.
+- If an individual member forgets their local passphrase or loses their device, an administrator can re-invite them, which wraps the team key to their new device.
+- If **all team administrators lose their devices and passphrases**, the encrypted team vault is permanently lost. Maintain at least two administrators with separate devices for each team.
+
+## Network path
+
+The sync server is **never in the SSH connection path**. SSH sessions connect directly from your local machine to the target server, or through your configured bastion hosts. No SSH traffic, credentials, or interactive shell bytes ever pass through the sync server.

@@ -1,0 +1,895 @@
+---
+title: Référence des commandes
+description: Toutes les commandes bssh, avec leur ligne d'usage, leurs options et leurs valeurs par défaut.
+---
+
+Cette page liste toutes les commandes `bssh`, les options qu'elles acceptent et les valeurs qu'elles prennent. Les commandes sont regroupées par usage.
+
+## Options globales
+
+```text
+Usage: bssh [OPTIONS] [COMMAND]
+```
+
+| Option | Description |
+| --- | --- |
+| `--env <ENV_NAME>` | Utiliser un autre environnement pour cette invocation (sans changer l'environnement actif). |
+| `-h, --help` | Afficher l'aide. Placé après une commande, affiche l'aide de cette commande. |
+| `-V, --version` | Afficher la version. |
+
+Chaque commande accepte aussi `--env` et `-h, --help`. Ajoutez `-h` après n'importe quelle commande pour voir son aide, par exemple `bssh connect -h`. `bssh help <COMMAND>` affiche le même texte.
+
+Cinq commandes ont un alias plus court : `bssh gui` pour `desktop`, `bssh run` pour `exec`, `bssh tunnel` pour `forward`, `bssh socks` pour `proxy` et `bssh kill` pour `close`.
+
+## Connexions
+
+Enregistrer, inspecter et modifier les hôtes auxquels vous vous connectez, gérer les clés qu'ils utilisent, puis les rejoindre depuis le terminal.
+
+### bssh connect
+
+Ouvrir une session SSH vers une connexion enregistrée. La cible est trouvée par nom, alias ou nom d'hôte avec la recherche approximative, et le classement bayésien retient la meilleure correspondance. Les options ci-dessous remplacent les réglages enregistrés pour cette session.
+
+```text
+Usage: bssh connect [OPTIONS] <TARGET>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TARGET>` | Nom de connexion, alias ou nom d'hôte (recherche approximative). |
+| `-u, --user <USER>` | Remplacer le nom d'utilisateur SSH pour cette session. |
+| `-p, --port <PORT>` | Remplacer le port SSH enregistré pour cette session. |
+| `-k, --kerberos <BOOL>` | Forcer Kerberos activé ou désactivé pour cette session. Valeurs possibles : `true`, `false`. |
+| `-b, --bastion <HOST>` | Passer par cet hôte de rebond. |
+| `--no-bastion` | Ignorer le bastion configuré et se connecter directement. |
+| `-B, --bastion-user <USER>` | Nom d'utilisateur sur l'hôte de rebond. |
+| `-i, --key <FILE>` | Chemin d'une clé privée SSH à utiliser. |
+| `--record` | Enregistrer la sortie de cette session (remplace la configuration). |
+| `--no-record` | Ne pas enregistrer la sortie de cette session (remplace la configuration). |
+
+### bssh add
+
+Enregistrer une nouvelle connexion nommée dans la base. Le nom est l'identifiant que vous passez à `connect`, `exec`, `upload` et aux autres commandes.
+
+```text
+Usage: bssh add [OPTIONS] <NAME> <HOST>
+```
+
+| Option | Description |
+| --- | --- |
+| `<NAME>` | Nom lisible de cette connexion (doit être unique). |
+| `<HOST>` | Nom d'hôte ou adresse IP du serveur. |
+| `-u, --user <USER>` | Nom d'utilisateur SSH (à défaut, la valeur par défaut de la configuration ou `$USER`). |
+| `-p, --port <PORT>` | Port SSH (par défaut : le port par défaut configuré, généralement 22). |
+| `-k, --kerberos <BOOL>` | Activer l'authentification Kerberos (GSSAPI). Valeurs possibles : `true`, `false`. |
+| `-b, --bastion <HOST>` | Hôte de rebond à utiliser. |
+| `--no-bastion` | Marquer comme connexion directe (ignorer le bastion par défaut). |
+| `-B, --bastion-user <USER>` | Nom d'utilisateur sur l'hôte de rebond. |
+| `-i, --key <FILE>` | Chemin d'une clé privée SSH. |
+| `-t, --tags <TAG>` | Tags de regroupement et de filtrage (répétable ou séparés par des virgules). |
+
+### bssh list
+
+Afficher toutes les connexions enregistrées dans l'environnement actif, classées par score bayésien (les plus utilisées d'abord).
+
+```text
+Usage: bssh list [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `-t, --tag <TAG>` | Afficher seulement les connexions portant ce tag. |
+| `-r, --recent` | Afficher seulement les connexions utilisées récemment. |
+| `-d, --detailed` | Afficher les détails complets (hôte, port, bastion, authentification). |
+
+### bssh show
+
+Afficher tous les détails d'une connexion enregistrée.
+
+```text
+Usage: bssh show [OPTIONS] <TARGET>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TARGET>` | Nom de connexion, alias ou ID. |
+
+### bssh edit
+
+Modifier des champs d'une connexion enregistrée. Seuls les champs passés sont mis à jour ; tout le reste reste inchangé.
+
+```text
+Usage: bssh edit [OPTIONS] <TARGET>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TARGET>` | Nom de connexion, alias ou ID à modifier. |
+| `--name <NAME>` | Renommer la connexion. |
+| `--host <HOST>` | Changer le nom d'hôte ou l'adresse IP. |
+| `--user <USER>` | Changer le nom d'utilisateur SSH. |
+| `--port <PORT>` | Changer le port SSH. |
+| `--kerberos <BOOL>` | Activer ou désactiver l'authentification Kerberos. Valeurs possibles : `true`, `false`. |
+| `--bastion <HOST>` | Définir ou changer l'hôte de rebond. |
+| `--no-bastion` | Supprimer le bastion (passer en connexion directe). |
+| `--bastion-user <USER>` | Changer le nom d'utilisateur sur le bastion. |
+| `--key <FILE>` | Définir ou changer le chemin de la clé privée SSH. |
+| `--add-tags <TAG>` | Ajouter des tags (répétable ou séparés par des virgules). |
+| `--remove-tags <TAG>` | Retirer des tags (répétable ou séparés par des virgules). |
+
+### bssh remove
+
+Supprimer une connexion enregistrée, ou toutes les connexions portant un tag.
+
+```text
+Usage: bssh remove [OPTIONS] [TARGET]
+```
+
+| Option | Description |
+| --- | --- |
+| `[TARGET]` | Nom de connexion, alias ou ID à supprimer. |
+| `-t, --tag <TAG>` | Supprimer les connexions portant ce tag. |
+| `-f, --force` | Ne pas demander de confirmation. |
+
+### bssh duplicate
+
+Créer une copie d'une connexion enregistrée sous un autre nom. Tous les réglages (hôte, port, bastion, tags, etc.) sont conservés.
+
+```text
+Usage: bssh duplicate [OPTIONS] <SOURCE> <NEW_NAME>
+```
+
+| Option | Description |
+| --- | --- |
+| `<SOURCE>` | Nom de la connexion à copier. |
+| `<NEW_NAME>` | Nom de la nouvelle connexion. |
+
+### bssh ping
+
+Tenter une connexion TCP (et éventuellement une poignée de main SSH) pour vérifier que les hôtes répondent. Utilisez une cible, `--all` ou un tag.
+
+```text
+Usage: bssh ping [OPTIONS] [TARGET]
+```
+
+| Option | Description |
+| --- | --- |
+| `[TARGET]` | Nom de connexion, alias ou nom d'hôte. |
+| `-a, --all` | Tester toutes les connexions enregistrées en parallèle. |
+| `-g, --tag <TAG>` | Tester les connexions portant ce tag. |
+| `-t, --timeout <SECS>` | Délai de connexion en secondes (par défaut : 5). |
+
+### bssh groups
+
+Lister les groupes de tags, ou afficher les connexions d'un groupe.
+
+```text
+Usage: bssh groups [OPTIONS] [GROUP_NAME]
+```
+
+| Option | Description |
+| --- | --- |
+| `[GROUP_NAME]` | Nom du tag à filtrer (omettez pour lister tous les groupes). |
+
+### bssh alias
+
+Créer, supprimer ou lister des alias courts pour les connexions.
+
+```text
+Usage: bssh alias [OPTIONS] <COMMAND>
+```
+
+| Commande | Description |
+| --- | --- |
+| `add` | Associer un alias court à une connexion existante. |
+| `remove` | Supprimer un alias. |
+| `list` | Lister les alias (éventuellement pour une seule connexion). |
+
+### bssh alias add
+
+```text
+Usage: bssh alias add [OPTIONS] <ALIAS> <TARGET>
+```
+
+| Option | Description |
+| --- | --- |
+| `<ALIAS>` | L'alias à créer (par exemple « wp »). |
+| `<TARGET>` | Le nom de connexion vers lequel pointe cet alias. |
+
+### bssh alias remove
+
+```text
+Usage: bssh alias remove [OPTIONS] <ALIAS>
+```
+
+| Option | Description |
+| --- | --- |
+| `<ALIAS>` | Nom de l'alias à supprimer. |
+
+### bssh alias list
+
+```text
+Usage: bssh alias list [OPTIONS] [TARGET]
+```
+
+| Option | Description |
+| --- | --- |
+| `[TARGET]` | Afficher seulement les alias de cette connexion (omettez pour tous). |
+
+### bssh key
+
+Gérer les clés SSH : lister les clés locales, générer une paire de clés ou copier une clé publique sur un serveur.
+
+```text
+Usage: bssh key [OPTIONS] <COMMAND>
+```
+
+| Commande | Description |
+| --- | --- |
+| `list` | Lister les clés SSH locales dans `~/.ssh/` avec leurs empreintes et le contrôle des permissions. |
+| `generate` | Générer une paire de clés SSH (Ed25519 ou RSA) avec des permissions sûres. |
+| `copy` | Copier la clé publique sur un serveur distant (`~/.ssh/authorized_keys`). |
+
+### bssh key list
+
+```text
+Usage: bssh key list [OPTIONS]
+```
+
+Aucune option en dehors des options globales.
+
+### bssh key generate
+
+```text
+Usage: bssh key generate [OPTIONS] --name <NAME>
+```
+
+| Option | Description |
+| --- | --- |
+| `-n, --name <NAME>` | Nom du fichier de clé (par exemple `id_ed25519` ou `my_company_key`). |
+| `-t, --key-type <TYPE>` | Type de clé : `ed25519` ou `rsa` (par défaut : `ed25519`). |
+
+### bssh key copy
+
+```text
+Usage: bssh key copy [OPTIONS] <TARGET>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TARGET>` | Nom de connexion ou alias cible. |
+| `-k, --key <FILE>` | Chemin du fichier de clé publique (par défaut : détection de `~/.ssh/id_*.pub`). |
+
+## Recherche et sessions
+
+Trouver le bon hôte, comprendre son classement et revoir ce que vous avez fait.
+
+### bssh why
+
+Décomposer le score de classement bayésien d'une connexion, facteur par facteur : fréquence de base, récence, taux de réussite et rapports de vraisemblance du contexte (dépôt, heure de la journée et connexion précédente).
+
+```text
+Usage: bssh why [OPTIONS] <TARGET>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TARGET>` | Nom de connexion, alias ou ID. |
+
+### bssh stats
+
+Afficher les statistiques d'usage : nombre de connexions, sessions et hôtes les plus utilisés.
+
+```text
+Usage: bssh stats [OPTIONS]
+```
+
+Aucune option en dehors des options globales.
+
+### bssh history
+
+Afficher l'historique des sessions SSH avec le nom de la connexion, l'heure de début, la durée et le code de sortie.
+
+```text
+Usage: bssh history [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `-c, --connection <NAME>` | Afficher seulement les sessions de cette connexion. |
+| `-n, --limit <COUNT>` | Nombre maximal d'entrées à afficher (par défaut : 20). |
+| `-D, --days <DAYS>` | Limiter aux sessions des N derniers jours. |
+| `-f, --failed` | Afficher seulement les sessions terminées par une erreur. |
+| `-g, --grep <TEXT>` | Chercher une phrase dans la sortie enregistrée des sessions. |
+
+### bssh replay
+
+Rejouer une session enregistrée au format asciicast v2 dans le terminal. Trouvez les identifiants de session avec `bssh history` ou `bssh history --grep <text>`.
+
+```text
+Usage: bssh replay [OPTIONS] <SESSION>
+```
+
+| Option | Description |
+| --- | --- |
+| `<SESSION>` | Identifiant de session ou préfixe unique (au moins 6 caractères). |
+| `-s, --speed <FACTOR>` | Multiplicateur de vitesse de lecture (par défaut : 1). |
+| `--idle-cap <SECONDS>` | Limiter les pauses d'inactivité à ce nombre de secondes (par défaut : 2). |
+
+### bssh close
+
+Terminer les sessions SSH lancées par `bssh`. Sans argument, liste les sessions actives.
+
+```text
+Usage: bssh close [OPTIONS] [TARGET]
+```
+
+| Option | Description |
+| --- | --- |
+| `[TARGET]` | Nom de connexion à fermer (omettez pour lister les sessions actives). |
+| `-a, --all` | Fermer toutes les sessions actives d'un coup. |
+| `--cleanup` | Supprimer les entrées de session obsolètes (PID qui ne tournent plus). |
+| `-f, --force` | Ne pas demander de confirmation. |
+
+## Commandes distantes et transferts
+
+Exécuter des commandes et déplacer des fichiers sans ouvrir de shell interactif.
+
+### bssh exec
+
+Exécuter une commande ponctuelle en SSH. Fonctionne avec un seul hôte, tous les hôtes ou un tag. Utilisez `--` pour séparer la commande distante des options de `bssh`.
+
+```text
+Usage: bssh exec [OPTIONS] [TARGET] -- <COMMAND>...
+```
+
+| Option | Description |
+| --- | --- |
+| `[TARGET]` | Nom de connexion, alias ou nom d'hôte. |
+| `<COMMAND>...` | Commande distante et ses arguments (placez `--` avant la commande). |
+| `-a, --all` | Exécuter la commande sur toutes les connexions enregistrées en parallèle. |
+| `-t, --tag <TAG>` | Exécuter la commande sur les connexions portant ce tag. |
+| `--dry-run` | Prévisualiser les hôtes cibles et la commande sans exécuter. |
+
+### bssh upload
+
+Transférer un fichier ou un répertoire local vers un ou plusieurs hôtes, en parallèle. Les cibles sont des noms, alias ou hôtes séparés par des virgules, par exemple `web1,web2,db1`.
+
+```text
+Usage: bssh upload [OPTIONS] [TARGETS] <LOCAL> <REMOTE>
+```
+
+| Option | Description |
+| --- | --- |
+| `[TARGETS]` | Hôtes cibles, séparés par des virgules. |
+| `<LOCAL>` | Fichier ou répertoire local à envoyer. |
+| `<REMOTE>` | Chemin de destination sur l'hôte distant. |
+| `-a, --all` | Envoyer vers toutes les connexions enregistrées en parallèle. |
+| `-t, --tag <TAG>` | Envoyer vers les connexions portant ce tag. |
+| `--dry-run` | Prévisualiser les hôtes cibles et les chemins distants résolus sans se connecter. |
+| `-j, --parallel <N>` | Nombre maximal d'hôtes traités en parallèle (par défaut : 16). |
+| `--offset <BYTES>` | Reprendre un envoi interrompu à cet octet (un seul hôte) (par défaut : 0). |
+| `--mode <OCTAL>` | Définir les permissions du fichier distant (octal, par exemple `0o644`) (par défaut : `0o644`). |
+| `-r, --recursive` | Envoyer récursivement toute une arborescence de répertoires. |
+
+Les transferts utilisent SFTP pour les connexions natives et basculent automatiquement sur SCP via un bastion interactif.
+
+### bssh download
+
+Transférer un fichier ou un répertoire distant vers la machine locale.
+
+```text
+Usage: bssh download [OPTIONS] <TARGET> <REMOTE> <LOCAL>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TARGET>` | Nom de connexion, alias ou nom d'hôte. |
+| `<REMOTE>` | Chemin du fichier ou du répertoire sur l'hôte distant. |
+| `<LOCAL>` | Chemin de destination local. |
+| `-r, --recursive` | Télécharger récursivement toute une arborescence de répertoires. |
+
+## Tunnels
+
+Atteindre des services qui n'écoutent que du côté distant.
+
+### bssh forward
+
+Créer une redirection de port locale SSH (style `-L`). Le trafic vers l'adresse locale est acheminé par le tunnel jusqu'à la cible distante. Le format est `[bind_addr:]bind_port:remote_host:remote_port` ; `bind_addr` vaut `127.0.0.1` par défaut.
+
+```text
+Usage: bssh forward [OPTIONS] -L <SPEC> <TARGET>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TARGET>` | Nom de connexion, alias ou nom d'hôte à travers lequel tunneliser. |
+| `-L <SPEC>` | Spécification : `[bind_addr:]bind_port:remote_host:remote_port`. |
+
+### bssh proxy
+
+Ouvrir une redirection de port dynamique SSH (style `-D`) qui agit comme un proxy SOCKS5 local. Pointez votre navigateur ou votre application vers le port local pour router le trafic par l'hôte distant.
+
+```text
+Usage: bssh proxy [OPTIONS] -D <PORT> <TARGET>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TARGET>` | Nom de connexion, alias ou nom d'hôte à travers lequel passer par un proxy. |
+| `-D <PORT>` | Port local du proxy SOCKS5. |
+| `--bind <ADDR>` | Adresse d'écoute du proxy SOCKS5 (par défaut : `127.0.0.1`). |
+
+## Importation et sauvegarde
+
+Importer des hôtes depuis d'autres outils et garder une copie de la base.
+
+### bssh import
+
+Lire un fichier de configuration OpenSSH ou une sauvegarde JSON chiffrée et importer chaque hôte comme connexion. Utilise `~/.ssh/config` par défaut quand `--file` est omis.
+
+```text
+Usage: bssh import [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `-f, --file <FILE>` | Chemin du fichier de configuration SSH ou de la sauvegarde (par défaut : `~/.ssh/config`). |
+| `--no-bastion` | Importer tous les hôtes comme connexions directes : ils n'utilisent jamais le bastion par défaut. |
+| `-p, --passphrase <PASSPHRASE>` | Phrase secrète pour déchiffrer une sauvegarde chiffrée. |
+
+### bssh export
+
+Sérialiser les connexions enregistrées en JSON, TOML ou configuration OpenSSH. Écrit sur la sortie standard par défaut ; utilisez `-o` pour écrire dans un fichier.
+
+```text
+Usage: bssh export [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--format <FMT>` | Format de sortie : `json`, `toml` ou `ssh-config` (par défaut : `json`). |
+| `-o, --output <FILE>` | Écrire la sortie dans ce fichier au lieu de la sortie standard. |
+| `-t, --tag <TAG>` | Exporter seulement les connexions portant ce tag. |
+| `-p, --passphrase <PASSPHRASE>` | Chiffrer l'export avec une phrase secrète. Nécessite `--output`. |
+
+### bssh backup
+
+Sauvegarder la base de connexions dans un fichier.
+
+```text
+Usage: bssh backup [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `-o, --output <FILE>` | Chemin de destination (par défaut : `ENV_DIR/backups/backup-TIMESTAMP.db`) ; ne doit pas déjà exister. |
+
+### bssh restore
+
+Restaurer la base de connexions depuis une sauvegarde. Une copie de sécurité de la base actuelle est d'abord écrite dans le répertoire `backups/` de l'environnement.
+
+```text
+Usage: bssh restore [OPTIONS] <FILE>
+```
+
+| Option | Description |
+| --- | --- |
+| `<FILE>` | Chemin de la sauvegarde à restaurer. |
+| `-f, --force` | Ne pas demander de confirmation. |
+
+## Environnements et sources
+
+Garder des ensembles de connexions séparés et laisser `bssh` découvrir des hôtes dans des inventaires.
+
+### bssh env
+
+Gérer des profils d'environnement, chacun avec sa propre base de connexions.
+
+```text
+Usage: bssh env [OPTIONS] <COMMAND>
+```
+
+| Commande | Description |
+| --- | --- |
+| `list` | Lister tous les environnements et indiquer celui qui est actif. |
+| `use` | Changer l'environnement actif (les connexions sont propres à chaque environnement). |
+| `create` | Créer un environnement isolé avec sa propre base de connexions. |
+| `remove` | Supprimer un environnement et toutes ses connexions enregistrées. |
+
+### bssh env list
+
+```text
+Usage: bssh env list [OPTIONS]
+```
+
+### bssh env use
+
+```text
+Usage: bssh env use [OPTIONS] <NAME>
+```
+
+| Option | Description |
+| --- | --- |
+| `<NAME>` | Nom de l'environnement à activer. |
+
+### bssh env create
+
+```text
+Usage: bssh env create [OPTIONS] <NAME>
+```
+
+| Option | Description |
+| --- | --- |
+| `<NAME>` | Nom du nouvel environnement (doit être unique). |
+
+### bssh env remove
+
+```text
+Usage: bssh env remove [OPTIONS] <NAME>
+```
+
+| Option | Description |
+| --- | --- |
+| `<NAME>` | Nom de l'environnement à supprimer. |
+
+### bssh source
+
+Configurer des inventaires dans lesquels des connexions peuvent être découvertes. Une source retient comment trouver des hôtes (configuration SSH, Ansible, Tailscale, AWS, GCP). Ajouter une source n'importe rien : lancez `bssh source sync <NAME>` pour aligner ses hôtes avec la base de connexions.
+
+```text
+Usage: bssh source [OPTIONS] <COMMAND>
+```
+
+| Commande | Description |
+| --- | --- |
+| `add` | Enregistrer une nouvelle source d'inventaire (sans la synchroniser). |
+| `list` | Lister les sources configurées et leur nombre d'hôtes. |
+| `sync` | Aligner les hôtes d'une source avec la base de connexions. |
+| `remove` | Supprimer une source en gardant ou en supprimant ses connexions. |
+
+### bssh source add
+
+```text
+Usage: bssh source add [OPTIONS] <NAME> <KIND>
+```
+
+| Option | Description |
+| --- | --- |
+| `<NAME>` | Nom unique de cette source. |
+| `<KIND>` | Type de source : `ssh-config`, `ansible`, `tailscale`, `aws` ou `gcp`. |
+| `--path <FILE>` | Chemin du fichier de configuration SSH (`ssh-config` seulement). |
+| `--inventory <FILE>` | Chemin du fichier d'inventaire Ansible (`ansible` seulement, obligatoire). |
+| `--profile <PROFILE>` | Profil AWS à utiliser (`aws` seulement). |
+| `--region <REGION>` | Région AWS à parcourir (`aws` seulement, répétable ou séparée par des virgules). |
+| `--address <MODE>` | Adresse à utiliser : `private`/`public`/`dns` pour AWS, `internal`/`external` pour GCP. |
+| `--project <PROJECT>` | Identifiant du projet GCP (`gcp` seulement, obligatoire). |
+| `--user <USER>` | Nom d'utilisateur SSH par défaut des hôtes découverts. |
+| `--bastion <HOST>` | Hôte de rebond appliqué aux connexions découvertes. |
+| `--bastion-user <USER>` | Nom d'utilisateur sur l'hôte de rebond. |
+| `--include-offline` | Inclure les pairs hors ligne (`tailscale` seulement). |
+
+### bssh source list
+
+```text
+Usage: bssh source list [OPTIONS]
+```
+
+### bssh source sync
+
+```text
+Usage: bssh source sync [OPTIONS] [NAME]
+```
+
+| Option | Description |
+| --- | --- |
+| `[NAME]` | Source à synchroniser (omettez avec `--all`). |
+| `-a, --all` | Synchroniser toutes les sources configurées, en continuant après un échec. |
+| `--dry-run` | Afficher les changements prévus sans rien écrire. |
+| `--prune` | Supprimer les hôtes obsolètes depuis plus de `--prune-after` jours. |
+| `--prune-after <DAYS>` | Ancienneté en jours avant qu'un hôte obsolète soit supprimé (par défaut : 30). |
+
+### bssh source remove
+
+```text
+Usage: bssh source remove [OPTIONS] <NAME>
+```
+
+| Option | Description |
+| --- | --- |
+| `<NAME>` | Nom de la source à supprimer. |
+| `--delete-hosts` | Supprimer les connexions de la source au lieu de les détacher. |
+| `-f, --force` | Ne pas demander de confirmation. |
+
+## Réglages et diagnostics
+
+Changer les valeurs par défaut globales et vérifier que tout fonctionne.
+
+### bssh config
+
+Lire ou modifier les valeurs par défaut globales de `bssh`. Sans option, affiche les réglages actuels ; avec une ou plusieurs options, met à jour les valeurs.
+
+```text
+Usage: bssh config [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--default-user <USER>` | Nom d'utilisateur SSH par défaut des nouvelles connexions. |
+| `--default-bastion <HOST>` | Hôte de rebond par défaut des nouvelles connexions. |
+| `--default-bastion-user <USER>` | Nom d'utilisateur par défaut sur l'hôte de rebond. |
+| `--default-port <PORT>` | Port SSH par défaut des nouvelles connexions. |
+| `--use-kerberos <BOOL>` | Activer Kerberos par défaut pour les nouvelles connexions. Valeurs possibles : `true`, `false`. |
+| `--log-level <LEVEL>` | Niveau de journalisation. Valeurs possibles : `trace`, `debug`, `info`, `warn`, `error`, `off`. |
+| `--clear-bastion` | Supprimer le bastion par défaut pour que les nouvelles connexions soient directes. |
+| `--search-mode <MODE>` | Algorithme de recherche : `bayesian` (classé par usage) ou `fuzzy` (sous-chaîne). |
+| `--recording <STATE>` | Activer ou désactiver l'enregistrement de la sortie des sessions (`on` ou `off`). |
+| `--recording-tags <TAGS>` | Enregistrer seulement les connexions portant ces tags séparés par des virgules (une chaîne vide efface). |
+| `--prediction <STATE>` | Activer ou désactiver le classement prédictif selon le contexte (`on` ou `off`). |
+| `--capture-cwd <STATE>` | Activer ou désactiver la capture du répertoire courant et de la racine git (`on` ou `off`). |
+
+Les réglages sans option ici sont stockés dans le `config.json` de l'environnement ; voir la [référence de la configuration](/fr/reference/configuration/).
+
+### bssh doctor
+
+Lancer les contrôles de santé locaux de `bssh`. Vérifie la configuration active, l'initialisation de la base, la présence du client SSH, le chemin facultatif de la configuration SSH, l'environnement ssh-agent et les commandes Kerberos.
+
+```text
+Usage: bssh doctor [OPTIONS]
+```
+
+Aucune option en dehors des options globales.
+
+### bssh audit
+
+Auditer la configuration de sécurité, les clés d'hôte, les permissions des clés et la santé des connexions.
+
+```text
+Usage: bssh audit [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `-f, --fix` | Réparer automatiquement les permissions trop ouvertes des fichiers et répertoires. |
+
+## Teams
+
+Partager des connexions avec votre équipe via un coffre chiffré de bout en bout. Le serveur de synchronisation ne stocke que du chiffré. Les connexions d'équipe apparaissent dans `bssh list` et `bssh connect` comme les autres hôtes. Une connexion à l'une d'elles est inscrite dans le journal d'audit signé de l'équipe à la synchronisation suivante. Les clés de vos appareils sont protégées par une phrase secrète, demandée ou lue dans `BSSH_TEAMS_PASSPHRASE`.
+
+### bssh teams
+
+```text
+Usage: bssh teams [OPTIONS] <COMMAND>
+```
+
+| Commande | Description |
+| --- | --- |
+| `init` | Configurer cette machine : créer votre compte et les clés de cet appareil. |
+| `whoami` | Afficher le compte, l'appareil et l'empreinte de cette machine. |
+| `create` | Créer une équipe ; vous en devenez administrateur. |
+| `list` | Lister les équipes de cette machine. |
+| `invite` | Inviter quelqu'un par e-mail (administrateur). |
+| `uninvite` | Révoquer une invitation en attente (administrateur) : son jeton cesse de fonctionner et son siège est libéré. |
+| `join` | Rejoindre une équipe avec un jeton d'invitation et l'empreinte de l'appareil de l'administrateur. |
+| `grant` | Donner la clé d'équipe à un appareil en attente (administrateur) ; les liste sans `--fingerprint`. |
+| `sync` | Synchroniser une équipe, ou toutes les équipes. |
+| `share` | Partager une connexion enregistrée avec une équipe (ou pousser vos modifications vers une connexion d'équipe). |
+| `unshare` | Supprimer une connexion d'équipe pour toute l'équipe. |
+| `members` | Lister les membres d'une équipe et leurs appareils. |
+| `billing` | Afficher l'offre et les sièges d'une équipe ; s'abonner ou gérer l'abonnement (administrateur). |
+| `remove` | Retirer un membre et faire tourner la clé d'équipe (administrateur). |
+| `audit` | Afficher et vérifier le journal d'audit de l'équipe (administrateur). Sort avec un code non nul si une vérification échoue. |
+
+### bssh teams init
+
+Configurer cette machine : créer votre compte et les clés de cet appareil.
+
+```text
+Usage: bssh teams init [OPTIONS] --server <URL> --email <EMAIL>
+```
+
+| Option | Description |
+| --- | --- |
+| `--server <URL>` | URL du serveur de synchronisation (https ; http seulement pour localhost). |
+| `--email <EMAIL>` | Votre adresse e-mail (les invitations y sont envoyées). |
+| `--device-name <NAME>` | Nom de cet appareil, affiché aux administrateurs (par défaut : le nom d'hôte). |
+| `--invite <TOKEN>` | Jeton d'invitation fourni par votre administrateur (nécessaire pour les serveurs qui n'acceptent que les comptes invités). |
+
+### bssh teams whoami
+
+Afficher le compte, l'appareil et l'empreinte de cette machine.
+
+```text
+Usage: bssh teams whoami [OPTIONS]
+```
+
+### bssh teams create
+
+Créer une équipe ; vous en devenez administrateur.
+
+```text
+Usage: bssh teams create [OPTIONS] <NAME>
+```
+
+| Option | Description |
+| --- | --- |
+| `<NAME>` | Nom de l'équipe, aussi utilisé comme nom de source dans `bssh list`. |
+
+### bssh teams list
+
+Lister les équipes de cette machine.
+
+```text
+Usage: bssh teams list [OPTIONS]
+```
+
+### bssh teams invite
+
+Inviter quelqu'un par e-mail (administrateur).
+
+```text
+Usage: bssh teams invite [OPTIONS] <TEAM> <EMAIL>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TEAM>` | Nom de l'équipe. |
+| `<EMAIL>` | Adresse e-mail de la personne à inviter. |
+| `--admin` | En faire un administrateur plutôt qu'un membre. |
+
+### bssh teams uninvite
+
+Révoquer une invitation en attente (administrateur) : son jeton cesse de fonctionner et son siège est libéré.
+
+```text
+Usage: bssh teams uninvite [OPTIONS] <TEAM> <EMAIL>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TEAM>` | Nom de l'équipe. |
+| `<EMAIL>` | Adresse e-mail à laquelle l'invitation a été envoyée. |
+
+### bssh teams join
+
+Rejoindre une équipe avec un jeton d'invitation et l'empreinte de l'appareil de l'administrateur.
+
+```text
+Usage: bssh teams join [OPTIONS] --fingerprint <SHA256:...> [TOKEN]
+```
+
+| Option | Description |
+| --- | --- |
+| `[TOKEN]` | Jeton d'invitation (usage unique). |
+| `--team <TEAM_ID>` | Terminer une adhésion dont le contrôle d'empreinte a échoué, par identifiant d'équipe. |
+| `--fingerprint <SHA256:...>` | Empreinte de l'administrateur, reçue avec l'invitation. |
+
+### bssh teams grant
+
+Donner la clé d'équipe à un appareil en attente (administrateur). Sans `--fingerprint`, liste les appareils qui l'attendent.
+
+```text
+Usage: bssh teams grant [OPTIONS] <TEAM>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TEAM>` | Nom de l'équipe. |
+| `--fingerprint <SHA256:...>` | Empreinte que le membre vous envoie après avoir rejoint. |
+
+### bssh teams sync
+
+Synchroniser une équipe, ou toutes les équipes.
+
+```text
+Usage: bssh teams sync [OPTIONS] [TEAM]
+```
+
+| Option | Description |
+| --- | --- |
+| `[TEAM]` | Équipe à synchroniser (par défaut : toutes). |
+
+### bssh teams share
+
+Partager une connexion enregistrée avec une équipe, ou pousser vos modifications vers une connexion d'équipe.
+
+```text
+Usage: bssh teams share [OPTIONS] --team <TEAM> <CONNECTION>
+```
+
+| Option | Description |
+| --- | --- |
+| `<CONNECTION>` | Nom de connexion ou alias. |
+| `--team <TEAM>` | Équipe avec laquelle partager la connexion. |
+
+### bssh teams unshare
+
+Supprimer une connexion d'équipe pour toute l'équipe.
+
+```text
+Usage: bssh teams unshare [OPTIONS] <CONNECTION>
+```
+
+| Option | Description |
+| --- | --- |
+| `<CONNECTION>` | Nom de connexion ou alias. |
+
+### bssh teams members
+
+Lister les membres d'une équipe et leurs appareils.
+
+```text
+Usage: bssh teams members [OPTIONS] <TEAM>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TEAM>` | Nom de l'équipe. |
+
+### bssh teams billing
+
+Afficher l'offre et les sièges d'une équipe ; s'abonner ou gérer l'abonnement (administrateur).
+
+```text
+Usage: bssh teams billing [OPTIONS] <TEAM>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TEAM>` | Nom de l'équipe. |
+| `--checkout` | Ouvrir une page de paiement pour abonner l'équipe (administrateur). |
+| `--seats <SEATS>` | Nombre de sièges à souscrire (par défaut : les sièges utilisés, au moins un de plus que l'offre gratuite). |
+| `--yearly` | Payer à l'année plutôt qu'au mois. |
+| `--manage` | Ouvrir le portail de facturation : carte, factures, sièges, résiliation (administrateur). |
+
+### bssh teams remove
+
+Retirer un membre et faire tourner la clé d'équipe (administrateur).
+
+```text
+Usage: bssh teams remove [OPTIONS] <TEAM> <EMAIL>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TEAM>` | Nom de l'équipe. |
+| `<EMAIL>` | Adresse e-mail du membre à retirer. |
+
+### bssh teams audit
+
+Afficher et vérifier le journal d'audit de l'équipe (administrateur). Sort avec un code non nul si une vérification échoue.
+
+```text
+Usage: bssh teams audit [OPTIONS] <TEAM>
+```
+
+| Option | Description |
+| --- | --- |
+| `<TEAM>` | Nom de l'équipe. |
+| `--host <CONNECTION>` | Seulement les événements de cette connexion d'équipe. |
+| `--member <EMAIL>` | Seulement les événements de ce membre. |
+| `--since <DATE>` | Seulement les événements reçus depuis cette date (`YYYY-MM-DD` ou RFC 3339). |
+| `--limit <LIMIT>` | Nombre maximal d'événements (par défaut et maximum : 1000). |
+
+## Bureau et shell
+
+Ouvrir l'application et activer la complétion de `bssh` dans votre shell.
+
+### bssh desktop
+
+Lancer l'application de bureau en arrière-plan, détachée du terminal.
+
+```text
+Usage: bssh desktop [OPTIONS]
+```
+
+### bssh completions
+
+Afficher un script de complétion sur la sortie standard. Chargez-le ou installez-le pour activer la complétion par tabulation dans votre shell.
+
+```text
+Usage: bssh completions [OPTIONS] <SHELL>
+```
+
+| Option | Description |
+| --- | --- |
+| `<SHELL>` | Shell cible. Valeurs possibles : `bash`, `elvish`, `fish`, `powershell`, `zsh`. |

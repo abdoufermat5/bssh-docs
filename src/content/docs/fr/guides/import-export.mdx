@@ -1,0 +1,186 @@
+---
+title: Importation, exportation, sauvegarde et restauration
+description: Migrez vos hôtes depuis un fichier de configuration OpenSSH, exportez des listes chiffrées et créez des sauvegardes fiables de votre base.
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Bayesian SSH propose deux méthodes pour transférer vos données :
+
+- **Importation et exportation** : transférez les paramètres de vos connexions et leurs métadonnées dans des formats lisibles (JSON, configuration OpenSSH ou TOML pour les exports), avec chiffrement optionnel par phrase secrète.
+- **Sauvegarde et restauration** : capturez ou restaurez un instantané complet de la base de données SQLite, comprenant l'historique des sessions, les statistiques d'utilisation, les alias et les tags.
+
+## Importer des connexions
+
+Utilisez `bssh import` pour intégrer vos hôtes existants dans la base de données de Bayesian SSH.
+
+### Importer un fichier de configuration OpenSSH
+
+Par défaut, `bssh import` lit votre fichier `~/.ssh/config` local (ou le chemin défini dans `config.json` sous `ssh_config_path`) :
+
+```sh
+bssh import
+```
+
+```text
+✅ Successfully imported 14 connection(s) from SSH config
+```
+
+Pour indiquer un autre fichier de configuration :
+
+```sh
+bssh import -f ~/.ssh/config.d/work
+```
+
+Comportements clés lors de l'importation de configuration SSH :
+
+- **Attributs des hôtes** : analyse les directives `Host`, `HostName`, `User`, `Port` et `IdentityFile`.
+- **Ajout automatique de tag** : chaque hôte importé reçoit le tag `imported` afin que vous puissiez le filtrer ou le gérer facilement.
+- **Idempotence** : si une connexion du même nom existe déjà dans votre base de données, `bssh` l'ignore sans erreur et conserve votre entrée actuelle.
+- **Ignorer les bastions** : pour importer les hôtes en tant que connexions directes au lieu d'hériter du bastion par défaut configuré, ajoutez `--no-bastion` :
+
+```sh
+bssh import --no-bastion
+```
+
+### Importer une sauvegarde JSON chiffrée
+
+Si vous avez précédemment exporté des connexions avec `bssh export --passphrase`, importez-les en fournissant le chemin du fichier et la phrase secrète :
+
+```sh
+bssh import -f hosts-backup.enc --passphrase "correct horse battery staple"
+```
+
+```text
+🔓 Decrypting import file with passphrase...
+✅ Imported 8 connection(s) from JSON backup (2 already existed).
+```
+
+## Exporter des connexions
+
+Utilisez `bssh export` pour partager des listes d'hôtes, générer des configurations OpenSSH ou créer des sauvegardes chiffrées.
+
+```sh
+# Exporter toutes les connexions au format JSON sur la sortie standard
+bssh export
+
+# Exporter dans un fichier
+bssh export -o hosts.json
+```
+
+### Formats d'exportation
+
+Bayesian SSH prend en charge trois formats d'exportation via l'option `--format` :
+
+```sh
+# Exporter au format JSON (par défaut)
+bssh export --format json -o hosts.json
+
+# Exporter au format TOML
+bssh export --format toml -o hosts.toml
+
+# Exporter au format standard OpenSSH config
+bssh export --format ssh-config -o ~/.ssh/config.d/bssh-hosts
+```
+
+| Format | Option | Description |
+| --- | --- | --- |
+| `json` | `--format json` | Tableau JSON complet des modèles de connexion (par défaut). |
+| `toml` | `--format toml` | Document TOML contenant les tables `[[connections]]`. |
+| `ssh-config` | `--format ssh-config` | Format OpenSSH standard (`Host`, `HostName`, `User`, `Port`, `IdentityFile` et `ProxyCommand` pour les bastions). |
+
+### Filtrer par tag
+
+Pour exporter uniquement les hôtes associés à un tag donné, utilisez `-t` ou `--tag` :
+
+```sh
+bssh export -t prod -o prod-hosts.json
+```
+
+### Chiffrer les exportations avec une phrase secrète
+
+Pour protéger les détails des connexions exportées, indiquez `-p` ou `--passphrase` conjointement avec `-o` :
+
+```sh
+bssh export -o hosts-backup.enc --passphrase "correct horse battery staple"
+```
+
+```text
+🔒 Encrypting export with passphrase...
+✅ Exported 28 connections to hosts-backup.enc
+```
+
+#### Conception cryptographique
+
+Les exportations chiffrées utilisent un chiffrement authentifié pour garantir à la fois la confidentialité et l'intégrité :
+
+- **Dérivation de clé** : [Argon2id](https://www.rfc-editor.org/rfc/rfc9106.html) avec 64 Mio de mémoire, 3 itérations et 1 fil d'exécution pour dériver une clé de 256 bits à partir de votre phrase secrète.
+- **Chiffrement authentifié** : AES-256-GCM avec un nonce aléatoire de 12 octets et une étiquette d'authentification de 16 octets.
+- **Format de fichier** : un en-tête magique `BSSH` suivi d'un octet de version (`0x02`), d'un sel de 16 octets, d'un nonce de 12 octets et du texte chiffré auquel est ajoutée l'étiquette GCM.
+- **Écriture sécurisée** : les fichiers sont d'abord écrits dans un fichier temporaire aux droits stricts `0600` (`-rw-------`), puis renommés de façon atomique vers la destination finale.
+
+## Sauvegarder la base de données
+
+Tandis que `bssh export` sérialise les définitions de connexions, `bssh backup` capture l'intégralité de la base de données SQLite, y compris l'historique des sessions, les pondérations de classement et les alias.
+
+```sh
+bssh backup
+```
+
+```text
+✅ Database successfully backed up to: /home/user/.local/share/bayesian-ssh/backups/backup-2026-10-23-093000.db
+```
+
+### Destination de la sauvegarde
+
+Par défaut, les sauvegardes sont enregistrées dans un sous-répertoire `backups/` situé dans votre dossier d'environnement, avec un horodatage : `backup-YYYY-MM-DD-HHMMSS.db`.
+
+Pour choisir un fichier de destination spécifique :
+
+```sh
+bssh backup -o ~/backups/bssh-snapshot.db
+```
+
+:::tip
+`bssh backup` utilise l'API de sauvegarde en ligne de SQLite (`VACUUM INTO`) plutôt qu'une copie du système de fichiers. Cela garantit un instantané cohérent et nettoyé sans bloquer ni corrompre les bases fonctionnant en mode WAL (Write-Ahead Logging).
+:::
+
+Le fichier cible est créé avec les permissions `0600` (`-rw-------`) et `bssh backup` refuse d'écraser un fichier existant.
+
+## Restaurer la base de données
+
+Utilisez `bssh restore` pour remplacer votre base de données active par un instantané de sauvegarde antérieur.
+
+```sh
+bssh restore ~/backups/bssh-snapshot.db
+```
+
+```text
+⚠️  WARNING: This will replace your current database with:
+    ~/backups/bssh-snapshot.db
+    Your existing database will be safely backed up first.
+
+Are you sure you want to restore? [y/N] y
+✅ Database successfully restored from: ~/backups/bssh-snapshot.db
+```
+
+Pour ignorer l'invite de confirmation dans les scripts automatisés, ajoutez `-f` ou `--force` :
+
+```sh
+bssh restore ~/backups/bssh-snapshot.db -f
+```
+
+### Garanties de sécurité et de validation
+
+1. **Vérification d'intégrité** : avant de modifier votre base active, `bssh` vérifie que le fichier cible est bien une base SQLite intacte contenant les tables requises par le schéma de Bayesian SSH.
+2. **Sauvegarde préalable** : si votre fichier de base actuel existe, `bssh` effectue automatiquement une sauvegarde interne de sécurité (`VACUUM INTO`) avant tout écrasement.
+3. **Remplacement atomique** : la restauration copie les données dans un fichier temporaire aux permissions `0600` avant de le renommer de façon atomique à son emplacement final.
+4. **Nettoyage des fichiers annexes** : les fichiers temporaires du journal SQLite de l'ancienne base (`-wal`, `-shm` et `-journal`) sont proprement supprimés afin qu'ils ne puissent pas corrompre le fichier restauré.
+5. **Migrations automatiques** : dès l'ouverture de la base restaurée, `bssh` applique automatiquement les éventuelles migrations de schéma en attente, assurant ainsi la mise à niveau transparente des sauvegardes plus anciennes.
+
+## Pour continuer
+
+<CardGrid>
+	<LinkCard title="Connexions enregistrées" description="Ajoutez, modifiez, supprimez et taguez vos connexions." href="/fr/guides/connections/" />
+	<LinkCard title="Sécurité" description="Consultez les autorisations de stockage de la base locale et les mécanismes de chiffrement." href="/fr/reference/security/" />
+</CardGrid>

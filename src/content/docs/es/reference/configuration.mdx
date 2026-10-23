@@ -1,0 +1,195 @@
+---
+title: Referencia de la configuración
+description: Todos los ajustes de bssh y sus valores por defecto, y dónde guarda bssh su configuración, su base de datos, sus grabaciones y las preferencias de la aplicación de escritorio.
+---
+
+`bssh` guarda todo en tu máquina. Los ajustes son archivos JSON, las conexiones viven en una base de datos SQLite y cada entorno tiene su propia copia de ambos. Esta página enumera cada archivo, cada ajuste y cada variable de entorno que lee el CLI.
+
+## Dónde guarda bssh sus datos
+
+La raíz de configuración es `~/.config/bayesian-ssh/`, o `$XDG_CONFIG_HOME/bayesian-ssh/` cuando esa variable está definida.
+
+Dentro:
+
+```text
+~/.config/bayesian-ssh/
+  active_env
+  desktop_settings.json
+  environments/
+    default/
+      config.json
+      history.db
+      backups/
+      recordings/
+    staging/
+      config.json
+      history.db
+      backups/
+      recordings/
+```
+
+| Ruta | Contenido |
+| --- | --- |
+| `active_env` | Nombre del entorno activo, en texto plano. Ausente o inválido significa `default`. |
+| `desktop_settings.json` | Preferencias de la aplicación de escritorio (tema, terminal, SFTP). El CLI no lo lee. |
+| `environments/<name>/config.json` | Ajustes de ese entorno. |
+| `environments/<name>/history.db` | Base SQLite: conexiones, etiquetas, alias, historial de sesiones, fuentes de inventario, el índice de grabaciones y el estado de Teams. |
+| `environments/<name>/recordings/` | Grabaciones de sesión, un archivo `.cast` por sesión. |
+| `environments/<name>/backups/` | Instantáneas escritas por `bssh backup`, más la copia de seguridad que toma `bssh restore` antes de sobrescribir la base. |
+
+Los directorios se crean con modo `0700` y los archivos con `0600`. `bssh audit --fix` repara los permisos que se han vuelto demasiado abiertos.
+
+:::note
+Las versiones anteriores guardaban `config.json` y `history.db` directamente en la raíz de configuración. Cuando `environments/default/` aún no existe, `bssh` los mueve ahí.
+:::
+
+## Entornos
+
+Un entorno es un conjunto completo y separado de conexiones, historial y ajustes. `bssh env` los gestiona:
+
+| Comando | Efecto |
+| --- | --- |
+| `bssh env list` | Listar todos los entornos y marcar el activo. |
+| `bssh env use <NAME>` | Activar un entorno. |
+| `bssh env create <NAME>` | Crear un entorno vacío con su propia base de datos. |
+| `bssh env remove <NAME>` | Eliminar un entorno y todas sus conexiones guardadas. |
+
+El entorno activo se guarda en `active_env`. Para usar otro entorno en un solo comando sin cambiar de entorno, pasa la opción global `--env`:
+
+```sh
+bssh --env staging list
+bssh --env staging connect db01
+```
+
+Los nombres de entorno están limitados a 64 caracteres. No pueden contener `/`, `\`, `:` ni caracteres de control, no pueden empezar por `.` y no pueden tener espacios al principio ni al final.
+
+## Ajustes
+
+El `config.json` de cada entorno contiene sus ajustes. El archivo es JSON, con formato legible, se reescribe de forma atómica y se crea con los valores por defecto la primera vez que se usa el entorno. `bssh config` actualiza los ajustes que tienen una opción; los demás se editan en el archivo.
+
+```json
+{
+  "database_path": "/home/ana/.config/bayesian-ssh/environments/default/history.db",
+  "default_user": "ana",
+  "default_bastion": null,
+  "default_bastion_user": null,
+  "default_port": 22,
+  "use_kerberos_by_default": false,
+  "ssh_config_path": "/home/ana/.ssh/config",
+  "log_level": "info",
+  "auto_save_history": true,
+  "max_history_size": 1000,
+  "search_mode": "bayesian",
+  "transport": {
+    "force_subprocess": false,
+    "strict_host_key_checking": "accept-new"
+  },
+  "auth": {
+    "identity_files": [],
+    "use_agent": true,
+    "agent_socket": null
+  },
+  "recording": {
+    "enabled": false,
+    "tags": [],
+    "max_bytes_per_session": 52428800,
+    "retention_days": 90
+  },
+  "prediction": {
+    "enabled": true,
+    "capture_cwd": true,
+    "window_days": 180
+  }
+}
+```
+
+| Ajuste | Tipo | Valor por defecto | Se cambia con | Significado |
+| --- | --- | --- | --- | --- |
+| `database_path` | ruta | `<directorio del entorno>/history.db` | — | Base de datos de este entorno. Una ruta relativa, o fuera del directorio del entorno, se sustituye por `<directorio del entorno>/history.db` al cargar el archivo. |
+| `default_user` | cadena | tu usuario del sistema | `--default-user` | Usuario SSH de las nuevas conexiones. |
+| `default_bastion` | cadena o `null` | `null` | `--default-bastion`, `--clear-bastion` | Bastión aplicado a las nuevas conexiones. |
+| `default_bastion_user` | cadena o `null` | `null` | `--default-bastion-user` | Usuario en el bastión por defecto. |
+| `default_port` | número | `22` | `--default-port` | Puerto SSH de las nuevas conexiones. |
+| `use_kerberos_by_default` | booleano | `false` | `--use-kerberos` | Activar Kerberos (GSSAPI) en las nuevas conexiones. |
+| `ssh_config_path` | ruta o `null` | `~/.ssh/config` | — | Archivo que lee `bssh import` cuando se omite `--file`. La aplicación de escritorio puede cambiarlo. |
+| `log_level` | cadena | `"info"` | `--log-level` | Uno de `trace`, `debug`, `info`, `warn`, `error`, `off`. |
+| `auto_save_history` | booleano | `true` | — | Si la aplicación de escritorio escribe una sesión en el historial. |
+| `max_history_size` | número | `1000` | — | Número de entradas de historial que la aplicación de escritorio lista por defecto. |
+| `search_mode` | cadena | `"bayesian"` | `--search-mode` | `bayesian` ordena según el uso; `fuzzy` solo compara subcadenas. |
+| `transport.force_subprocess` | booleano | `false` | — | Usar siempre el binario `ssh` del sistema. Las conexiones con Kerberos o bastión lo usan de todos modos. |
+| `transport.strict_host_key_checking` | cadena | `"accept-new"` | — | `strict`, `accept-new` (confianza en la primera conexión) u `off`. `bssh audit` informa de `off`. |
+| `auth.identity_files` | lista de rutas | `[]` | — | Claves privadas adicionales que ofrecer, además de las detectadas. |
+| `auth.use_agent` | booleano | `true` | — | Usar ssh-agent cuando haya uno disponible. |
+| `auth.agent_socket` | ruta o `null` | `null` | — | Socket de agente explícito. `null` significa leer `SSH_AUTH_SOCK`. |
+| `recording.enabled` | booleano | `false` | `--recording` | Grabar la salida de las sesiones. |
+| `recording.tags` | lista de cadenas | `[]` | `--recording-tags` | Grabar solo las conexiones con una de estas etiquetas. Vacío graba todas las conexiones. |
+| `recording.max_bytes_per_session` | número | `52428800` (50 MiB) | — | Dejar de escribir eventos cuando una grabación alcanza este tamaño. |
+| `recording.retention_days` | número | `90` | — | Borrar las grabaciones más antiguas que este número de días. `0` las conserva para siempre. La limpieza se ejecuta al terminar una sesión y con `bssh close --cleanup`. |
+| `prediction.enabled` | booleano | `true` | `--prediction` | Usar el contexto (repositorio, hora, conexión anterior) en la clasificación. |
+| `prediction.capture_cwd` | booleano | `true` | `--capture-cwd` | Capturar el directorio actual y la raíz de git en cada sesión. |
+| `prediction.window_days` | número | `180` | — | Días de historial usados para la parte contextual de la puntuación. |
+
+`bssh config` sin opciones muestra los valores actuales y reescribe el archivo con los mismos ajustes.
+
+## Variables de entorno
+
+| Variable | La lee | Significado |
+| --- | --- | --- |
+| `BSSH_TEAMS_PASSPHRASE` | `bssh teams` | Frase de contraseña del dispositivo, usada en lugar del aviso. Los valores vacíos se ignoran. |
+| `SSH_AUTH_SOCK` | conexiones, `bssh doctor` | Socket de agente cuando `auth.agent_socket` es `null`. |
+| `KRB5_CONFIG` | comprobaciones de Kerberos | Ruta de `krb5.conf`, antes de `/etc/krb5.conf` y `/etc/krb5/krb5.conf`. |
+| `KRB5CCNAME` | comprobaciones de Kerberos | Caché de tickets que inspeccionar, antes de la caché por defecto de `krb5.conf`. |
+| `USER`, `LOGNAME`, `USERNAME` | Kerberos | Nombre de acceso cuando no hay un principal configurado. |
+| `UID` | detección del agente | Propietario de los sockets de agente que aceptar; si no, `id -u`. |
+| `HOSTNAME` | `bssh teams init` | Nombre de dispositivo por defecto; si no, `/etc/hostname`, luego `device`. |
+| `TERM` | sesiones | Tipo de terminal solicitado para el PTY remoto (por defecto `xterm-256color`). |
+| `PATH` | `bssh doctor`, `bssh desktop` | Localización de `ssh`, `kinit`, `klist` y el binario de escritorio. |
+| `HOME` | configuración y claves | Resolución de `~` para `ssh_config_path` y `~/.ssh`. |
+| `XDG_CONFIG_HOME` | raíz de configuración | Sustituye a `~/.config` en Linux. |
+
+## Ajustes de la aplicación de escritorio
+
+La aplicación de escritorio guarda sus propias preferencias en `desktop_settings.json`, en la raíz de configuración, compartidas por todos los entornos. Es la aplicación quien escribe el archivo; edítalo solo con la aplicación cerrada.
+
+| Ajuste | Valor por defecto | Significado |
+| --- | --- | --- |
+| `theme` | `"dark"` | `dark`, `light` o `system`. |
+| `density` | `"comfortable"` | `compact`, `comfortable` o `spacious`. |
+| `auto_start_agent` | `false` | Iniciar un ssh-agent con la aplicación. |
+| `custom_agent_socket` | `SSH_AUTH_SOCK` en el primer arranque | Socket de agente que usa la aplicación. |
+| `kerberos_warn_minutes` | `15` | Avisar este número de minutos antes de que caduque un ticket. |
+| `monitor_kerberos` | `true` | Mostrar el estado de Kerberos y los avisos de caducidad. |
+| `default_user` | tu usuario del sistema | Usuario prerrellenado para las nuevas conexiones. |
+| `default_port` | `22` | Puerto prerrellenado para las nuevas conexiones. |
+| `fuzzy_search` | `false` | Empezar la búsqueda de hosts en modo aproximado. |
+| `default_key_path` | `null` | Clave prerrellenada para las nuevas conexiones. |
+| `timezone` | `"system"` | Zona horaria usada para mostrar las fechas. |
+| `onboarding_complete` | lo define la bienvenida | Si se ha terminado la configuración inicial. |
+| `terminal_font_family` | JetBrains Mono, Fira Code, Cascadia Code, Ubuntu Mono, DejaVu Sans Mono, Liberation Mono, Consolas, monospace | Pila de fuentes del terminal. |
+| `terminal_font_size` | `13` | Tamaño de fuente en píxeles. |
+| `terminal_line_height` | `1.18` | Multiplicador de altura de línea. |
+| `terminal_cursor_style` | `"block"` | Forma del cursor. |
+| `terminal_cursor_blink` | `true` | Hacer parpadear el cursor. |
+| `terminal_copy_on_select` | `false` | Copiar automáticamente el texto seleccionado. |
+| `terminal_smart_copy` | `false` | <kbd>Ctrl</kbd>+<kbd>C</kbd> copia cuando hay texto seleccionado. |
+| `terminal_scrollback` | `10000` | Líneas que se conservan en el historial de desplazamiento. |
+| `sftp_show_hidden_files` | `true` | Mostrar los archivos ocultos en el explorador de archivos. |
+| `sftp_default_remote_path` | `"/"` | Directorio en el que se abre el explorador de archivos. |
+| `enable_sftp` | `true` | Mostrar el explorador de archivos. |
+| `record_sessions` | `false` | Grabar las sesiones iniciadas desde la aplicación. |
+| `record_tags` | `[]` | Grabar solo estas etiquetas; vacío graba todas las conexiones. |
+
+## Paquete Snap
+
+El snap se ejecuta con confinamiento estricto, así que no puede usar tu directorio de configuración habitual. Sus archivos viven en `~/snap/bayesian-ssh/current/`:
+
+```text
+~/snap/bayesian-ssh/current/.config/bayesian-ssh/
+```
+
+Por eso el snap tiene sus propios entornos, base de datos y ajustes de escritorio, separados de una instalación nativa o de `install.sh`. `~/.ssh` se monta en solo lectura, así que el snap no puede actualizar `known_hosts` ni generar claves en `~/.ssh`.
+
+## Para continuar
+
+- [Referencia de comandos](/es/reference/cli/) para cada comando y opción.
+- [Solución de problemas](/es/reference/troubleshooting/) cuando `bssh doctor` informa de un problema.

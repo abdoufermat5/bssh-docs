@@ -1,0 +1,123 @@
+---
+title: Configurar Teams
+description: Configura bssh Teams en una máquina, crea un equipo y comparte tu primera conexión.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+bssh Teams comparte conexiones con las personas de tu equipo. Cada dispositivo guarda sus propias claves, las conexiones del equipo se cifran en tus dispositivos antes de sincronizarse, y el servidor de sincronización solo guarda texto cifrado y metadatos. Configura Teams una vez por máquina.
+
+Teams necesita un servidor de sincronización. En el servicio alojado, la URL está en tu invitación si te invitaron. Si creas el equipo, el operador te registra y la URL llega con la puesta en marcha. La URL de un servidor autoalojado te la da su operador.
+
+## Configurar este equipo
+
+<Tabs syncKey="surface">
+<TabItem label="Línea de comandos">
+
+```sh
+bssh teams init --server https://teams.example.com --email you@example.com
+```
+
+bssh te pide que elijas una frase de contraseña y luego crea tu cuenta y las claves de este dispositivo.
+
+- `--invite <TOKEN>` crea la cuenta en un servidor que solo acepta cuentas invitadas. El token está en tu invitación.
+- `--device-name <NAME>` da nombre a este dispositivo para los administradores del equipo. Por defecto es el nombre de host de la máquina.
+
+La frase de contraseña cifra las claves de Teams de este dispositivo. Nunca sale de la máquina, nadie puede restablecerla y necesita al menos 8 caracteres. Si la olvidas, las claves de este dispositivo quedan bloqueadas; no hay recuperación. Un administrador concede la clave del equipo a un dispositivo nuevo.
+
+Los comandos que usan las claves de este dispositivo piden la frase de contraseña. En scripts, define `BSSH_TEAMS_PASSPHRASE` en su lugar.
+
+</TabItem>
+<TabItem label="Aplicación de escritorio">
+
+Abre **Teams** en la barra lateral. La pantalla de configuración pide el servidor de sincronización, tu correo, un nombre de dispositivo y una frase de contraseña.
+
+Si tienes una invitación, pega el mensaje completo en **Got an invite? Paste it here (optional)**. Rellena el servidor y tu correo, y terminas de unirte después de la configuración. Si no, rellena los campos y elige **Set up this device**.
+
+</TabItem>
+</Tabs>
+
+## Comprobar este dispositivo
+
+```sh
+bssh teams whoami
+```
+
+Muestra tu cuenta, el servidor, el id de este dispositivo y su huella. La huella identifica la clave de este dispositivo ante los administradores de tu equipo; se la envías cuando te conceden una clave del equipo. En la aplicación de escritorio, la misma huella está en el panel del dispositivo, en la parte superior de **Teams**, con un botón **Copy**.
+
+## Crear un equipo
+
+<Tabs syncKey="surface">
+<TabItem label="Línea de comandos">
+
+```sh
+bssh teams create platform
+```
+
+Te conviertes en administrador del equipo. El equipo también es una fuente en `bssh list`: sus conexiones aparecen ahí como las tuyas, con `platform` como fuente.
+
+</TabItem>
+<TabItem label="Aplicación de escritorio">
+
+Elige **Create team** en la cabecera de la página Teams, introduce un nombre y elige **Create team**. Te conviertes en su administrador.
+
+</TabItem>
+</Tabs>
+
+## Compartir una conexión
+
+<Tabs syncKey="surface">
+<TabItem label="Línea de comandos">
+
+```sh
+bssh teams share db-prod --team platform
+```
+
+Una conexión compartida lleva su host, usuario, puerto, bastión (con su usuario), ajuste de Kerberos y etiquetas. Nunca lleva rutas de claves ni contraseñas: cada miembro se conecta con sus propias claves. Todos los miembros ven la conexión después de su siguiente sincronización, y cada conexión a ese host se registra en el registro de auditoría del equipo.
+
+En tu máquina, la copia del equipo aparece como `db-prod@platform` junto a tu propia `db-prod`.
+
+</TabItem>
+<TabItem label="Aplicación de escritorio">
+
+En la vista **Hosts**, abre el menú de un host y elige **Share with a team…**, o pulsa <kbd>S</kbd> en el host seleccionado. Elige el equipo, revisa los campos que se comparten y elige **Share with platform**. El diálogo los enumera: host, usuario, puerto, bastión, Kerberos y etiquetas.
+
+También puedes compartir desde la página del equipo: abre el equipo, ve a **Hosts**, elige un host en **Share a host with platform** y elige **Share**.
+
+</TabItem>
+</Tabs>
+
+## Cambiar una conexión compartida
+
+Edita la copia del equipo y vuelve a compartirla antes de la siguiente sincronización. De lo contrario, una sincronización restaura la versión de la bóveda:
+
+```sh
+bssh edit db-prod@platform --user deploy
+bssh teams share db-prod@platform --team platform
+```
+
+En la aplicación de escritorio, edita el host y elige **Update in platform** en su menú.
+
+## Quitar una conexión compartida
+
+```sh
+bssh teams unshare db-prod@platform
+```
+
+bssh pide confirmación. La conexión se elimina de la bóveda del equipo para todos los miembros, en su siguiente sincronización; el servidor conserva su historial. Si no se puede alcanzar el servidor, la eliminación queda en cola para la siguiente sincronización. En la aplicación de escritorio, abre la pestaña **Hosts** del equipo, elige **Unshare** junto a la conexión y luego **Remove for everyone**.
+
+:::caution
+El servidor conserva el historial de la entrada, y un miembro que aún no ha sincronizado sigue viendo la conexión hasta que lo haga.
+:::
+
+## Desbloquear y bloquear
+
+En la línea de comandos, los comandos que usan las claves de este dispositivo piden la frase de contraseña, o leen `BSSH_TEAMS_PASSPHRASE`.
+
+La aplicación de escritorio la pide la primera vez que abres **Teams** después de iniciar la aplicación. Las claves permanecen desbloqueadas en memoria hasta que elijas **Lock** en la cabecera de Teams o salgas. Los hosts del equipo siguen conectando mientras Teams está bloqueado; sus eventos de sesión se firman y se suben en la siguiente sincronización tras desbloquear.
+
+## Siguientes pasos
+
+- [Invita a tu equipo](/es/teams/members/) y concede la clave a cada dispositivo.
+- [Sincroniza](/es/teams/sync/) y descubre cómo se tratan los cambios sin conexión y los conflictos.
+- [Planes y facturación](/es/teams/plans-and-billing/) para los puestos y la suscripción.

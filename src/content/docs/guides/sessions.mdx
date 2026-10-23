@@ -1,0 +1,192 @@
+---
+title: Session history and active sessions
+description: Inspect past SSH connections, view usage statistics, and terminate active or stale sessions.
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Bayesian SSH logs every connection you make in its local database, recording start times, duration, and exit status. You can inspect past sessions, analyze usage patterns, and manage running connections from the command line or the desktop app.
+
+## View session history
+
+Run `bssh history` to display recent SSH sessions.
+
+```sh
+bssh history
+```
+
+The output shows a summary header followed by recent sessions, newest first:
+
+```text
+📋 Session History
+
+────────────────────────────────────────────────────────────────────────────────────────
+📊 Summary: 4 sessions | ✅ 3 successful (75.0%) | ❌ 1 failed | ⏱️  Avg duration: 12m 45s
+────────────────────────────────────────────────────────────────────────────────────────
+
+SESSION    CONNECTION           STARTED              DURATION     STATUS          EXIT CODE
+────────────────────────────────────────────────────────────────────────────────────────
+3f2a91c0 ● web-prod             2026-10-23 09:14:22  18m 10s      Success         0
+8c4e12a9   db-primary           2026-10-23 08:30:05  42m 02s      Success         0
+1b7d55f0   bastion-ext          2026-10-23 07:15:40  2m 11s       Error           255
+f4a10e82 ● staging-api          2026-10-22 17:05:12  5m 28s       Success         0
+```
+
+Each row includes:
+
+- **SESSION**: An 8-character prefix of the session UUID. A `●` marker beside the ID indicates that a session output recording is available.
+- **CONNECTION**: The name of the saved connection.
+- **STARTED**: Timestamp when the connection was opened.
+- **DURATION**: Total elapsed time, or `ongoing` for active sessions.
+- **STATUS**: Session state (`Success`, `Error`, `Terminated`, or `Active`).
+- **EXIT CODE**: The remote SSH exit code, or `-` if terminated abnormally.
+
+When you run `bssh history`, `bssh` automatically detects sessions whose local processes are no longer running and updates their state in the database.
+
+### Filter history entries
+
+Narrow history with command-line flags:
+
+```sh
+# Show only sessions for a specific connection
+bssh history -c web-prod
+
+# Limit to sessions from the last 7 days
+bssh history --days 7
+
+# Display only sessions that exited with an error
+bssh history --failed
+
+# Change the number of entries displayed (default: 20)
+bssh history -n 50
+```
+
+To search for text printed during recorded sessions, use `-g` or `--grep`:
+
+```sh
+bssh history --grep "Out of memory"
+```
+
+For more details on recorded session output and replays, see [Session recording](/guides/recording/).
+
+## Manage active sessions
+
+The `bssh close` command lists and terminates active SSH sessions initiated by `bssh`.
+
+### List running sessions
+
+Run `bssh close` without arguments to view all currently active sessions:
+
+```sh
+bssh close
+```
+
+```text
+📋 Active Sessions
+
+CONNECTION           PID        STARTED              DURATION
+──────────────────────────────────────────────────────────────────────
+web-prod             41208      2026-10-23 09:14:22  18m 10s 🟢
+db-primary           41355      2026-10-23 08:30:05  42m 02s 🟢
+
+💡 Use 'bssh close <connection>' to close a session
+   Use 'bssh close --cleanup' to remove stale sessions
+```
+
+### Terminate a session
+
+Specify a connection name to terminate its active sessions:
+
+```sh
+bssh close web-prod
+```
+
+`bssh` prompts for confirmation before sending a `SIGTERM` signal to the process:
+
+```text
+Close session for 'web-prod' (PID 41208)? [y/N] y
+✅ Sent SIGTERM to session 'web-prod' (PID 41208)
+```
+
+To skip the interactive prompt, pass `-f` or `--force`:
+
+```sh
+bssh close web-prod -f
+```
+
+### Terminate all sessions
+
+To close every active session at once, use `-a` or `--all`:
+
+```sh
+bssh close --all -f
+```
+
+:::note
+`bssh kill` is an alias for `bssh close`. Commands such as `bssh kill --all -f` perform the same operation.
+:::
+
+### Clean up stale sessions
+
+If a terminal window was closed forcefully or the operating system rebooted, session records may remain marked as active even though their process no longer exists.
+
+Run `bssh close --cleanup` to reconcile the session table:
+
+```sh
+bssh close --cleanup
+```
+
+```text
+🧹 Cleaned stale session: web-prod (PID 41208)
+
+✅ Cleaned 1 stale session(s)
+```
+
+If you configured a recording retention window, `bssh close --cleanup` also removes expired `.cast` recordings and their search index entries.
+
+## Usage statistics
+
+Run `bssh stats` to inspect connection counts, recent activity, and tag distribution:
+
+```sh
+bssh stats
+```
+
+```text
+📊 Bayesian SSH Statistics
+
+Total Connections: 28
+Most Used: web-prod (last: 2026-10-23 09:14:22)
+
+Recently Used:
+  1. web-prod - 10-23 09:14
+  2. db-primary - 10-23 08:30
+  3. bastion-ext - 10-23 07:15
+  4. staging-api - 10-22 17:05
+  5. monitoring - 10-22 14:10
+
+Connections by Tag:
+  prod: 12 connection(s)
+  aws: 8 connection(s)
+  database: 5 connection(s)
+  staging: 3 connection(s)
+```
+
+In addition to reporting usage, session history powers the ranking engine: each completed session updates the Bayesian probabilities that determine which host appears first when you run `bssh connect`. See [Search and ranking](/guides/search-and-ranking/) for details.
+
+## Desktop app
+
+The desktop app integrates session tracking into its user interface:
+
+![The desktop app History view showing past sessions, status chips, and filters](../../../assets/screenshots/app-history.png)
+
+- **History view**: Click the **History** tab in the sidebar to review past sessions. You can filter by connection name or status, view execution timestamps, and click recorded sessions to launch the terminal replay player.
+- **Active terminals**: Running terminal tabs appear in the top tab bar. Closing a tab terminates the corresponding SSH process.
+- **Detached sessions**: If the desktop app detects sessions running in the background, access them from the command palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>) by searching for **Detached sessions**.
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Session recording" description="Record session output in asciicast format and replay it." href="/guides/recording/" />
+	<LinkCard title="Search and ranking" description="Learn how session history influences Bayesian host ranking." href="/guides/search-and-ranking/" />
+</CardGrid>

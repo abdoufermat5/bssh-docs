@@ -1,0 +1,207 @@
+---
+title: Installation
+description: Installez Bayesian SSH à l'aide du script en une ligne, des paquets Linux précompilés, de Snap ou depuis les sources.
+---
+
+import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH fournit des paquets et des binaires Linux précompilés pour `x86_64` (amd64) et `aarch64` (arm64), un script d'installation automatisé, un paquet Snap et la compilation depuis les sources.
+
+## Installateur en une ligne
+
+Le script d'installation télécharge la dernière version précompilée pour votre architecture, vérifie sa somme de contrôle et installe `bayesian-ssh` ainsi que l'alias `bssh` dans `/usr/local/bin`.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash
+```
+
+Par défaut, l'installateur configure à la fois l'interface en ligne de commande et l'application de bureau, en créant une entrée dans le menu des applications et en installant l'icône correspondante.
+
+### Options de l'installateur
+
+Transmettez des arguments au script en utilisant `bash -s -- <options>` :
+
+- **Ligne de commande uniquement** (serveurs et systèmes sans interface graphique) :
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash -s -- --no-gui
+  ```
+- **Mode interactif** (demande de choisir entre paquets précompilés et compilation source, avec ou sans application de bureau) :
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash -s -- --interactive
+  ```
+
+### Dépendances d'exécution du bureau
+
+L'application de bureau nécessite WebKitGTK 4.1. Si vous lancez l'application sur un environnement de bureau minimal, installez les bibliothèques d'exécution requises :
+
+<Tabs syncKey="os">
+	<TabItem label="Debian / Ubuntu">
+		```sh
+		sudo apt install libwebkit2gtk-4.1-0 libayatana-appindicator3-1
+		```
+	</TabItem>
+	<TabItem label="Fedora / RHEL">
+		```sh
+		sudo dnf install webkit2gtk4.1 libappindicator-gtk3
+		```
+	</TabItem>
+</Tabs>
+
+## Paquets Linux
+
+Des paquets unifiés `.deb` et `.rpm` contenant à la fois l'outil en ligne de commande et l'application de bureau sont publiés avec chaque [version GitHub](https://github.com/abdoufermat5/bayesian-ssh/releases) pour `x86_64` et `aarch64`.
+
+<Tabs syncKey="os">
+	<TabItem label="Debian / Ubuntu">
+		```sh
+		sudo apt install ./bayesian-ssh_2.10.0_amd64.deb
+		```
+	</TabItem>
+	<TabItem label="Fedora / RHEL">
+		```sh
+		sudo dnf install ./bayesian-ssh-2.10.0-1.x86_64.rpm
+		```
+	</TabItem>
+</Tabs>
+
+## Paquet Snap
+
+Installez le snap `bayesian-ssh` depuis le Snap Store :
+
+```sh
+sudo snap install bayesian-ssh
+```
+
+### Configuration après installation
+
+Comme le paquet s'exécute sous confinement strict, accordez-lui l'accès en lecture à votre configuration SSH et à vos clés privées :
+
+```sh
+sudo snap connect bayesian-ssh:ssh-keys
+```
+
+Vous pouvez également activer l'alias court `bssh` :
+
+```sh
+sudo snap alias bayesian-ssh bssh
+```
+
+### Limites de confinement
+
+Le confinement strict impose plusieurs contraintes de fonctionnement :
+
+- Le dossier `~/.ssh` est monté en lecture seule. Le snap ne peut pas mettre à jour `known_hosts` ni enregistrer de nouvelles clés dans `~/.ssh`.
+- Les fichiers de configuration et de base de données se trouvent dans `~/snap/bayesian-ssh/current/.config/bayesian-ssh/` et sont isolés des installations natives.
+- Le snap intègre ses propres copies de `ssh`, `kinit` et `klist`.
+- Identifiants Kerberos de l'hôte : Pour réutiliser les caches de tickets créés sur l'hôte via `KRB5CCNAME=FILE:/tmp/krb5cc_*`, connectez l'interface dédiée :
+  ```sh
+  sudo snap connect bayesian-ssh:kerberos-tickets
+  ```
+  Les caches KCM et KEYRING (courants sur Fedora, RHEL et avec SSSD) ne sont pas accessibles sous confinement strict. Utilisez un paquet natif ou le script d'installation sur les systèmes exploitant ces mécanismes.
+- Le mécanisme de mise à jour intégré est désactivé dans la version Snap. Toutes les mises à jour sont prises en charge par le Snap Store.
+
+## Compiler depuis les sources
+
+La compilation depuis les sources requiert Git et la chaîne d'outils Rust (`cargo` en version stable). La compilation de l'application de bureau nécessite également Make, Node.js (avec `npm`) ainsi que les en-têtes de développement pour GTK 3 et WebKitGTK 4.1.
+
+<Steps>
+1. Clonez le dépôt :
+   ```sh
+   git clone https://github.com/abdoufermat5/bayesian-ssh.git
+   cd bayesian-ssh
+   ```
+
+2. Compilez et installez l'outil en ligne de commande et l'application de bureau :
+   ```sh
+   make release && make install
+   ```
+</Steps>
+
+Pour compiler uniquement le binaire de l'outil en ligne de commande sans les dépendances graphiques :
+
+```sh
+cargo build --release --locked --package bayesian-ssh
+sudo install -m 755 target/release/bayesian-ssh /usr/local/bin/bayesian-ssh
+sudo ln -sf /usr/local/bin/bayesian-ssh /usr/local/bin/bssh
+```
+
+## Complètement du shell
+
+Générez les scripts de complètement automatique pour votre shell avec `bssh completions <SHELL>` :
+
+<Tabs syncKey="shell">
+	<TabItem label="Bash">
+		```sh
+		bssh completions bash > ~/.local/share/bash-completion/completions/bssh
+		```
+	</TabItem>
+	<TabItem label="Zsh">
+		```sh
+		bssh completions zsh > ~/.zfunc/_bssh
+		```
+	</TabItem>
+	<TabItem label="Fish">
+		```sh
+		bssh completions fish > ~/.config/fish/completions/bssh.fish
+		```
+	</TabItem>
+</Tabs>
+
+Shells pris en charge : `bash`, `elvish`, `fish`, `powershell` et `zsh`. Redémarrez votre shell ou rechargez son fichier de configuration après avoir généré le script.
+
+## Mise à jour
+
+La méthode de mise à jour dépend du mode d'installation utilisé :
+
+- **Mise à jour intégrée dans l'application de bureau** : Les paquets autonomes `.AppImage` et `bayesian-ssh-desktop` en `.deb`/`.rpm` vérifient automatiquement la présence de mises à jour dans **Settings** → **Updates** et les installent sur place. Les sessions ouvertes sont fermées lors de l'application.
+- **Snap** : Les mises à jour sont appliquées automatiquement par snapd, ou manuellement avec `sudo snap refresh bayesian-ssh`.
+- **Script d'installation et paquets système** : Relancez le script d'installation en une ligne, installez le nouveau paquet `.deb`/`.rpm`, ou récupérez les dernières modifications du dépôt puis réexécutez `make release && make install`.
+
+## Vérification des versions
+
+Les artefacts de version et les sommes de contrôle sont signés cryptographiquement via des flux Sigstore sans clé. GitHub génère des attestations de provenance de compilation pour chaque fichier publié.
+
+Pour savoir comment vérifier `SHA256SUMS` avec `cosign` et valider la provenance de compilation avec `gh attestation verify`, consultez la [référence de sécurité](/fr/reference/security/).
+
+## Désinstallation
+
+Le script `install.sh` ne propose pas d'option de désinstallation directe. Pour supprimer les binaires et fichiers installés par le script :
+
+```sh
+sudo rm -f /usr/local/bin/bayesian-ssh /usr/local/bin/bssh /usr/local/bin/bayesian-ssh-desktop /usr/local/bin/bayesian-ssh-gui
+sudo rm -f /usr/share/applications/bayesian-ssh-desktop.desktop
+sudo rm -f /usr/share/icons/hicolor/128x128/apps/bayesian-ssh-desktop.png
+```
+
+Si vous avez installé le projet depuis les sources avec le Makefile :
+
+```sh
+make uninstall
+```
+
+Si vous avez utilisé un gestionnaire de paquets :
+
+<Tabs syncKey="os">
+	<TabItem label="Debian / Ubuntu">
+		```sh
+		sudo apt remove bayesian-ssh
+		```
+	</TabItem>
+	<TabItem label="Fedora / RHEL">
+		```sh
+		sudo dnf remove bayesian-ssh
+		```
+	</TabItem>
+	<TabItem label="Snap">
+		```sh
+		sudo snap remove bayesian-ssh
+		```
+	</TabItem>
+</Tabs>
+
+## Pour continuer
+
+<CardGrid>
+	<LinkCard title="Démarrage rapide" description="Ajoutez votre premier hôte et connectez-vous." href="/fr/start/quick-start/" />
+	<LinkCard title="Configuration" description="Configurez les utilisateurs, ports et bastions par défaut." href="/fr/start/configuration/" />
+</CardGrid>

@@ -1,0 +1,46 @@
+---
+title: Descripción general de Teams
+description: Comparte conexiones SSH con tu equipo a través de una bóveda cifrada de extremo a extremo, con dispositivos verificados y un registro de auditoría firmado.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+bssh Teams comparte conexiones con las personas con las que trabajas. Todos disponen de los mismos hosts en `bssh` y en la aplicación de escritorio, sin tener que pasarse listas de servidores por chat o en una wiki.
+
+Las conexiones compartidas se cifran en tu dispositivo antes de salir de él. El servidor de sincronización almacena únicamente texto cifrado y una pequeña cantidad de metadatos: nunca ve nombres de host, usuarios ni etiquetas, y jamás se interpone en la ruta de tus conexiones SSH.
+
+## Cómo funciona
+
+1. **Cada dispositivo tiene sus propias claves.** Configurar Teams crea una clave de firma y una clave de cifrado en tu máquina, protegidas por una frase de contraseña. Nunca salen del dispositivo.
+2. **Un equipo tiene una sola clave.** Un administrador se la entrega a cada nuevo dispositivo tras comprobar su huella, evitando que el servidor introduzca un dispositivo propio.
+3. **Las entradas se cifran localmente.** Compartir una conexión la cifra con la clave del equipo. El servidor almacena el resultado y lo transmite.
+4. **Los compañeros de equipo descifran localmente.** Cada sincronización descarga las nuevas entradas, verifica quién las escribió y las añade a tu lista de hosts como `nombre@equipo`.
+5. **Las conexiones se auditan.** Conectarse a un host del equipo registra un evento firmado y encadenado por hash. Los administradores pueden verificar todo el registro en su propia máquina.
+
+## Qué se comparte
+
+Una conexión compartida incluye su host, usuario, puerto, bastión, ajuste de Kerberos y etiquetas.
+
+Estos elementos nunca se comparten:
+
+- **Claves, rutas de claves y contraseñas.** Cada persona se conecta con sus propias credenciales o agente.
+- **Las claves de tu dispositivo y tu frase de contraseña.**
+- **Grabaciones de sesión y salidas de terminal.** Permanecen en tu máquina.
+- **Conexiones que no compartes.** Los hosts personales se quedan en tu base de datos local.
+
+## Planes
+
+- **Gratuito:** en el servicio alojado, cada equipo dispone de 3 puestos gratis, con todas las funciones.
+- **De pago:** para más puestos, un administrador suscribe al equipo completo, con facturación por puesto, mensual o anual.
+- **Autoalojado:** ejecuta tú mismo el servidor de sincronización; los puestos por equipo los define el operador.
+
+Consulta los detalles en [Planes y facturación](/es/teams/plans-and-billing/). Para iniciar un equipo en el servicio alojado o preguntar sobre el autoalojamiento, [abre un issue en GitHub](https://github.com/abdoufermat5/bayesian-ssh/issues).
+
+## Próximos pasos
+
+<CardGrid>
+	<LinkCard title="Configurar Teams" description="Configura este dispositivo, crea un equipo y comparte una conexión." href="/es/teams/setup/" />
+	<LinkCard title="Miembros y dispositivos" description="Invita a personas, verifica huellas, elimina miembros." href="/es/teams/members/" />
+	<LinkCard title="Seguridad y modelo de confianza" description="Qué puede y qué no puede ver el servidor." href="/es/teams/security/" />
+	<LinkCard title="Planes y facturación" description="Puestos, suscripciones y reglas del modo de solo lectura." href="/es/teams/plans-and-billing/" />
+</CardGrid>

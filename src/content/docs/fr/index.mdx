@@ -1,0 +1,51 @@
+---
+title: Bayesian SSH
+description: Un gestionnaire SSH pensé pour le clavier, qui apprend quel hôte vous cherchez. En ligne de commande et sur le bureau, avec un partage d'équipe chiffré de bout en bout.
+template: splash
+hero:
+  title: Chaque hôte, à une touche.
+  tagline: Bayesian SSH est un gestionnaire SSH pensé pour le clavier, en ligne de commande et sur le bureau. Il apprend quel hôte vous cherchez et partage vos connexions avec votre équipe via un coffre chiffré de bout en bout.
+  actions:
+    - text: Commencer
+      link: /fr/start/quick-start/
+      icon: right-arrow
+    - text: Installer
+      link: /fr/start/installation/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import hosts from '../../../assets/screenshots/app-hosts.png';
+
+```sh frame="terminal"
+curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash
+bssh add web-prod web-prod.example.com --tags prod,web
+bssh connect prod
+```
+
+<CardGrid>
+	<Card title="Trouve l'hôte que vous voulez" icon="magnifier">
+		Tapez une partie du nom, un tag ou une abréviation. Les résultats sont classés selon la fréquence et la date de vos connexions.
+	</Card>
+	<Card title="Bastions et Kerberos intégrés" icon="server">
+		Hôtes de rebond, bastions interactifs et tickets Kerberos sont gérés pour vous, par connexion ou par défaut.
+	</Card>
+	<Card title="Terminal et bureau" icon="laptop">
+		Les mêmes hôtes dans `bssh` et dans l'application de bureau, avec terminaux, transferts de fichiers et historique des sessions.
+	</Card>
+	<Card title="Partagé avec votre équipe" icon="padlock">
+		bssh Teams synchronise les connexions via un coffre chiffré sur vos appareils, avec un journal d'audit signé.
+	</Card>
+</CardGrid>
+
+<Image src={hosts} alt="L'application de bureau Bayesian SSH affichant les hôtes enregistrés, leurs tags et leur dernière utilisation" class="landing-shot" />
+
+## Pour continuer
+
+<CardGrid>
+	<LinkCard title="Démarrage rapide" description="Enregistrez un hôte et connectez-vous en deux minutes." href="/fr/start/quick-start/" />
+	<LinkCard title="Guides" description="Connexions, bastions, tunnels, transferts et application de bureau." href="/fr/guides/connections/" />
+	<LinkCard title="bssh Teams" description="Partagez vos connexions avec un chiffrement de bout en bout et auditez chaque session." href="/fr/teams/overview/" />
+	<LinkCard title="Référence des commandes" description="Toutes les commandes et options." href="/fr/reference/cli/" />
+</CardGrid>

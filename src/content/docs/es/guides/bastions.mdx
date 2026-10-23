@@ -1,0 +1,148 @@
+---
+title: Hosts bastión
+description: Enruta conexiones SSH a través de hosts de salto y bastiones interactivos.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Los hosts bastión (o hosts de salto) te permiten acceder a servidores protegidos tras cortafuegos o redes privadas aisladas. Bayesian SSH es compatible tanto con hosts de salto estándar mediante reenvío de puertos TCP como con bastiones interactivos que requieren protocolos específicos de shell de salto.
+
+## Configurar un bastión por defecto
+
+Si la mayoría de tus servidores se encuentran tras la misma pasarela, configura un bastión por defecto en tus ajustes globales:
+
+```sh
+bssh config --default-bastion bastion.example.com --default-bastion-user jump
+```
+
+Las nuevas conexiones que guardes heredarán estos ajustes automáticamente:
+
+- `--default-bastion <HOST>`: Host de pasarela aplicado a las nuevas conexiones.
+- `--default-bastion-user <USER>`: Nombre de usuario para el host de pasarela.
+
+Consulta tu configuración actual ejecutando `bssh config` sin argumentos:
+
+```sh
+bssh config
+```
+
+```text
+Current settings:
+  Default user: ana
+  Default bastion: bastion.example.com
+  Default bastion user: jump
+  Default port: 22
+  Use Kerberos by default: No
+```
+
+Para eliminar el bastión por defecto y hacer que las futuras conexiones sean directas, ejecuta:
+
+```sh
+bssh config --clear-bastion
+```
+
+## Definir un bastión en una conexión
+
+Puedes configurar un bastión para un host concreto al guardar o editar una conexión.
+
+<Tabs syncKey="surface">
+<TabItem label="Línea de comandos">
+
+Pasa `-b` (o `--bastion`) y opcionalmente `-B` (o `--bastion-user`) al guardar un host:
+
+```sh
+bssh add db-prod 10.0.4.12 -b bastion.example.com -B jump
+```
+
+Si omites `-B`, el usuario del bastión coincidirá por defecto con el usuario de la conexión.
+
+Para modificar o añadir un bastión en una conexión existente:
+
+```sh
+bssh edit db-prod --bastion bastion.example.com --bastion-user jump
+```
+
+</TabItem>
+<TabItem label="Aplicación de escritorio">
+
+En la aplicación de escritorio, abre la ventana de conexión pulsando en **New host** o editando un host existente.
+
+Rellena el campo **Jump host** con la dirección del bastión (como `bastion.example.com`) y el campo **Jump user** si el usuario del bastión difiere del usuario del host. Los hosts guardados que se enrutan mediante un bastión muestran una etiqueta **Jump** en la lista de hosts.
+
+</TabItem>
+</Tabs>
+
+## Conectar directamente sin bastión
+
+Para omitir cualquier bastión configurado:
+
+- **Al añadir un host**: Pasa `--no-bastion` para evitar que se asigne el bastión global por defecto:
+  ```sh
+  bssh add direct-srv 192.168.1.50 --no-bastion
+  ```
+- **Al editar un host**: Elimina la configuración de bastión guardada:
+  ```sh
+  bssh edit db-prod --no-bastion
+  ```
+- **Al conectar**: Omite el bastión guardado para una sola sesión:
+  ```sh
+  bssh connect db-prod --no-bastion
+  ```
+- **Al importar**: marca cada host importado como conexión directa, para que ninguno use el bastión por defecto:
+  ```sh
+  bssh import --no-bastion
+  ```
+
+También puedes sustituir temporalmente el bastión para una única sesión de conexión:
+
+```sh
+bssh connect db-prod -b temp-bastion.example.com -B jump
+```
+
+## Cómo se elige la ruta
+
+Al iniciar una conexión, `bssh` resuelve la ruta siguiendo esta jerarquía:
+
+1. **Opciones de sesión**: Las opciones pasadas a `bssh connect` en la línea de comandos (`-b`, `-B`, `--no-bastion`) tienen prioridad sobre los ajustes guardados.
+2. **Ajustes guardados de la conexión**: Los valores almacenados en el registro de la conexión (`bastion` y `bastion_user`).
+3. **Valores por defecto globales**: Los valores `default_bastion` y `default_bastion_user` configurados en `bssh config` se asignan al añadir nuevas conexiones, a menos que se especifique `--no-bastion` o un bastión explícito.
+
+Una vez resuelta la ruta, `bssh` determina el mecanismo de transporte:
+
+- **Conexión directa**: Si no hay un bastión configurado y Kerberos está desactivado, `bssh` se conecta directamente usando su transporte SSH nativo en Rust (`russh`).
+- **Host de salto clásico**: Si hay un bastión configurado y Kerberos está desactivado (`use_kerberos: false`), `bssh` delega en un subproceso de OpenSSH utilizando `ProxyCommand` (`ssh -W %h:%p`). Esto canaliza el tráfico TCP a través del bastión aplicando tus políticas de verificación de claves de host en ambos saltos.
+- **Bastión interactivo**: Si tanto el bastión como Kerberos están configurados (`use_kerberos: true`), `bssh` aplica el protocolo de bastión interactivo.
+
+## Bastiones interactivos
+
+Algunas pasarelas de seguridad no permiten el reenvío TCP (`-W` o `-J`). En su lugar, funcionan como pasarelas a nivel de aplicación (como «The Bastion» de OVH ejecutando `--osh`). Los usuarios se autentican en el bastión mediante Kerberos, y el bastión ejecuta una shell interactiva que recibe `target_user@target_host` como argumento.
+
+Bayesian SSH identifica un bastión interactivo en cuanto una conexión tiene tanto un bastión configurado como Kerberos habilitado:
+
+```sh
+bssh add secure-db 10.0.8.20 -b bastion.example.com -B jump -k true
+```
+
+### Sesiones de shell interactivas
+
+Al conectar de forma interactiva, `bssh` se conecta al puerto 22 del bastión y pasa el destino remoto como argumento de comando:
+
+```sh
+ssh -p 22 -- jump@bastion.example.com ana@10.0.8.20
+```
+
+La pasarela autentica tu ticket Kerberos y te sitúa directamente en la sesión del host de destino.
+
+### Comandos remotos y transferencias de archivos
+
+Dado que los bastiones interactivos no admiten el paso habitual de argumentos de OpenSSH ni el reenvío de subsistemas:
+
+- **Ejecución de comandos**: Al ejecutar comandos no interactivos o listar directorios a través de un bastión interactivo, `bssh` gestiona la comunicación mediante PTY y marcadores de salida para aislar la salida del comando respecto a los mensajes iniciales de la pasarela.
+- **Transferencias de archivos**: Los bastiones interactivos bloquean los canales del subsistema SFTP estándar. Al subir o descargar archivos, `bssh` detecta automáticamente la pasarela interactiva y recurre a SCP. Para pasarelas basadas en OVH, `bssh` genera de forma automática un script envoltorio en `~/.local/share/bayesian-ssh/scp-wrapper.sh` que traduce las peticiones SCP al protocolo `--osh scp` de la pasarela.
+
+## Próximos pasos
+
+<CardGrid>
+	<LinkCard title="Autenticación" description="Claves SSH, reenvío de agente, Kerberos y verificación de claves de host." href="/es/guides/authentication/" />
+	<LinkCard title="Túneles" description="Reenvío de puertos y proxys dinámicos SOCKS5." href="/es/guides/tunnels/" />
+</CardGrid>

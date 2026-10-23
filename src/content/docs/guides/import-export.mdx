@@ -1,0 +1,186 @@
+---
+title: Import, export, backup, and restore
+description: Migrate hosts from OpenSSH config, export encrypted host lists, and take consistent database backups.
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Bayesian SSH provides two ways to move data in and out:
+
+- **Import and export**: Transfer connection configurations and metadata in human-readable formats (JSON, OpenSSH config, or TOML for exports), with optional passphrase encryption.
+- **Backup and restore**: Capture or restore a complete SQLite database snapshot, including session history, usage statistics, aliases, and tags.
+
+## Import connections
+
+Use `bssh import` to bring existing hosts into your Bayesian SSH database.
+
+### Import an OpenSSH configuration file
+
+By default, `bssh import` reads your local `~/.ssh/config` file (or the path set in your `config.json` under `ssh_config_path`):
+
+```sh
+bssh import
+```
+
+```text
+✅ Successfully imported 14 connection(s) from SSH config
+```
+
+To specify an alternative configuration file:
+
+```sh
+bssh import -f ~/.ssh/config.d/work
+```
+
+Key behaviors during SSH config import:
+
+- **Host attributes**: Parses `Host`, `HostName`, `User`, `Port`, and `IdentityFile`.
+- **Automatic tagging**: Every imported host receives the `imported` tag so you can filter or manage them easily.
+- **Idempotent**: If a connection with the same name already exists in your database, `bssh` skips it without error and preserves your existing entry.
+- **Ignore bastions**: To import hosts as direct connections rather than inheriting the configured default bastion, pass `--no-bastion`:
+
+```sh
+bssh import --no-bastion
+```
+
+### Import an encrypted JSON backup
+
+If you previously exported connections using `bssh export --passphrase`, import them by providing the file path and passphrase:
+
+```sh
+bssh import -f hosts-backup.enc --passphrase "correct horse battery staple"
+```
+
+```text
+🔓 Decrypting import file with passphrase...
+✅ Imported 8 connection(s) from JSON backup (2 already existed).
+```
+
+## Export connections
+
+Use `bssh export` to share host lists, generate OpenSSH configs, or create encrypted backups.
+
+```sh
+# Export all connections as JSON to stdout
+bssh export
+
+# Export to a file
+bssh export -o hosts.json
+```
+
+### Export formats
+
+Bayesian SSH supports three export formats via the `--format` flag:
+
+```sh
+# Export as JSON (default)
+bssh export --format json -o hosts.json
+
+# Export as TOML
+bssh export --format toml -o hosts.toml
+
+# Export as standard OpenSSH config
+bssh export --format ssh-config -o ~/.ssh/config.d/bssh-hosts
+```
+
+| Format | Flag | Description |
+| --- | --- | --- |
+| `json` | `--format json` | Full JSON array of connection models (default). |
+| `toml` | `--format toml` | TOML document containing `[[connections]]` tables. |
+| `ssh-config` | `--format ssh-config` | Standard OpenSSH format (`Host`, `HostName`, `User`, `Port`, `IdentityFile`, and `ProxyCommand` for bastions). |
+
+### Filter by tag
+
+To export only hosts matching a specific tag, use `-t` or `--tag`:
+
+```sh
+bssh export -t prod -o prod-hosts.json
+```
+
+### Encrypt exports with a passphrase
+
+To protect exported connection details, supply `-p` or `--passphrase` alongside `-o`:
+
+```sh
+bssh export -o hosts-backup.enc --passphrase "correct horse battery staple"
+```
+
+```text
+🔒 Encrypting export with passphrase...
+✅ Exported 28 connections to hosts-backup.enc
+```
+
+#### Cryptographic design
+
+Encrypted exports use authenticated encryption to ensure both confidentiality and integrity:
+
+- **Key derivation**: [Argon2id](https://www.rfc-editor.org/rfc/rfc9106.html) with 64 MiB memory, 3 iterations, and 1 lane to derive a 256-bit encryption key from your passphrase.
+- **Authenticated cipher**: AES-256-GCM with a 12-byte random nonce and a 16-byte authentication tag.
+- **Payload format**: A `BSSH` magic header followed by a version byte (`0x02`), 16-byte salt, 12-byte nonce, and the ciphertext with appended GCM authentication tag.
+- **Safe write**: Files are written to a temporary file with strict `0600` permissions (`-rw-------`) and renamed atomically over the destination.
+
+## Database backup
+
+While `bssh export` serializes connection definitions, `bssh backup` captures the entire SQLite database, including session history, ranking weights, and aliases.
+
+```sh
+bssh backup
+```
+
+```text
+✅ Database successfully backed up to: /home/user/.local/share/bayesian-ssh/backups/backup-2026-10-23-093000.db
+```
+
+### Backup destination
+
+By default, backups are written to a `backups/` subdirectory inside your environment folder, named with a timestamp: `backup-YYYY-MM-DD-HHMMSS.db`.
+
+To choose a specific destination file:
+
+```sh
+bssh backup -o ~/backups/bssh-snapshot.db
+```
+
+:::tip
+`bssh backup` uses SQLite's online backup API (`VACUUM INTO`) instead of a filesystem copy. This guarantees a consistent, vacuumed snapshot without locking or corrupting databases operating in WAL (Write-Ahead Logging) mode.
+:::
+
+The destination file is created with `0600` permissions (`-rw-------`) and `bssh backup` refuses to overwrite an existing file.
+
+## Database restore
+
+Use `bssh restore` to replace your active database with a previously created backup snapshot.
+
+```sh
+bssh restore ~/backups/bssh-snapshot.db
+```
+
+```text
+⚠️  WARNING: This will replace your current database with:
+    ~/backups/bssh-snapshot.db
+    Your existing database will be safely backed up first.
+
+Are you sure you want to restore? [y/N] y
+✅ Database successfully restored from: ~/backups/bssh-snapshot.db
+```
+
+To skip the confirmation prompt in scripts, pass `-f` or `--force`:
+
+```sh
+bssh restore ~/backups/bssh-snapshot.db -f
+```
+
+### Safety and validation guarantees
+
+1. **Integrity check**: Before touching your active database, `bssh` verifies that the target file is an intact SQLite database containing the required Bayesian SSH schema tables.
+2. **Pre-restore snapshot**: If your existing database file exists, `bssh` automatically takes an internal safety backup (`VACUUM INTO`) before overwriting anything.
+3. **Atomic replace**: The restore is performed by copying into a temporary `0600` file and atomically renaming it into place.
+4. **Sidecar cleanup**: Stale SQLite write-ahead log files (`-wal`, `-shm`, and `-journal`) from the old database are cleanly removed so they cannot corrupt the restored file.
+5. **Automatic migration**: When the restored database is opened, `bssh` automatically runs any pending schema migrations so that backups from older versions are upgraded seamlessly.
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Saved connections" description="Add, edit, remove, and tag connections." href="/guides/connections/" />
+	<LinkCard title="Security reference" description="Review local database storage permissions and cryptography." href="/reference/security/" />
+</CardGrid>

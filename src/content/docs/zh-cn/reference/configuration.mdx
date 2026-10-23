@@ -1,0 +1,195 @@
+---
+title: 配置参考
+description: bssh 的每一项设置及其默认值，以及 bssh 把配置、数据库、会话录制和桌面应用偏好保存在哪里。
+---
+
+`bssh` 把所有内容保存在你的机器上。设置是 JSON 文件，连接存放在 SQLite 数据库中，每个环境都有各自的一份。本页列出每个文件、每项设置和 CLI 读取的每个环境变量。
+
+## bssh 把数据保存在哪里
+
+配置根目录是 `~/.config/bayesian-ssh/`；设置了 `$XDG_CONFIG_HOME` 时则为 `$XDG_CONFIG_HOME/bayesian-ssh/`。
+
+其中的内容：
+
+```text
+~/.config/bayesian-ssh/
+  active_env
+  desktop_settings.json
+  environments/
+    default/
+      config.json
+      history.db
+      backups/
+      recordings/
+    staging/
+      config.json
+      history.db
+      backups/
+      recordings/
+```
+
+| 路径 | 内容 |
+| --- | --- |
+| `active_env` | 当前环境名称，纯文本。缺失或无效时表示 `default`。 |
+| `desktop_settings.json` | 桌面应用的偏好（主题、终端、SFTP）。CLI 不读取它。 |
+| `environments/<name>/config.json` | 该环境的设置。 |
+| `environments/<name>/history.db` | SQLite 数据库：连接、标签、别名、会话历史、清单源、会话录制索引和 Teams 状态。 |
+| `environments/<name>/recordings/` | 会话录制，每个会话一个 `.cast` 文件。 |
+| `environments/<name>/backups/` | `bssh backup` 写出的快照，以及 `bssh restore` 覆盖数据库前留下的安全副本。 |
+
+目录以 `0700` 权限创建，文件以 `0600` 权限创建。`bssh audit --fix` 会修复变得过于宽松的权限。
+
+:::note
+旧版本把 `config.json` 和 `history.db` 直接放在配置根目录。当 `environments/default/` 尚不存在时，`bssh` 会把它们移入其中。
+:::
+
+## 环境
+
+一个环境是一套完整而独立的连接、历史和设置。`bssh env` 负责管理它们：
+
+| 命令 | 作用 |
+| --- | --- |
+| `bssh env list` | 列出所有环境并标出当前环境。 |
+| `bssh env use <NAME>` | 启用某个环境。 |
+| `bssh env create <NAME>` | 创建一个拥有独立数据库的空环境。 |
+| `bssh env remove <NAME>` | 删除一个环境及其保存的所有连接。 |
+
+当前环境保存在 `active_env`。如果只想在一条命令中临时使用其他环境而不切换，传入全局选项 `--env`：
+
+```sh
+bssh --env staging list
+bssh --env staging connect db01
+```
+
+环境名称最长为 64 个字符，不能包含 `/`、`\`、`:` 或控制字符，不能以 `.` 开头，首尾也不能有空格。
+
+## 设置
+
+每个环境的 `config.json` 保存该环境的设置。文件是格式化后的 JSON，以原子方式重写，并在环境首次使用时按默认值创建。`bssh config` 更新带选项的设置；其余设置直接在文件中修改。
+
+```json
+{
+  "database_path": "/home/ana/.config/bayesian-ssh/environments/default/history.db",
+  "default_user": "ana",
+  "default_bastion": null,
+  "default_bastion_user": null,
+  "default_port": 22,
+  "use_kerberos_by_default": false,
+  "ssh_config_path": "/home/ana/.ssh/config",
+  "log_level": "info",
+  "auto_save_history": true,
+  "max_history_size": 1000,
+  "search_mode": "bayesian",
+  "transport": {
+    "force_subprocess": false,
+    "strict_host_key_checking": "accept-new"
+  },
+  "auth": {
+    "identity_files": [],
+    "use_agent": true,
+    "agent_socket": null
+  },
+  "recording": {
+    "enabled": false,
+    "tags": [],
+    "max_bytes_per_session": 52428800,
+    "retention_days": 90
+  },
+  "prediction": {
+    "enabled": true,
+    "capture_cwd": true,
+    "window_days": 180
+  }
+}
+```
+
+| 设置 | 类型 | 默认值 | 修改方式 | 含义 |
+| --- | --- | --- | --- | --- |
+| `database_path` | 路径 | `<环境目录>/history.db` | — | 该环境的数据库。相对路径或位于环境目录之外的路径，会在加载时被替换为 `<环境目录>/history.db`。 |
+| `default_user` | 字符串 | 你的系统用户名 | `--default-user` | 新连接的 SSH 用户名。 |
+| `default_bastion` | 字符串或 `null` | `null` | `--default-bastion`、`--clear-bastion` | 应用到新连接的跳板机。 |
+| `default_bastion_user` | 字符串或 `null` | `null` | `--default-bastion-user` | 默认跳板机上的用户名。 |
+| `default_port` | 数字 | `22` | `--default-port` | 新连接的 SSH 端口。 |
+| `use_kerberos_by_default` | 布尔值 | `false` | `--use-kerberos` | 为新连接启用 Kerberos（GSSAPI）。 |
+| `ssh_config_path` | 路径或 `null` | `~/.ssh/config` | — | 省略 `--file` 时 `bssh import` 读取的文件。桌面应用可以修改它。 |
+| `log_level` | 字符串 | `"info"` | `--log-level` | 取值为 `trace`、`debug`、`info`、`warn`、`error`、`off`。 |
+| `auto_save_history` | 布尔值 | `true` | — | 桌面应用是否把会话写入历史。 |
+| `max_history_size` | 数字 | `1000` | — | 桌面应用默认列出的历史条目数。 |
+| `search_mode` | 字符串 | `"bayesian"` | `--search-mode` | `bayesian` 按使用情况排序；`fuzzy` 只做子串匹配。 |
+| `transport.force_subprocess` | 布尔值 | `false` | — | 始终使用系统的 `ssh` 程序。Kerberos 和跳板机连接本来就会使用它。 |
+| `transport.strict_host_key_checking` | 字符串 | `"accept-new"` | — | `strict`、`accept-new`（首次连接即信任）或 `off`。`bssh audit` 会把 `off` 列为问题。 |
+| `auth.identity_files` | 路径列表 | `[]` | — | 在自动发现的密钥之外额外提供的私钥。 |
+| `auth.use_agent` | 布尔值 | `true` | — | 有可用的 ssh-agent 时使用它。 |
+| `auth.agent_socket` | 路径或 `null` | `null` | — | 显式指定的 agent 套接字。`null` 表示读取 `SSH_AUTH_SOCK`。 |
+| `recording.enabled` | 布尔值 | `false` | `--recording` | 录制会话输出。 |
+| `recording.tags` | 字符串列表 | `[]` | `--recording-tags` | 只录制带这些标签之一的连接。为空表示录制所有连接。 |
+| `recording.max_bytes_per_session` | 数字 | `52428800`（50 MiB） | — | 录制达到该大小后停止写入事件。 |
+| `recording.retention_days` | 数字 | `90` | — | 删除早于该天数的录制。`0` 表示永久保留。清理会在会话结束时和运行 `bssh close --cleanup` 时执行。 |
+| `prediction.enabled` | 布尔值 | `true` | `--prediction` | 在排序中使用上下文（代码仓库、时段、上一条连接）。 |
+| `prediction.capture_cwd` | 布尔值 | `true` | `--capture-cwd` | 每次会话记录工作目录和 git 根目录。 |
+| `prediction.window_days` | 数字 | `180` | — | 分数中上下文部分使用的历史天数。 |
+
+不带选项运行 `bssh config` 会打印当前值，并按同样的设置重写文件。
+
+## 环境变量
+
+| 变量 | 读取方 | 含义 |
+| --- | --- | --- |
+| `BSSH_TEAMS_PASSPHRASE` | `bssh teams` | 设备口令，用来代替交互提示。空值会被忽略。 |
+| `SSH_AUTH_SOCK` | 连接、`bssh doctor` | `auth.agent_socket` 为 `null` 时使用的 agent 套接字。 |
+| `KRB5_CONFIG` | Kerberos 检查 | `krb5.conf` 的路径，优先于 `/etc/krb5.conf` 和 `/etc/krb5/krb5.conf`。 |
+| `KRB5CCNAME` | Kerberos 检查 | 要检查的票据缓存，优先于 `krb5.conf` 中的默认缓存。 |
+| `USER`、`LOGNAME`、`USERNAME` | Kerberos | 未配置 principal 时使用的登录名。 |
+| `UID` | agent 发现 | 可接受的 agent 套接字所有者；否则使用 `id -u`。 |
+| `HOSTNAME` | `bssh teams init` | 默认设备名称；否则使用 `/etc/hostname`，再否则使用 `device`。 |
+| `TERM` | 会话 | 请求远程 PTY 时使用的终端类型（默认值 `xterm-256color`）。 |
+| `PATH` | `bssh doctor`、`bssh desktop` | 查找 `ssh`、`kinit`、`klist` 和桌面应用程序。 |
+| `HOME` | 配置和密钥发现 | 为 `ssh_config_path` 和 `~/.ssh` 解析 `~`。 |
+| `XDG_CONFIG_HOME` | 配置根目录 | 在 Linux 上替代 `~/.config`。 |
+
+## 桌面应用设置
+
+桌面应用把自己的偏好保存在配置根目录的 `desktop_settings.json` 中，所有环境共用。该文件由应用写入；只在应用关闭时手动修改。
+
+| 设置 | 默认值 | 含义 |
+| --- | --- | --- |
+| `theme` | `"dark"` | `dark`、`light` 或 `system`。 |
+| `density` | `"comfortable"` | `compact`、`comfortable` 或 `spacious`。 |
+| `auto_start_agent` | `false` | 随应用启动 ssh-agent。 |
+| `custom_agent_socket` | 首次运行时为 `SSH_AUTH_SOCK` | 应用使用的 agent 套接字。 |
+| `kerberos_warn_minutes` | `15` | 票据过期前多少分钟提醒。 |
+| `monitor_kerberos` | `true` | 显示 Kerberos 状态和过期提醒。 |
+| `default_user` | 你的系统用户名 | 新连接预填的用户名。 |
+| `default_port` | `22` | 新连接预填的端口。 |
+| `fuzzy_search` | `false` | 主机搜索以模糊模式开始。 |
+| `default_key_path` | `null` | 新连接预填的密钥。 |
+| `timezone` | `"system"` | 显示时间戳使用的时区。 |
+| `onboarding_complete` | 由引导流程设置 | 是否已完成首次设置。 |
+| `terminal_font_family` | JetBrains Mono、Fira Code、Cascadia Code、Ubuntu Mono、DejaVu Sans Mono、Liberation Mono、Consolas、monospace | 终端的字体栈。 |
+| `terminal_font_size` | `13` | 字号（像素）。 |
+| `terminal_line_height` | `1.18` | 行高倍数。 |
+| `terminal_cursor_style` | `"block"` | 光标形状。 |
+| `terminal_cursor_blink` | `true` | 光标闪烁。 |
+| `terminal_copy_on_select` | `false` | 自动复制选中的文本。 |
+| `terminal_smart_copy` | `false` | 有选中文本时 <kbd>Ctrl</kbd>+<kbd>C</kbd> 执行复制。 |
+| `terminal_scrollback` | `10000` | 回滚缓冲区保留的行数。 |
+| `sftp_show_hidden_files` | `true` | 在文件浏览器中显示隐藏文件。 |
+| `sftp_default_remote_path` | `"/"` | 文件浏览器打开时所在的目录。 |
+| `enable_sftp` | `true` | 显示文件浏览器。 |
+| `record_sessions` | `false` | 录制从应用启动的会话。 |
+| `record_tags` | `[]` | 只录制这些标签；为空表示录制所有连接。 |
+
+## Snap 包
+
+Snap 在严格受限的沙箱中运行，无法使用你平时的配置目录。它的文件位于 `~/snap/bayesian-ssh/current/` 下：
+
+```text
+~/snap/bayesian-ssh/current/.config/bayesian-ssh/
+```
+
+因此 Snap 拥有自己的环境、数据库和桌面设置，与原生安装或 `install.sh` 互不共享。`~/.ssh` 以只读方式挂载，所以 Snap 无法更新 `known_hosts`，也无法在 `~/.ssh` 中生成密钥。
+
+## 接下来
+
+- [命令参考](/zh-cn/reference/cli/)：每条命令和选项。
+- [故障排查](/zh-cn/reference/troubleshooting/)：当 `bssh doctor` 报告问题时。

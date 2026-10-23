@@ -1,0 +1,153 @@
+---
+title: Enregistrement et relecture de session
+description: Enregistrez la sortie du terminal au format asciicast, recherchez dans les sorties passées et rejouez les sessions depuis le terminal ou l'application de bureau.
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Bayesian SSH peut enregistrer la sortie de vos sessions SSH dans des fichiers au format asciicast v2. Vous pouvez effectuer des recherches textuelles sur les sorties de vos sessions passées, rejouer des sessions dans votre terminal ou l'application de bureau, et définir des règles de rétention pour gérer l'espace disque.
+
+:::caution
+Les enregistrements capturent la sortie du terminal telle quelle. Si une commande affiche des secrets, des jetons d'accès ou des clés privées sur votre écran, ces secrets sont stockés dans le fichier d'enregistrement et indexés dans la base de recherche locale. Les frappes de touches ne sont jamais enregistrées.
+:::
+
+## Activer l'enregistrement de session
+
+L'enregistrement de session est désactivé par défaut. Vous pouvez l'activer globalement, le limiter à certains tags ou l'activer par connexion.
+
+<Tabs syncKey="surface">
+	<TabItem label="Ligne de commande">
+		Activez l'enregistrement globalement :
+
+		```sh
+		bssh config --recording on
+		```
+
+		Pour n'enregistrer que les hôtes portant des tags spécifiques :
+
+		```sh
+		bssh config --recording-tags prod,critical
+		```
+
+		Pour désactiver à nouveau l'enregistrement :
+
+		```sh
+		bssh config --recording off
+		```
+
+		Vous pouvez également remplacer la configuration globale pour une connexion donnée à l'aide de `--record` ou `--no-record` :
+
+		```sh
+		# Enregistrer cette session même si l'enregistrement est désactivé globalement
+		bssh connect web-prod --record
+
+		# Ne pas enregistrer cette session même si l'enregistrement est activé globalement
+		bssh connect web-prod --no-record
+		```
+	</TabItem>
+	<TabItem label="Application de bureau">
+		Ouvrez **Settings** dans la barre latérale, puis accédez à **Session recording** :
+
+		1. Cochez **Record sessions** pour activer l'enregistrement de toutes les connexions.
+		2. Dans **Only for tags**, saisissez une liste de tags séparés par des virgules (par exemple `prod, staging`) pour limiter l'enregistrement aux hôtes correspondants. Laissez le champ vide pour enregistrer toutes les connexions.
+	</TabItem>
+</Tabs>
+
+### Paramètres de configuration
+
+Vous pouvez affiner les paramètres d'enregistrement dans le fichier `config.json` de votre environnement sous la clé `recording` :
+
+```json
+{
+  "recording": {
+    "enabled": false,
+    "tags": ["prod"],
+    "max_bytes_per_session": 52428800,
+    "retention_days": 90
+  }
+}
+```
+
+- **`max_bytes_per_session`** : empêche un flux de logs incontrôlé de remplir votre disque. Si une session dépasse cette taille (par défaut : 50 Mio), `bssh` inscrit `[bssh: recording truncated]` et arrête la capture pour le reste de la session.
+- **`retention_days`** : délai en jours après lequel les anciens enregistrements et leurs index de recherche sont nettoyés (par défaut : 90 jours).
+
+## Emplacement et autorisations des fichiers
+
+Les enregistrements sont stockés dans le répertoire `recordings/` situé dans le dossier de données de votre environnement (par défaut, `~/.local/share/bayesian-ssh/recordings/` sous Linux).
+
+- **Format** : chaque session est écrite sous la forme d'un fichier [asciicast v2](https://github.com/asciinema/asciicast-format) nommé `<session_id>.cast`. Ces fichiers peuvent être lus avec `bssh replay` ou tout lecteur compatible asciicast.
+- **Autorisations** : les fichiers sont créés d'emblée avec les droits stricts `0600` (`-rw-------`) avant que le moindre octet n'y soit écrit. Les autres utilisateurs locaux de votre machine ne peuvent pas lire les fichiers d'enregistrement.
+
+## Rejouer une session enregistrée
+
+Pour rejouer une session enregistrée dans votre terminal, transmettez son identifiant de session ou un préfixe unique (d'au moins 6 caractères) à `bssh replay` :
+
+```sh
+bssh replay 3f2a91c0
+```
+
+Vous pouvez ajuster la vitesse de lecture et limiter les temps d'inactivité :
+
+```sh
+# Doubler la vitesse de lecture
+bssh replay 3f2a91c0 --speed 2.0
+
+# Limiter les pauses d'inactivité à 1 seconde au maximum (par défaut : 2)
+bssh replay 3f2a91c0 --idle-cap 1.0
+```
+
+| Option | Valeur par défaut | Description |
+| --- | --- | --- |
+| `-s, --speed <FACTOR>` | `1` | Multiplicateur de vitesse de lecture (par exemple, `2` pour doubler la vitesse). |
+| `--idle-cap <SECONDS>` | `2` | Durée maximale de pause en secondes lors des périodes d'inactivité. |
+
+Dans l'application de bureau, ouvrez la vue **History** et cliquez sur une session dotée d'une icône d'enregistrement pour démarrer le lecteur intégré. Le lecteur de l'application prend en charge la lecture, la pause, le déplacement le long de la chronologie, le réglage de la vitesse (1x, 2x, 4x) et le saut direct vers la fin.
+
+## Rechercher dans le texte des sessions enregistrées
+
+Bayesian SSH indexe le texte des sessions enregistrées à l'aide du module FTS5 (recherche plein texte) de SQLite. Avant l'indexation, les codes d'échappement de couleur ANSI et les déplacements de curseur sont supprimés afin de pouvoir rechercher le texte brut de manière fiable.
+
+Pour rechercher une expression dans tous les enregistrements :
+
+```sh
+bssh history --grep "kernel panic"
+```
+
+```text
+CONNECTION           STARTED              SESSION    SNIPPET
+────────────────────────────────────────────────────────────────────────────────────────
+web-prod             2026-10-23 09:14:22  3f2a91c0   ...systemd-journald: kernel panic - not syncing...
+staging-api          2026-10-22 17:05:12  f4a10e82   ...kernel panic detected in crashdump...
+```
+
+Vous pouvez combiner `--grep` avec des filtres de connexion ou de date :
+
+```sh
+bssh history -c web-prod --days 14 --grep "certificate expired"
+```
+
+## Nettoyer les anciens enregistrements
+
+Lorsque les enregistrements de session atteignent le seuil de `retention_days` configuré (par défaut : 90 jours), `bssh` supprime automatiquement les fichiers `.cast` expirés et efface leurs entrées de la base de données et de l'index de recherche FTS5.
+
+Ce nettoyage se produit automatiquement :
+
+- À la fin d'une session SSH.
+- Lors de l'exécution de `bssh close --cleanup`.
+
+```sh
+bssh close --cleanup
+```
+
+```text
+🗑️  Pruned 3 expired recording(s) (older than 90 days)
+```
+
+Pour conserver les enregistrements indéfiniment, définissez `"retention_days": 0` dans votre fichier `config.json`.
+
+## Pour continuer
+
+<CardGrid>
+	<LinkCard title="Historique des sessions" description="Filtrez l'historique, vérifiez les codes de sortie et consultez les statistiques." href="/fr/guides/sessions/" />
+	<LinkCard title="Référence de configuration" description="Consultez tous les paramètres d'enregistrement disponibles dans config.json." href="/fr/reference/configuration/" />
+</CardGrid>

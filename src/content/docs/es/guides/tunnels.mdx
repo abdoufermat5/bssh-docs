@@ -1,0 +1,130 @@
+---
+title: Túneles
+description: Reenvía puertos locales y abre proxys dinámicos SOCKS5 mediante SSH.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH incluye comandos para abrir túneles de reenvío de puertos locales y proxys dinámicos SOCKS5 sin necesidad de recordar opciones complejas de OpenSSH. Los túneles se ejecutan en primer plano y se cierran de forma limpia al interrumpirlos.
+
+## Reenvío de puertos local
+
+El comando `bssh forward` crea un túnel SSH de reenvío de puertos local (estilo `-L`). El tráfico enviado a un puerto de escucha local se canaliza a través del host SSH remoto hasta una dirección de destino.
+
+```sh
+bssh forward db01 -L 5432:localhost:5432
+```
+
+### Formato de especificación
+
+La especificación `-L` sigue la sintaxis habitual de OpenSSH:
+
+```text
+[bind_addr:]bind_port:remote_host:remote_port
+```
+
+- `bind_addr`: Dirección IP local en la que escuchar. Si se omite, se utiliza `127.0.0.1`.
+- `bind_port`: Puerto local donde `bssh` escucha las conexiones entrantes.
+- `remote_host`: Dirección de destino accesible desde el servidor SSH remoto.
+- `remote_port`: Puerto de destino en `remote_host`.
+
+Las direcciones IPv6 pueden escribirse entre corchetes:
+
+```sh
+bssh forward web-prod -L [::1]:8080:[fe80::1]:80
+```
+
+### Ejemplos habituales
+
+**Reenviar una base de datos remota a tu equipo local:**
+
+```sh
+bssh forward db01 -L 5432:localhost:5432
+```
+
+Ahora puedes conectar herramientas locales (como `psql` o clientes gráficos) a `localhost:5432`.
+
+**Acceder a un servicio interno mediante un host de salto:**
+
+```sh
+bssh forward bastion -L 8080:internal-api.corp:80
+```
+
+Las peticiones locales dirigidas a `http://localhost:8080` se reenviarán a través del `bastion` al puerto 80 de `internal-api.corp`.
+
+**Escuchar en todas las interfaces de red locales:**
+
+```sh
+bssh forward web-prod -L 0.0.0.0:8080:localhost:80
+```
+
+Al indicar `0.0.0.0`, otros equipos de tu red local podrán acceder al puerto reenviado.
+
+## Proxy dinámico SOCKS5
+
+El comando `bssh proxy` inicia un reenvío dinámico de puertos por SSH (estilo `-D`) que funciona como un proxy SOCKS5 local. Cualquier aplicación con soporte para SOCKS5 puede enrutar su tráfico a través del host SSH remoto.
+
+```sh
+bssh proxy web-prod -D 1080
+```
+
+### Opciones
+
+- `-D <PORT>`: Puerto local para el listener del proxy SOCKS5 (obligatorio).
+- `--bind <ADDR>`: Dirección de escucha local (opcional, por defecto: `127.0.0.1`).
+
+Para que el proxy SOCKS5 sea accesible desde tu red local:
+
+```sh
+bssh proxy bastion -D 9050 --bind 0.0.0.0
+```
+
+### Configuración en clientes
+
+Configura tus aplicaciones para que utilicen `socks5://127.0.0.1:1080`.
+
+Por ejemplo, comprueba el funcionamiento del proxy con `curl`:
+
+```sh
+curl --socks5-hostname 127.0.0.1:1080 https://api.ipify.org
+```
+
+La dirección IP devuelta coincidirá con la del host SSH remoto y no con tu dirección local.
+
+## Ejecución y enrutamiento de túneles
+
+Al ejecutar `bssh forward` o `bssh proxy`:
+
+1. `bssh` resuelve la conexión de destino mediante búsqueda aproximada y clasificación bayesiana.
+2. Muestra el estado de conexión y los datos de escucha:
+   ```text
+   →  SOCKS5 proxy on 127.0.0.1:1080 via web-prod (native)
+      Configure your client: socks5://127.0.0.1:1080
+      Press Ctrl+C to stop.
+   ```
+3. Las conexiones directas sin Kerberos ni bastión utilizan el transporte SSH nativo en Rust (`russh`).
+4. Las conexiones que pasan por un bastión o requieren Kerberos utilizan automáticamente un subproceso de OpenSSH (`ssh -L` o `ssh -D`), manteniendo el enrutamiento de salto y las credenciales.
+
+## Detener un túnel o proxy
+
+Tanto `bssh forward` como `bssh proxy` se ejecutan como procesos interactivos en primer plano.
+
+Para cerrar un túnel:
+
+1. En la terminal donde se ejecuta el comando, pulsa <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+2. `bssh` captura la señal de interrupción, detiene limpiamente el listener local, cierra los canales SSH remotos y finaliza:
+   ```text
+   Shutting down proxy…
+   Done.
+   ```
+
+## Aplicación de escritorio
+
+Los túneles y proxys se gestionan desde la interfaz de línea de comandos. La aplicación de escritorio se centra en sesiones interactivas de terminal, transferencia de archivos por SFTP, gestión de hosts guardados, historial de sesiones y sincronización en equipo; por el momento no cuenta con una vista específica para túneles.
+
+## Próximos pasos
+
+<CardGrid>
+	<LinkCard title="Hosts bastión" description="Enruta conexiones a través de hosts de salto y bastiones interactivos." href="/es/guides/bastions/" />
+	<LinkCard title="Comandos remotos" description="Ejecuta comandos y transfiere archivos entre hosts." href="/es/guides/remote-commands/" />
+</CardGrid>

@@ -1,0 +1,118 @@
+---
+title: Alias
+description: Crea nombres cortos para tus conexiones y úsalos en todos los comandos de bssh.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Un alias es un nombre corto y fácil de recordar asociado a una conexión existente. En lugar de escribir identificadores largos como `production-payment-gateway-01`, puedes definir un alias como `pay` y utilizarlo de forma indistinta en todos los comandos de `bssh`.
+
+## Crear un alias
+
+Ejecuta `bssh alias add` con el nuevo alias y el nombre, alias o ID de la conexión de destino:
+
+```sh
+bssh alias add wp web-prod
+```
+
+```text
+✅ Added alias 'wp' → 'web-prod'
+   You can now use: bssh connect wp
+```
+
+Puedes asignar múltiples alias a una misma conexión:
+
+```sh
+bssh alias add prod web-prod
+bssh alias add primary web-prod
+```
+
+`bssh` valida los alias para prevenir conflictos de nombres:
+- Un alias no puede coincidir con el nombre de una conexión existente.
+- Un alias no puede duplicar otro alias previamente registrado.
+
+## Listar alias
+
+Ejecuta `bssh alias list` para consultar todos los alias del entorno activo agrupados por host:
+
+```sh
+bssh alias list
+```
+
+```text
+📝 All Connection Aliases
+
+  web-prod (web.example.com)
+    └─ wp
+    └─ prod
+
+  db01 (10.0.1.5)
+    └─ db
+```
+
+Para ver únicamente los alias vinculados a una conexión específica, indica el nombre de dicha conexión:
+
+```sh
+bssh alias list web-prod
+```
+
+```text
+📝 Aliases for 'web-prod':
+   • wp
+   • prod
+```
+
+## Eliminar un alias
+
+Ejecuta `bssh alias remove` indicando el nombre del alias para borrarlo:
+
+```sh
+bssh alias remove wp
+```
+
+Eliminar un alias solo borra el acceso directo. La conexión subyacente, su configuración y su historial de sesiones permanecen inalterados.
+
+## Resolución de alias
+
+Los alias se resuelven en cualquier lugar donde `bssh` acepte una conexión de destino. Puedes usar un alias en cualquier comando que admita un argumento `<TARGET>`:
+
+```sh
+# Conectarse al host remoto
+bssh connect wp
+
+# Ver detalles de la conexión
+bssh show wp
+
+# Editar la configuración de la conexión
+bssh edit wp --port 2222
+
+# Probar conectividad SSH
+bssh ping wp
+
+# Consultar la puntuación de clasificación bayesiana
+bssh why wp
+
+# Ejecutar un comando remoto
+bssh exec wp -- uptime
+
+# Subir archivos
+bssh upload wp -r ./dist /var/www/html
+
+# Redirigir un puerto local
+bssh forward wp -L 8080:localhost:80
+```
+
+### Orden de prioridad
+
+Cuando introduces un identificador, `bssh` comprueba primero si existe un nombre de conexión exacto. Si no encuentra ninguna coincidencia, busca entre los alias. Si tampoco coincide ningún alias, inicia la búsqueda aproximada interactiva entre todas tus conexiones guardadas.
+
+### Ámbito del entorno
+
+Los alias se guardan en la base de datos SQLite local del entorno activo (`history.db`). Cada entorno mantiene un conjunto independiente de alias, garantizando que los nombres definidos en un perfil no interfieran ni se mezclen con otro.
+
+## Siguientes pasos
+
+<CardGrid>
+  <LinkCard title="Conexiones" description="Guarda, lista, edita y organiza tus conexiones SSH." href="/es/guides/connections/" />
+  <LinkCard title="Entornos" description="Aísla tus conexiones y alias en perfiles independientes." href="/es/guides/environments/" />
+</CardGrid>

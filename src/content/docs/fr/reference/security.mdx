@@ -1,0 +1,94 @@
+---
+title: Sécurité
+description: Où bssh conserve vos données, comment vérifier une version publiée et comment signaler une vulnérabilité.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+bssh garde ses données sur votre machine et ne s'interpose jamais entre vous et vos serveurs. Cette page liste les fichiers, ce qui les protège et comment vérifier qu'un téléchargement est authentique.
+
+## Où vivent vos données
+
+Sous Linux, les données propres à bssh se trouvent sous `~/.config/bayesian-ssh/`. Chaque environnement a son propre répertoire, `environments/<name>/` : changer d'environnement change la base de données et les enregistrements.
+
+| Données | Emplacement | Protection |
+| --- | --- | --- |
+| Connexions, tags, historique des sessions, état Teams et clés Teams scellées de cet appareil | `environments/<env>/history.db` | Répertoire en 0700, fichier en 0600 |
+| Réglages | `environments/<env>/config.json` | 0600, écriture atomique |
+| Enregistrements de session | `environments/<env>/recordings/<session-id>.cast` | 0600 |
+| Sauvegardes | `environments/<env>/backups/` ou le chemin passé à `bssh backup` | 0600, non chiffrées |
+| Clés SSH, `known_hosts`, tickets Kerberos | `~/.ssh` et le cache d'identifiants de votre système | Gérés par votre OS et vos outils SSH, jamais copiés dans les fichiers de bssh |
+
+`active_env`, dans `~/.config/bayesian-ssh/`, contient le nom de l'environnement actif et est aussi en 0600.
+
+bssh crée ces répertoires en 0700 et ces fichiers en 0600, et réapplique le mode des répertoires à chaque exécution. Si quelque chose a ouvert davantage le répertoire de configuration, la base de données ou une clé privée, `bssh audit` le signale et `bssh audit --fix` le répare. Voir [Dépannage](/fr/reference/troubleshooting/).
+
+Le paquet Snap utilise la même arborescence sous `~/snap/bayesian-ssh/current/.config/bayesian-ssh/`, séparée d'une installation native.
+
+## Jamais dans le chemin des données
+
+bssh ouvre les connexions depuis votre machine vers l'hôte, comme `ssh`. Il n'y a ni relais ni service mandataire : aucun tiers ne peut lire ni modifier une session. Les bastions, tunnels et le proxy SOCKS sont des routes que vous configurez vous-même, et votre machine les ouvre directement.
+
+bssh Teams ajoute un serveur de synchronisation, mais il ne stocke que les données d'équipe ; il ne transporte jamais le trafic SSH. [Sécurité de Teams](/fr/teams/security/) explique ce qu'il voit et ne voit pas.
+
+## Sauvegardes et exports chiffrés
+
+`bssh backup` écrit un instantané de la base, pas un conteneur chiffré : le fichier est une base SQLite en clair, en mode 0600. Il contient les mêmes données que la base active : conservez-le avec le même soin.
+
+`bssh export` peut chiffrer ce qu'il écrit. La phrase secrète devient une clé via Argon2id, et la charge utile est scellée avec AES-256-GCM :
+
+```sh
+bssh export --format json -p '<passphrase>' -o hosts.enc
+bssh import -f hosts.enc --passphrase '<passphrase>'
+```
+
+`--passphrase` exige `--output`, et le fichier exporté est créé en 0600. Une mauvaise phrase secrète échoue avec `Decryption failed: invalid passphrase or corrupted file` ; un texte chiffré endommagé donne le même message, car le déchiffrement ne peut pas distinguer les deux.
+
+:::caution
+Une phrase secrète passée avec `-p` est un argument de ligne de commande : elle peut finir dans l'historique de votre shell et reste visible dans la liste des processus pendant l'exécution. Supprimez l'entrée d'historique si cela compte sur cette machine.
+:::
+
+## Enregistrements de session
+
+Un enregistrement est un fichier asciicast de ce que le terminal a affiché pendant une session, y compris tout ce qui a été imprimé, renvoyé ou collé. Un enregistrement peut donc contenir des secrets. Ce sont des fichiers en clair en mode 0600, jamais lisibles par les autres utilisateurs, et rien ne les chiffre sur le disque.
+
+- L'enregistrement est désactivé par défaut. Activez-le avec `bssh config --recording on`, limitez-le éventuellement à certaines connexions avec `bssh config --recording-tags prod`, et désactivez-le à nouveau avec `bssh config --recording off`.
+- Regardez-en un avec `bssh replay <session-id>` ; `bssh history` donne l'identifiant.
+- Supprimez le fichier d'enregistrement pour le retirer. Les enregistrements restent locaux ; bssh n'a aucune commande qui les envoie.
+
+## Vérifier une version publiée
+
+Chaque fichier publié est couvert deux fois : une signature sans clé sur `SHA256SUMS` et une attestation de provenance de compilation. Avec `cosign` et la CLI `gh` installés, dans le répertoire des fichiers téléchargés :
+
+```sh
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/abdoufermat5/bayesian-ssh/\.github/workflows/release\.yml@refs/(tags/v.+|heads/main)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+
+sha256sum --ignore-missing -c SHA256SUMS
+
+gh attestation verify bayesian-ssh-linux-x86_64.tar.gz --repo abdoufermat5/bayesian-ssh
+```
+
+La première commande prouve que `SHA256SUMS` a été signé par le workflow de publication de ce dépôt, sur un tag ou sur `main`. La deuxième vérifie chaque fichier téléchargé par rapport à cette liste signée. La troisième vérifie la provenance de compilation du fichier nommé pour ce dépôt.
+
+`install.sh` exécute la vérification `cosign` automatiquement quand `cosign` est installé, et vérifie toujours `SHA256SUMS`.
+
+## Versions prises en charge
+
+Les correctifs de sécurité ne concernent que la dernière version mineure. Vérifiez ce que vous exécutez avec `bssh --version` et mettez à jour avant de signaler un problème qu'une version plus récente a peut-être déjà corrigé.
+
+## Signaler une vulnérabilité
+
+Signalez-la en privé via GitHub : [signaler une vulnérabilité](https://github.com/abdoufermat5/bayesian-ssh/security/advisories/new). N'ouvrez pas de ticket public.
+
+Vous recevez un accusé de réception sous 3 jours ouvrés. Une fois le correctif publié, l'avis est publié avec votre nom, sauf si vous préférez rester anonyme.
+
+## Teams
+
+Si vous utilisez bssh Teams, lisez [Sécurité de Teams](/fr/teams/security/) : la page décrit le modèle de confiance du serveur de synchronisation, la cryptographie et ce que la récupération permet ou non.
+
+<CardGrid>
+	<LinkCard title="Sécurité de Teams" description="Ce que le serveur de synchronisation voit et comment fonctionne la clé d'équipe." href="/fr/teams/security/" />
+	<LinkCard title="Référence de configuration" description="Tous les réglages, fichiers et variables d'environnement." href="/fr/reference/configuration/" />
+</CardGrid>

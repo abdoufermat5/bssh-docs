@@ -1,0 +1,82 @@
+---
+title: Configuration
+description: Configure default usernames, ports, bastions, and Kerberos settings for your SSH connections.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH provides sensible defaults out of the box. You can customize global settings such as default users, default ports, jump hosts, and authentication methods using the `bssh config` command.
+
+## View current settings
+
+Run `bssh config` without arguments to display your active configuration:
+
+```sh
+bssh config
+```
+
+The output shows current settings: default user, bastion, bastion user, port, Kerberos default, log level, search mode, session recording, prediction, and working directory capture.
+
+## Set default values
+
+Update one or more settings by passing flags to `bssh config`:
+
+```sh
+bssh config --default-user deploy --default-port 2222
+```
+
+When you add a new connection with `bssh add`, omitting `--user` or `--port` applies these configured defaults.
+
+## Configure a default bastion
+
+If your infrastructure routes connections through a central jump host, configure a default bastion:
+
+```sh
+bssh config --default-bastion bastion.example.com --default-bastion-user jump
+```
+
+New connections created with `bssh add` will route through this bastion by default. To create a direct connection that bypasses the default bastion, pass `--no-bastion` when adding the host:
+
+```sh
+bssh add web-direct 192.168.1.50 --no-bastion
+```
+
+To remove the default bastion and route new connections directly:
+
+```sh
+bssh config --clear-bastion
+```
+
+## Kerberos authentication
+
+If your network relies on Kerberos or GSSAPI tickets (such as FreeIPA or Active Directory), enable Kerberos by default:
+
+```sh
+bssh config --use-kerberos true
+```
+
+New connections will attempt Kerberos authentication automatically. To turn it off by default, run `bssh config --use-kerberos false`.
+
+## Search mode
+
+Bayesian SSH supports two search ranking modes:
+
+```sh
+bssh config --search-mode bayesian
+```
+
+- `bayesian`: Combines match quality with usage frequency and recency. This is the default.
+- `fuzzy`: Standard substring matching without history weighting.
+
+## Configuration file
+
+Configuration is stored per environment in `~/.config/bayesian-ssh/environments/<env>/config.json` (using `~/.config/bayesian-ssh/environments/default/config.json` for the default environment). For environment variables, file locations, and an exhaustive list of all configuration fields, see the [configuration reference](/reference/configuration/).
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Quick start" description="Add a host and connect in two minutes." href="/start/quick-start/" />
+	<LinkCard title="Bastion hosts" description="Set up jump hosts, chaining, and interactive bastions." href="/guides/bastions/" />
+	<LinkCard title="Authentication" description="Manage SSH keys, ssh-agent, and Kerberos." href="/guides/authentication/" />
+	<LinkCard title="Configuration reference" description="Complete reference for all settings, files, and environment variables." href="/reference/configuration/" />
+</CardGrid>

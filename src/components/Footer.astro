@@ -1,0 +1,44 @@
+---
+import Default from '@astrojs/starlight/components/Footer.astro';
+
+const strings = {
+	en: { issues: 'Report an issue', license: 'Client released under the MIT license.' },
+	fr: { issues: 'Signaler un problème', license: 'Client publié sous licence MIT.' },
+	es: { issues: 'Informar de un problema', license: 'Cliente publicado bajo licencia MIT.' },
+	'zh-CN': { issues: '报告问题', license: '客户端以 MIT 许可证发布。' },
+};
+const t = strings[Astro.locals.starlightRoute.lang as keyof typeof strings] ?? strings.en;
+---
+
+<Default />
+<div class="site-footer">
+	<span>© {new Date().getFullYear()} Bayesian SSH</span>
+	<span aria-hidden="true">·</span>
+	<a href="https://github.com/abdoufermat5/bayesian-ssh">GitHub</a>
+	<span aria-hidden="true">·</span>
+	<a href="https://github.com/abdoufermat5/bayesian-ssh/issues">{t.issues}</a>
+	<span class="license">{t.license}</span>
+</div>
+
+<style>
+	.site-footer {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.5rem;
+		margin-top: 2.5rem;
+		padding-top: 1.25rem;
+		border-top: 1px solid var(--sl-color-hairline);
+		font-size: var(--sl-text-xs);
+		color: var(--sl-color-gray-3);
+	}
+	.site-footer a {
+		color: inherit;
+		text-decoration: none;
+	}
+	.site-footer a:hover {
+		color: var(--sl-color-white);
+	}
+	.license {
+		flex-basis: 100%;
+	}
+</style>

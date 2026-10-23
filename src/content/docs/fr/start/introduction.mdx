@@ -1,0 +1,42 @@
+---
+title: Qu'est-ce que Bayesian SSH ?
+description: Un gestionnaire SSH pensé pour le clavier, en ligne de commande et sur le bureau, avec un partage d'équipe chiffré de bout en bout en option.
+---
+
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+Bayesian SSH regroupe vos hôtes SSH au même endroit et vous connecte au bon serveur en quelques frappes de touches. Il fonctionne sous la forme d'une commande, `bssh`, et d'une application de bureau. Les deux utilisent la même base de données locale.
+
+```sh
+bssh connect prod
+```
+
+Vous n'avez pas besoin du nom exact. `bssh` recherche dans les noms, alias, tags et noms d'hôte, ignore les séparateurs (`webprod` trouve `web-prod-server`) et classe les résultats selon la fréquence et la date de vos connexions à chaque hôte. L'hôte recherché apparaît généralement en tête.
+
+## Ce qu'il fait
+
+- **Enregistre des connexions** avec leur utilisateur, port, clé, bastion, paramètre Kerberos et tags.
+- **Trouve les hôtes rapidement** grâce à une recherche approximative et un classement qui apprend de votre historique.
+- **Gère le routage** : bastions par défaut ou par hôte, bastions interactifs et tickets Kerberos.
+- **Va au-delà du terminal** : exécutez des commandes sur plusieurs hôtes, transférez des fichiers, ouvrez des tunnels et un proxy SOCKS.
+- **Mémorise les sessions** : historique, statistiques et enregistrements de session optionnels que vous pouvez rejouer et rechercher.
+- **Importe vos données existantes** : votre fichier `~/.ssh/config` et des sources d'inventaire qui maintiennent la liste des hôtes synchronisée.
+
+## En local avant tout
+
+Tout est stocké sur votre machine. Bayesian SSH ne s'interpose jamais entre vous et vos serveurs : les connexions vont directement de votre ordinateur à l'hôte, exactement comme avec `ssh`.
+
+## bssh Teams
+
+bssh Teams est le forfait payant pour partager des connexions avec vos collègues. Les connexions partagées sont chiffrées sur vos appareils avant d'être synchronisées, de sorte que le serveur de synchronisation ne voit jamais les noms d'hôte, les utilisateurs ni les notes. Chaque connexion à un hôte partagé est consignée dans un journal d'audit signé. Les équipes comprenant jusqu'à 3 sièges sont gratuites.
+
+<Aside type="tip">
+`bssh` est le nom court de la commande `bayesian-ssh`. Les deux sont installées et fonctionnent de manière identique ; cette documentation utilise `bssh`.
+</Aside>
+
+## Pour continuer
+
+<CardGrid>
+	<LinkCard title="Installer" description="Installateur en une ligne, paquets Linux, Snap ou compilation depuis les sources." href="/fr/start/installation/" />
+	<LinkCard title="Démarrage rapide" description="Enregistrez un hôte et connectez-vous." href="/fr/start/quick-start/" />
+</CardGrid>

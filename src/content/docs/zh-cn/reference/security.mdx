@@ -1,0 +1,94 @@
+---
+title: 安全
+description: bssh 在哪里保存你的数据、如何验证发布的版本，以及如何报告漏洞。
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+bssh 把数据保存在你的机器上，从不介于你和服务器之间。本页列出相关文件、它们的保护方式，以及如何确认下载的文件是真实的。
+
+## 数据存放位置
+
+在 Linux 上，bssh 自己的数据位于 `~/.config/bayesian-ssh/` 下。每个环境都有自己的目录 `environments/<name>/`，切换环境就是切换数据库和录制文件。
+
+| 数据 | 位置 | 保护 |
+| --- | --- | --- |
+| 连接、标签、会话历史、Teams 状态和此设备的 Teams 密钥（经口令封装） | `environments/<env>/history.db` | 目录 0700，文件 0600 |
+| 设置 | `environments/<env>/config.json` | 0600，原子写入 |
+| 会话录制 | `environments/<env>/recordings/<session-id>.cast` | 0600 |
+| 备份 | `environments/<env>/backups/` 或传给 `bssh backup` 的路径 | 0600，未加密 |
+| SSH 密钥、`known_hosts`、Kerberos 票据 | `~/.ssh` 和系统的凭据缓存 | 由操作系统和 SSH 工具管理，不会复制到 bssh 的文件中 |
+
+`active_env` 位于 `~/.config/bayesian-ssh/`，保存当前环境名称，权限同样是 0600。
+
+bssh 以 0700 创建这些目录、以 0600 创建这些文件，并在每次运行时重新应用目录权限。如果配置目录、数据库或某个私钥的权限被放宽，`bssh audit` 会报告，`bssh audit --fix` 会修复。参见[故障排查](/zh-cn/reference/troubleshooting/)。
+
+Snap 包在同一棵目录树下使用 `~/snap/bayesian-ssh/current/.config/bayesian-ssh/`，与原生安装相互独立。
+
+## 从不位于数据路径中
+
+bssh 像 `ssh` 一样从你的机器直接连接到主机。没有中继，也没有代理服务，因此任何第三方都无法读取或修改会话。跳板机、隧道和 SOCKS 代理都是你自行配置的路由，由你的机器直接建立。
+
+bssh Teams 增加了同步服务器，但它只保存团队数据，从不承载 SSH 流量。[Teams 安全](/zh-cn/teams/security/) 说明了它能看见和看不见什么。
+
+## 备份与加密导出
+
+`bssh backup` 写入数据库快照，而不是加密容器：文件是明文 SQLite 数据库，权限 0600。它包含与当前数据库相同的数据，因此请同样谨慎保管。
+
+`bssh export` 可以加密其输出。口令通过 Argon2id 派生为密钥，载荷用 AES-256-GCM 封装：
+
+```sh
+bssh export --format json -p '<passphrase>' -o hosts.enc
+bssh import -f hosts.enc --passphrase '<passphrase>'
+```
+
+`--passphrase` 需要配合 `--output`，导出的文件以 0600 创建。口令错误会失败并显示 `Decryption failed: invalid passphrase or corrupted file`；密文损坏时也是同样的消息，因为解密无法区分两者。
+
+:::caution
+用 `-p` 传入的口令是命令行参数：它可能进入 shell 历史记录，并在命令运行期间出现在进程列表中。如果这台机器上这很重要，请删除历史记录条目。
+:::
+
+## 会话录制
+
+录制是终端在会话中显示内容的 asciicast 文件，包括所有打印、回显或粘贴的内容。因此录制可能包含机密。它们是权限 0600 的明文文件，其他用户不可读，磁盘上也没有加密。
+
+- 录制默认关闭。用 `bssh config --recording on` 开启，可用 `bssh config --recording-tags prod` 只录制部分连接，再用 `bssh config --recording off` 关闭。
+- 用 `bssh replay <session-id>` 回放；`bssh history` 可以找到 id。
+- 删除录制文件即可移除。录制始终留在本地；bssh 没有任何上传它们的命令。
+
+## 验证发布的版本
+
+每个发布文件都有两重保障：对 `SHA256SUMS` 的无密钥签名，以及构建来源证明。安装 `cosign` 和 `gh` CLI 后，在下载文件所在目录执行：
+
+```sh
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/abdoufermat5/bayesian-ssh/\.github/workflows/release\.yml@refs/(tags/v.+|heads/main)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+
+sha256sum --ignore-missing -c SHA256SUMS
+
+gh attestation verify bayesian-ssh-linux-x86_64.tar.gz --repo abdoufermat5/bayesian-ssh
+```
+
+第一条命令证明 `SHA256SUMS` 由本仓库的发布工作流在标签或 `main` 上签名。第二条按该签名清单校验你下载的每个文件。第三条校验指定文件在本仓库的构建来源。
+
+安装 `cosign` 时，`install.sh` 会自动执行 `cosign` 校验，并始终校验 `SHA256SUMS`。
+
+## 支持的版本
+
+安全修复只进入最新的次版本。用 `bssh --version` 查看你运行的版本，并在报告可能已被新版本修复的问题之前先更新。
+
+## 报告漏洞
+
+请通过 GitHub 私下报告：[报告漏洞](https://github.com/abdoufermat5/bayesian-ssh/security/advisories/new)。不要提交公开 issue。
+
+你会在 3 个工作日内收到确认。修复发布后，公告会署上你的名字，除非你希望匿名。
+
+## Teams
+
+如果你使用 bssh Teams，请阅读 [Teams 安全](/zh-cn/teams/security/)：其中说明同步服务器的信任模型、密码学，以及恢复能力的有无。
+
+<CardGrid>
+	<LinkCard title="Teams 安全" description="同步服务器能看到什么，以及团队密钥如何运作。" href="/zh-cn/teams/security/" />
+	<LinkCard title="配置参考" description="所有设置、文件和环境变量。" href="/zh-cn/reference/configuration/" />
+</CardGrid>

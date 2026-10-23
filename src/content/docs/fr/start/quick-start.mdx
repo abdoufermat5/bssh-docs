@@ -1,0 +1,61 @@
+---
+title: Démarrage rapide
+description: Enregistrez votre premier hôte SSH, connectez-vous par recherche approximative, importez votre configuration SSH existante et ouvrez l'application de bureau.
+---
+
+import { Steps, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Connectez-vous à votre premier serveur en moins de deux minutes avec Bayesian SSH.
+
+## De zéro à votre première connexion
+
+<Steps>
+1. ### Enregistrer un hôte
+
+   Ajoutez une entrée de connexion dans la base de données locale avec `bssh add`. Indiquez un nom mémorisable ainsi que le nom d'hôte ou l'adresse IP cible :
+
+   ```sh
+   bssh add web-prod web-prod.example.com -u deploy --tags prod,web
+   ```
+
+   Vous pouvez aussi spécifier un port (`-p 2222`), une clé SSH (`-i ~/.ssh/id_ed25519`) ou un hôte de rebond (`-b bastion.example.com`).
+
+2. ### Se connecter grâce à la recherche approximative
+
+   Connectez-vous à votre hôte enregistré avec `bssh connect` :
+
+   ```sh
+   bssh connect prod
+   ```
+
+   Vous n'avez pas besoin du nom complet ou exact. `bssh` recherche dans des fragments de noms, d'alias, de noms d'hôte et de tags. Les séparateurs sont ignorés, de sorte que `webprod` correspond à `web-prod`. Lorsque plusieurs hôtes correspondent, le classement bayésien place l'hôte que vous utilisez le plus souvent ou le plus récemment en tête de liste.
+
+3. ### Importer votre configuration SSH
+
+   Si vous avez déjà des hôtes configurés dans votre fichier OpenSSH, importez-les dans Bayesian SSH :
+
+   ```sh
+   bssh import
+   ```
+
+   `bssh import` lit `~/.ssh/config` par défaut. La commande analyse les directives `Host`, `HostName`, `User`, `Port` et `IdentityFile`, en ignorant les blocs `Match`, pour créer automatiquement les connexions correspondantes.
+
+4. ### Ouvrir l'application de bureau
+
+   Lancez l'interface graphique en arrière-plan :
+
+   ```sh
+   bssh desktop
+   ```
+
+   L'application de bureau partage la même base de données locale que la ligne de commande. Vous pouvez y parcourir vos hôtes, les filtrer par tags, ouvrir des onglets de terminal intégrés, transférer des fichiers et ouvrir la palette de commandes avec <kbd>Ctrl</kbd>+<kbd>K</kbd>.
+</Steps>
+
+## Pour continuer
+
+<CardGrid>
+	<LinkCard title="Gestion des connexions" description="Modifier, dupliquer, supprimer et organiser vos connexions avec des tags." href="/fr/guides/connections/" />
+	<LinkCard title="Recherche et classement" description="Comment la recherche approximative et le classement bayésien choisissent le bon hôte." href="/fr/guides/search-and-ranking/" />
+	<LinkCard title="Première configuration" description="Définir les utilisateurs, ports et bastions par défaut." href="/fr/start/configuration/" />
+	<LinkCard title="bssh Teams" description="Partager des connexions avec votre équipe grâce au chiffrement de bout en bout." href="/fr/teams/overview/" />
+</CardGrid>

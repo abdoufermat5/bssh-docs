@@ -1,0 +1,153 @@
+---
+title: Session recording and replay
+description: Record terminal output in asciicast format, search past output, and replay sessions from the CLI or desktop app.
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Bayesian SSH can record terminal output from your SSH sessions into asciicast v2 format files. You can search the full text of past sessions with full-text search, play back sessions in your terminal or the desktop app, and configure retention policies to manage disk usage.
+
+:::caution
+Recordings capture terminal output verbatim. If a command prints secrets, access tokens, or private keys to your screen, those secrets are saved to the recording file and indexed in the local search database. Keystrokes are never recorded.
+:::
+
+## Enable session recording
+
+Session recording is disabled by default. You can enable it globally, restrict it to specific tags, or toggle it per connection.
+
+<Tabs syncKey="surface">
+	<TabItem label="Command line">
+		Enable recording globally:
+
+		```sh
+		bssh config --recording on
+		```
+
+		To record only hosts that carry specific tags:
+
+		```sh
+		bssh config --recording-tags prod,critical
+		```
+
+		To disable recording again:
+
+		```sh
+		bssh config --recording off
+		```
+
+		You can also override your global configuration for an individual connection using `--record` or `--no-record`:
+
+		```sh
+		# Record this session even if recording is globally off
+		bssh connect web-prod --record
+
+		# Do not record this session even if recording is globally on
+		bssh connect web-prod --no-record
+		```
+	</TabItem>
+	<TabItem label="Desktop app">
+		Open **Settings** from the sidebar, then navigate to **Session recording**:
+
+		1. Check **Record sessions** to enable recording for all connections.
+		2. In **Only for tags**, enter a comma-separated list of tags (such as `prod, staging`) to restrict recording to matching hosts. Leave the field empty to record all connections.
+	</TabItem>
+</Tabs>
+
+### Configuration settings
+
+You can fine-tune recording parameters in your environment's `config.json` file under the `recording` key:
+
+```json
+{
+  "recording": {
+    "enabled": false,
+    "tags": ["prod"],
+    "max_bytes_per_session": 52428800,
+    "retention_days": 90
+  }
+}
+```
+
+- **`max_bytes_per_session`**: Prevents a runaway log stream from filling your disk. If a session exceeds this size (default: 50 MiB), `bssh` writes `[bssh: recording truncated]` and stops capturing further output.
+- **`retention_days`**: Age in days after which old recordings and their search indices are pruned (default: 90 days).
+
+## Storage and file permissions
+
+Recordings are stored in the `recordings/` directory inside your environment data folder (by default, `~/.local/share/bayesian-ssh/recordings/` on Linux).
+
+- **Format**: Each session is written as an [asciicast v2](https://github.com/asciinema/asciicast-format) file named `<session_id>.cast`. These files can be played with `bssh replay` or any standard asciicast-compatible player.
+- **Permissions**: Files are created with strict mode `0600` (`-rw-------`) up front before any bytes are written. Other local users on your workstation cannot read the recording files.
+
+## Replay a recorded session
+
+To replay a recorded session in your terminal, pass its session ID or an initial prefix (at least 6 characters) to `bssh replay`:
+
+```sh
+bssh replay 3f2a91c0
+```
+
+You can control the playback speed and cap idle time:
+
+```sh
+# Double playback speed
+bssh replay 3f2a91c0 --speed 2.0
+
+# Limit pauses between keystrokes or output bursts to at most 1 second (default: 2)
+bssh replay 3f2a91c0 --idle-cap 1.0
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `-s, --speed <FACTOR>` | `1` | Playback speed multiplier (for example, `2` for double speed). |
+| `--idle-cap <SECONDS>` | `2` | Maximum pause duration in seconds during idle periods. |
+
+In the desktop app, open the **History** view and click any session marked with a recording icon to launch the built-in replay player. The desktop player supports play, pause, scrubbing along the timeline, speed adjustment (1x, 2x, 4x), and jumping directly to the end.
+
+## Search recorded session output
+
+Bayesian SSH indexes the text of recorded sessions using SQLite FTS5 (full-text search). Before indexing, ANSI color escapes and cursor movement codes are stripped statefully so you can match the raw output text cleanly.
+
+To search for a phrase across all recordings:
+
+```sh
+bssh history --grep "kernel panic"
+```
+
+```text
+CONNECTION           STARTED              SESSION    SNIPPET
+────────────────────────────────────────────────────────────────────────────────────────
+web-prod             2026-10-23 09:14:22  3f2a91c0   ...systemd-journald: kernel panic - not syncing...
+staging-api          2026-10-22 17:05:12  f4a10e82   ...kernel panic detected in crashdump...
+```
+
+You can combine `--grep` with connection or date filters:
+
+```sh
+bssh history -c web-prod --days 14 --grep "certificate expired"
+```
+
+## Prune old recordings
+
+When session recordings reach the configured `retention_days` threshold (default: 90 days), `bssh` automatically deletes the expired `.cast` files and clears their entries from the database and FTS5 search index.
+
+Pruning occurs automatically:
+
+- When an SSH session finishes.
+- When running `bssh close --cleanup`.
+
+```sh
+bssh close --cleanup
+```
+
+```text
+🗑️  Pruned 3 expired recording(s) (older than 90 days)
+```
+
+To retain recordings indefinitely, set `"retention_days": 0` in your `config.json`.
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Session history" description="Filter history, check exit codes, and inspect statistics." href="/guides/sessions/" />
+	<LinkCard title="Configuration reference" description="Review all available recording settings in config.json." href="/reference/configuration/" />
+</CardGrid>

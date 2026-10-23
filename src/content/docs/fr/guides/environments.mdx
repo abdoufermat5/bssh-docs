@@ -1,0 +1,136 @@
+---
+title: Environnements
+description: Isolez vos connexions, votre historique et vos paramètres dans des profils indépendants.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Les environnements vous permettent de gérer plusieurs profils isolés au sein de `bssh`. Chaque environnement conserve sa propre base de données indépendante pour les connexions, les tags, les alias, l'historique des sessions et la configuration par défaut.
+
+## Ce qui est isolé
+
+Chaque environnement est stocké dans son propre répertoire sous `~/.config/bayesian-ssh/environments/<nom>/` :
+
+- **`history.db`** : Une base de données SQLite indépendante contenant :
+  - Les connexions enregistrées et les identifiants
+  - Les tags et les groupes
+  - Les alias courts
+  - L'historique et la durée des sessions passées
+  - Les sources d'inventaire configurées
+- **`config.json`** : Les paramètres spécifiques au profil, comprenant :
+  - L'utilisateur SSH et le port par défaut
+  - Le bastion et l'utilisateur du bastion par défaut
+  - Le mode de recherche (`bayesian` ou `fuzzy`)
+  - Les préférences d'enregistrement de session
+  - Les réglages de prédiction contextuelle
+
+L'environnement initial intégré se nomme `default`. Votre environnement actif est suivi dans le fichier `~/.config/bayesian-ssh/active_env`.
+
+## Gérer les environnements
+
+### Lister les environnements
+
+Exécutez `bssh env list` pour afficher tous les environnements disponibles. Le profil actif est signalé par un astérisque :
+
+```sh
+bssh env list
+```
+
+```text
+Environments:
+    client-a
+  * default (active)
+```
+
+### Créer un environnement
+
+Exécutez `bssh env create` avec un nom unique pour initialiser un nouveau profil :
+
+```sh
+bssh env create client-a
+```
+
+```text
+✅ Created new environment 'client-a'
+To start using it, run: bayesian-ssh env use client-a
+```
+
+La création d'un environnement génère une base de données `history.db` vierge et un fichier `config.json` pré-rempli avec les réglages par défaut.
+
+### Changer d'environnement
+
+Exécutez `bssh env use` pour basculer vers un autre profil actif :
+
+```sh
+bssh env use client-a
+```
+
+```text
+✅ Now using environment 'client-a'
+```
+
+Une fois le changement effectué, toutes les commandes `bssh` suivantes s'appliquent à la base de données de l'environnement sélectionné jusqu'au prochain changement.
+
+### Supprimer un environnement
+
+Exécutez `bssh env remove` pour supprimer un environnement et sa base de données associée :
+
+```sh
+bssh env remove client-a
+```
+
+```text
+🗑️ Removed environment 'client-a'
+```
+
+`bssh` applique des règles de sécurité lors de la suppression :
+- Vous ne pouvez pas supprimer l'environnement en cours d'utilisation. Basculez d'abord vers un autre environnement.
+- Vous ne pouvez pas supprimer l'environnement intégré `default`.
+
+:::caution
+La suppression d'un environnement efface définitivement son répertoire, sa base de données SQLite, ses connexions et tout son historique de session.
+:::
+
+## Support dans l'application de bureau
+
+<Tabs syncKey="surface">
+  <TabItem label="Ligne de commande">
+    ```sh
+    # Changer de profil depuis le terminal
+    bssh env use client-a
+    ```
+  </TabItem>
+  <TabItem label="Application de bureau">
+    Dans l'application de bureau, cliquez sur le sélecteur de profil en haut de la barre latérale pour basculer d'un profil à l'autre, ou choisissez **Manage profiles…** pour ajouter ou supprimer des profils.
+  </TabItem>
+</Tabs>
+
+## Remplacement ponctuel par commande
+
+Pour exécuter une seule commande dans un autre environnement sans modifier votre profil actif persistant, utilisez l'option `--env` :
+
+```sh
+# Lister les connexions dans l'environnement client-b
+bssh --env client-b list
+
+# Se connecter à un hôte enregistré dans client-b
+bssh --env client-b connect db-prod
+
+# Tester l'accessibilité des hôtes dans client-b
+bssh --env client-b ping --all
+```
+
+L'option `--env` s'applique exclusivement à cette exécution. Votre environnement actif demeure inchangé.
+
+## Cas d'usage courants
+
+- **Séparation par client** : Les consultants et agences peuvent maintenir des environnements distincts pour chaque client (`client-acme`, `client-beta`). Les connexions, les routes de bastion et les alias ne se mélangent jamais et n'apparaissent pas dans les recherches d'un autre client.
+- **Vie professionnelle et personnelle** : Isolez complètement vos serveurs personnels et projets personnels des infrastructures de production de votre entreprise.
+- **Conformité et audits** : Configurez un enregistrement strict des sessions et des bastions obligatoires dans un environnement de `production`, tout en conservant un environnement de test (`sandbox`) sans contrainte.
+
+## Prochaines étapes
+
+<CardGrid>
+  <LinkCard title="Connexions" description="Enregistrez et gérez vos entrées d'hôtes SSH." href="/fr/guides/connections/" />
+  <LinkCard title="Référence de configuration" description="Consultez chaque paramètre et chemin de fichier." href="/fr/reference/configuration/" />
+</CardGrid>

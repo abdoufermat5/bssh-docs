@@ -1,0 +1,123 @@
+---
+title: Set up Teams
+description: Set up bssh Teams on a machine, create a team, and share your first connection.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+bssh Teams shares connections with the people on your team. Each device keeps its own keys, the team's connections are encrypted on your devices before they are synced, and the sync server stores only ciphertext and metadata. Set Teams up once per machine.
+
+Teams needs a sync server. On the hosted service, the URL is in your invite if you were invited. If you create the team instead, the operator registers you and the URL comes with your onboarding. A self-hosted server's URL comes from its operator.
+
+## Set up this machine
+
+<Tabs syncKey="surface">
+<TabItem label="Command line">
+
+```sh
+bssh teams init --server https://teams.example.com --email you@example.com
+```
+
+bssh asks you to choose a passphrase, then creates your account and this device's keys.
+
+- `--invite <TOKEN>` creates the account on a server that only accepts invited accounts. The token is in your invite.
+- `--device-name <NAME>` names this device for team admins. The default is the machine's hostname.
+
+The passphrase encrypts this device's Teams keys. It never leaves the machine, nobody can reset it, and it needs at least 8 characters. If you forget it, the keys on this device stay locked; there is no recovery. An admin grants the team key to a new device instead.
+
+Commands that use this device's keys ask for the passphrase. In scripts, set `BSSH_TEAMS_PASSPHRASE` instead.
+
+</TabItem>
+<TabItem label="Desktop app">
+
+Open **Teams** in the sidebar. The setup screen asks for the sync server, your email, a device name and a passphrase.
+
+If you have an invite, paste the whole message in **Got an invite? Paste it here (optional)**. It fills in the server and your email, and you finish joining after setup. Otherwise, fill in the fields and choose **Set up this device**.
+
+</TabItem>
+</Tabs>
+
+## Check this device
+
+```sh
+bssh teams whoami
+```
+
+It prints your account, the server, this device's id and its fingerprint. The fingerprint identifies this device's key to your team's admins; you send it to them when they grant you a team key. In the desktop app, the same fingerprint is in the device panel at the top of **Teams**, with a **Copy** button.
+
+## Create a team
+
+<Tabs syncKey="surface">
+<TabItem label="Command line">
+
+```sh
+bssh teams create platform
+```
+
+You become the team's admin. The team is also a source in `bssh list`: its connections appear there like your own, with `platform` as their source.
+
+</TabItem>
+<TabItem label="Desktop app">
+
+Choose **Create team** in the Teams page header, enter a name and choose **Create team**. You become its admin.
+
+</TabItem>
+</Tabs>
+
+## Share a connection
+
+<Tabs syncKey="surface">
+<TabItem label="Command line">
+
+```sh
+bssh teams share db-prod --team platform
+```
+
+A shared connection carries its host, user, port, bastion (with its user), Kerberos setting and tags. It never carries key paths or passwords: each member connects with their own keys. Everyone in the team sees the connection after their next sync, and connecting to it is recorded in the team's audit log.
+
+On your machine, the team's copy is listed as `db-prod@platform` next to your own `db-prod`.
+
+</TabItem>
+<TabItem label="Desktop app">
+
+In the **Hosts** view, open a host's menu and choose **Share with a team…**, or press <kbd>S</kbd> on the selected host. Choose the team, check the fields that are shared and choose **Share with platform**. The dialog lists them: host, user, port, bastion, Kerberos and tags.
+
+You can also share from the team page: open the team, go to **Hosts**, pick a host under **Share a host with platform** and choose **Share**.
+
+</TabItem>
+</Tabs>
+
+## Change a shared connection
+
+Edit the team's copy, then share it again before the next sync. A sync would otherwise restore the vault's version:
+
+```sh
+bssh edit db-prod@platform --user deploy
+bssh teams share db-prod@platform --team platform
+```
+
+In the desktop app, edit the host and choose **Update in platform** in its menu.
+
+## Remove a shared connection
+
+```sh
+bssh teams unshare db-prod@platform
+```
+
+bssh asks for confirmation. The connection is deleted from the team vault for everyone, at their next sync; the server keeps its history. If the server cannot be reached, the removal is queued for the next sync. In the desktop app, open the team's **Hosts** tab, choose **Unshare** next to the connection, then **Remove for everyone**.
+
+:::caution
+The server keeps the entry's history, and a member who has not synced yet still sees the connection until they do.
+:::
+
+## Unlock and lock
+
+On the command line, commands that use this device's keys ask for the passphrase, or read `BSSH_TEAMS_PASSPHRASE`.
+
+The desktop app asks for it the first time you open **Teams** after starting the app. The keys stay unlocked in memory until you choose **Lock** in the Teams header or quit. Team hosts still connect while Teams is locked; their session events are signed and uploaded at the next sync after you unlock.
+
+## Next steps
+
+- [Invite your team](/teams/members/) and grant each device the key.
+- [Sync](/teams/sync/) and see how offline edits and conflicts are handled.
+- [Plans and billing](/teams/plans-and-billing/) for seats and the subscription.

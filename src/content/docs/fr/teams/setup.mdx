@@ -1,0 +1,123 @@
+---
+title: Configurer Teams
+description: Configurer bssh Teams sur une machine, créer une équipe et partager votre première connexion.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+bssh Teams partage des connexions avec les personnes de votre équipe. Chaque appareil garde ses propres clés, les connexions de l'équipe sont chiffrées sur vos appareils avant d'être synchronisées, et le serveur de synchronisation ne stocke que du texte chiffré et des métadonnées. Configurez Teams une fois par machine.
+
+Teams a besoin d'un serveur de synchronisation. Sur le service hébergé, l'URL figure dans votre invitation si vous avez été invité. Si vous créez l'équipe, l'opérateur vous enregistre et l'URL vous est fournie lors de la prise en main. L'URL d'un serveur auto-hébergé vous est donnée par son opérateur.
+
+## Configurer cette machine
+
+<Tabs syncKey="surface">
+<TabItem label="Ligne de commande">
+
+```sh
+bssh teams init --server https://teams.example.com --email you@example.com
+```
+
+bssh vous demande de choisir une phrase secrète, puis crée votre compte et les clés de cet appareil.
+
+- `--invite <TOKEN>` crée le compte sur un serveur qui n'accepte que les comptes invités. Le jeton se trouve dans votre invitation.
+- `--device-name <NAME>` nomme cet appareil pour les administrateurs de l'équipe. Par défaut, c'est le nom d'hôte de la machine.
+
+La phrase secrète chiffre les clés Teams de cet appareil. Elle ne quitte jamais la machine, personne ne peut la réinitialiser, et elle doit compter au moins 8 caractères. Si vous l'oubliez, les clés de cet appareil restent verrouillées ; il n'y a pas de récupération. Un administrateur accorde la clé d'équipe à un nouvel appareil à la place.
+
+Les commandes qui utilisent les clés de cet appareil demandent la phrase secrète. Dans les scripts, définissez `BSSH_TEAMS_PASSPHRASE` à la place.
+
+</TabItem>
+<TabItem label="Application de bureau">
+
+Ouvrez **Teams** dans la barre latérale. L'écran de configuration demande le serveur de synchronisation, votre e-mail, un nom d'appareil et une phrase secrète.
+
+Si vous avez une invitation, collez le message entier dans **Got an invite? Paste it here (optional)**. Il remplit le serveur et votre e-mail, et vous terminez l'adhésion après la configuration. Sinon, remplissez les champs et choisissez **Set up this device**.
+
+</TabItem>
+</Tabs>
+
+## Vérifier cet appareil
+
+```sh
+bssh teams whoami
+```
+
+La commande affiche votre compte, le serveur, l'identifiant de cet appareil et son empreinte. L'empreinte identifie la clé de cet appareil auprès des administrateurs de votre équipe ; vous la leur envoyez lorsqu'ils vous accordent une clé d'équipe. Dans l'application de bureau, la même empreinte se trouve dans le panneau de l'appareil en haut de **Teams**, avec un bouton **Copy**.
+
+## Créer une équipe
+
+<Tabs syncKey="surface">
+<TabItem label="Ligne de commande">
+
+```sh
+bssh teams create platform
+```
+
+Vous devenez administrateur de l'équipe. L'équipe est aussi une source dans `bssh list` : ses connexions y apparaissent comme les vôtres, avec `platform` comme source.
+
+</TabItem>
+<TabItem label="Application de bureau">
+
+Choisissez **Create team** dans l'en-tête de la page Teams, saisissez un nom et choisissez **Create team**. Vous en devenez administrateur.
+
+</TabItem>
+</Tabs>
+
+## Partager une connexion
+
+<Tabs syncKey="surface">
+<TabItem label="Ligne de commande">
+
+```sh
+bssh teams share db-prod --team platform
+```
+
+Une connexion partagée contient son hôte, son utilisateur, son port, son bastion (avec son utilisateur), son réglage Kerberos et ses tags. Elle ne contient jamais les chemins des clés ni les mots de passe : chaque membre se connecte avec ses propres clés. Tous les membres voient la connexion après leur prochaine synchronisation, et chaque connexion à cet hôte est enregistrée dans le journal d'audit de l'équipe.
+
+Sur votre machine, la copie de l'équipe figure comme `db-prod@platform` à côté de votre propre `db-prod`.
+
+</TabItem>
+<TabItem label="Application de bureau">
+
+Dans la vue **Hosts**, ouvrez le menu d'un hôte et choisissez **Share with a team…**, ou appuyez sur <kbd>S</kbd> sur l'hôte sélectionné. Choisissez l'équipe, vérifiez les champs partagés et choisissez **Share with platform**. La boîte de dialogue les liste : hôte, utilisateur, port, bastion, Kerberos et tags.
+
+Vous pouvez aussi partager depuis la page de l'équipe : ouvrez l'équipe, allez dans **Hosts**, choisissez un hôte sous **Share a host with platform** et choisissez **Share**.
+
+</TabItem>
+</Tabs>
+
+## Modifier une connexion partagée
+
+Modifiez la copie de l'équipe, puis partagez-la à nouveau avant la prochaine synchronisation. Sinon, une synchronisation rétablit la version du coffre :
+
+```sh
+bssh edit db-prod@platform --user deploy
+bssh teams share db-prod@platform --team platform
+```
+
+Dans l'application de bureau, modifiez l'hôte et choisissez **Update in platform** dans son menu.
+
+## Retirer une connexion partagée
+
+```sh
+bssh teams unshare db-prod@platform
+```
+
+bssh demande confirmation. La connexion est supprimée du coffre de l'équipe pour tous les membres, lors de leur prochaine synchronisation ; le serveur garde son historique. Si le serveur est injoignable, la suppression est mise en file pour la prochaine synchronisation. Dans l'application de bureau, ouvrez l'onglet **Hosts** de l'équipe, choisissez **Unshare** à côté de la connexion, puis **Remove for everyone**.
+
+:::caution
+Le serveur garde l'historique de l'entrée, et un membre qui n'a pas encore synchronisé voit toujours la connexion jusqu'à ce qu'il le fasse.
+:::
+
+## Déverrouiller et verrouiller
+
+En ligne de commande, les commandes qui utilisent les clés de cet appareil demandent la phrase secrète, ou lisent `BSSH_TEAMS_PASSPHRASE`.
+
+L'application de bureau la demande la première fois que vous ouvrez **Teams** après avoir démarré l'application. Les clés restent déverrouillées en mémoire jusqu'à ce que vous choisissiez **Lock** dans l'en-tête Teams ou que vous quittiez. Les hôtes de l'équipe se connectent encore lorsque Teams est verrouillé ; leurs événements de session sont signés et téléversés à la prochaine synchronisation après le déverrouillage.
+
+## Étapes suivantes
+
+- [Invitez votre équipe](/fr/teams/members/) et accordez la clé à chaque appareil.
+- [Synchronisez](/fr/teams/sync/) et voyez comment les modifications hors ligne et les conflits sont traités.
+- [Formules et facturation](/fr/teams/plans-and-billing/) pour les sièges et l'abonnement.

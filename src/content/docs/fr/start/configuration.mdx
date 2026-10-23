@@ -1,0 +1,82 @@
+---
+title: Configuration
+description: Configurez les utilisateurs, ports, bastions et paramètres Kerberos par défaut pour vos connexions SSH.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH propose des réglages par défaut adaptés dès l'installation. Vous pouvez personnaliser les paramètres globaux tels que l'utilisateur par défaut, le port par défaut, les hôtes de rebond et les méthodes d'authentification grâce à la commande `bssh config`.
+
+## Afficher les paramètres actuels
+
+Exécutez `bssh config` sans argument pour afficher votre configuration active :
+
+```sh
+bssh config
+```
+
+La sortie affiche les réglages actuels : utilisateur par défaut, bastion, utilisateur du bastion, port, Kerberos par défaut, niveau de journalisation, mode de recherche, enregistrement des sessions, prédiction et capture du répertoire courant.
+
+## Définir les valeurs par défaut
+
+Modifiez un ou plusieurs paramètres en passant les options correspondantes à `bssh config` :
+
+```sh
+bssh config --default-user deploy --default-port 2222
+```
+
+Lorsque vous ajoutez une nouvelle connexion avec `bssh add`, omettre `--user` ou `--port` appliquera ces valeurs par défaut configurées.
+
+## Configurer un bastion par défaut
+
+Si votre infrastructure achemine les connexions à travers un hôte de rebond central, configurez un bastion par défaut :
+
+```sh
+bssh config --default-bastion bastion.example.com --default-bastion-user jump
+```
+
+Les nouvelles connexions créées avec `bssh add` passeront par ce bastion par défaut. Pour créer une connexion directe qui contourne le bastion par défaut, passez `--no-bastion` lors de l'ajout de l'hôte :
+
+```sh
+bssh add web-direct 192.168.1.50 --no-bastion
+```
+
+Pour supprimer le bastion par défaut et router les nouvelles connexions en direct :
+
+```sh
+bssh config --clear-bastion
+```
+
+## Authentification Kerberos
+
+Si votre réseau utilise des tickets Kerberos ou GSSAPI (comme avec FreeIPA ou Active Directory), activez Kerberos par défaut :
+
+```sh
+bssh config --use-kerberos true
+```
+
+Les nouvelles connexions tenteront automatiquement de s'authentifier avec Kerberos. Pour le désactiver par défaut, exécutez `bssh config --use-kerberos false`.
+
+## Mode de recherche
+
+Bayesian SSH prend en charge deux modes de classement pour la recherche :
+
+```sh
+bssh config --search-mode bayesian
+```
+
+- `bayesian` : Combine la qualité de correspondance avec la fréquence et la date de vos connexions. Il s'agit du mode par défaut.
+- `fuzzy` : Recherche de sous-chaînes standard sans pondération par l'historique.
+
+## Fichier de configuration
+
+La configuration est stockée par environnement dans `~/.config/bayesian-ssh/environments/<env>/config.json` (soit `~/.config/bayesian-ssh/environments/default/config.json` pour l'environnement par défaut). Pour connaître les variables d'environnement, les chemins de stockage et la liste exhaustive de tous les paramètres, consultez la [référence de configuration](/fr/reference/configuration/).
+
+## Pour continuer
+
+<CardGrid>
+	<LinkCard title="Démarrage rapide" description="Ajoutez un hôte et connectez-vous en deux minutes." href="/fr/start/quick-start/" />
+	<LinkCard title="Hôtes bastions" description="Configurer les hôtes de rebond, le chaînage et les bastions interactifs." href="/fr/guides/bastions/" />
+	<LinkCard title="Authentification" description="Gérer les clés SSH, ssh-agent et Kerberos." href="/fr/guides/authentication/" />
+	<LinkCard title="Référence de configuration" description="Référence complète de tous les paramètres, fichiers et variables d'environnement." href="/fr/reference/configuration/" />
+</CardGrid>

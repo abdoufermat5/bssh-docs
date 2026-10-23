@@ -1,0 +1,115 @@
+---
+title: Aplicación de escritorio
+description: Gestiona hosts, abre terminales, explora archivos y configura ajustes en la aplicación de escritorio de Bayesian SSH.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+Bayesian SSH ofrece una aplicación de escritorio pensada para el teclado junto con la herramienta de línea de comandos. Ambas comparten la misma base de datos local SQLite, configuración y perfiles de entorno.
+
+## Iniciar la aplicación
+
+Abre la interfaz de escritorio desde el menú de aplicaciones del sistema o ejecútala desde una terminal:
+
+```sh
+bssh desktop
+```
+
+El comando inicia `bayesian-ssh-desktop` en segundo plano, desacoplado de tu sesión de terminal. También puedes ejecutar el binario directamente:
+
+```sh
+bayesian-ssh-desktop
+```
+
+Para iniciar la aplicación de escritorio con un perfil de entorno específico, añade el parámetro `--env`:
+
+```sh
+bssh desktop --env staging
+```
+
+## Estructura de la interfaz
+
+La barra lateral organiza tu flujo de trabajo en vistas dedicadas:
+
+![La lista de hosts de la aplicación de escritorio mostrando las conexiones guardadas, etiquetas y acciones rápidas](../../../../assets/screenshots/app-hosts.png)
+
+- **Hosts**: Visualiza, filtra y busca conexiones guardadas. Consulta clasificaciones, estado de conexión, etiquetas y acciones rápidas.
+- **Terminals**: Emulador de terminal integrado con soporte para múltiples pestañas. Conéctate a varios hosts en paralelo, cambia o reordena pestañas y busca texto en la salida de la terminal.
+- **Files**: Gestor de archivos SFTP para explorar directorios remotos, subir y descargar archivos. Puedes habilitar o deshabilitar esta vista en la configuración.
+- **Keys**: Inspecciona claves SSH locales, genera nuevos pares de claves y consulta las claves activas en tu agente SSH.
+- **Security check**: Ejecuta auditorías de seguridad directamente desde la interfaz (`bssh audit`) para detectar algoritmos obsoletos, claves ausentes o permisos no seguros.
+- **History**: Revisa el historial de sesiones de conexión anteriores y sus marcas temporales.
+- **Teams**: Gestiona conexiones de equipo, invitaciones a miembros, aprobación de dispositivos y registros de auditoría verificados.
+- **Settings**: Ajusta las preferencias de la aplicación, apariencia, fuentes de terminal, actualizaciones y perfiles de entorno.
+
+<Aside type="note">
+El reenvío de puertos local y los proxies SOCKS se gestionan desde la línea de comandos con `bssh forward` (o `bssh tunnel`). Consulta la [guía de túneles](/es/guides/tunnels/) para conocer las opciones de reenvío.
+</Aside>
+
+## Paleta de comandos y atajos de teclado
+
+Abre la paleta de comandos desde cualquier lugar pulsando <kbd>Ctrl</kbd>+<kbd>K</kbd> (o <kbd>⌘</kbd><kbd>K</kbd> en macOS).
+
+Dentro de una pestaña de terminal activa en Linux o Windows, pulsa <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (<kbd>⌘</kbd><kbd>K</kbd> en macOS) para abrir la paleta sin interferir con las combinaciones de teclas de la shell.
+
+![Búsqueda de acciones y verbos de host en la paleta de comandos](../../../../assets/screenshots/app-palette.png)
+
+La paleta de comandos te permite buscar hosts, cambiar de vista, editar conexiones, explorar archivos y ejecutar acciones. Pulsa <kbd>?</kbd>, <kbd>F1</kbd> o <kbd>Ctrl</kbd>+<kbd>/</kbd> (<kbd>⌘</kbd><kbd>/</kbd> en macOS) para abrir la hoja completa de atajos de teclado.
+
+### Atajos habituales
+
+| Acción | Linux / Windows | macOS | Contexto |
+| --- | --- | --- | --- |
+| Paleta de comandos | <kbd>Ctrl</kbd>+<kbd>K</kbd> | <kbd>⌘</kbd><kbd>K</kbd> | En cualquier lugar |
+| Paleta de comandos en terminal | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> | <kbd>⌘</kbd><kbd>K</kbd> | Terminal |
+| Ajustes | <kbd>Ctrl</kbd>+<kbd>,</kbd> | <kbd>⌘</kbd><kbd>,</kbd> | En cualquier lugar |
+| Hoja de atajos de teclado | <kbd>?</kbd> / <kbd>F1</kbd> / <kbd>Ctrl</kbd>+<kbd>/</kbd> | <kbd>?</kbd> / <kbd>F1</kbd> / <kbd>⌘</kbd><kbd>/</kbd> | En cualquier lugar |
+| Filtrar o buscar | <kbd>/</kbd> | <kbd>/</kbd> | Global |
+| Cambiar de vista por número (<kbd>1</kbd>–<kbd>7</kbd>) | <kbd>1</kbd> a <kbd>7</kbd> | <kbd>1</kbd> a <kbd>7</kbd> | Global |
+| Nuevo host | <kbd>N</kbd> o <kbd>Ctrl</kbd>+<kbd>N</kbd> | <kbd>N</kbd> o <kbd>⌘</kbd><kbd>N</kbd> | Global |
+| Conectar al host seleccionado | <kbd>Enter</kbd> | <kbd>Enter</kbd> | Hosts |
+| Conectar en una nueva pestaña | <kbd>Shift</kbd>+<kbd>Enter</kbd> | <kbd>Shift</kbd>+<kbd>Enter</kbd> | Hosts |
+| Explorar archivos | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | <kbd>⌘</kbd><kbd>Enter</kbd> | Hosts |
+| Editar host | <kbd>E</kbd> | <kbd>E</kbd> | Hosts |
+| Compartir con un equipo | <kbd>S</kbd> | <kbd>S</kbd> | Hosts |
+| Copiar comando ssh | <kbd>C</kbd> | <kbd>C</kbd> | Hosts |
+| Eliminar host | <kbd>Delete</kbd> | <kbd>Delete</kbd> | Hosts |
+| Mover selección | <kbd>↑</kbd> / <kbd>↓</kbd> o <kbd>J</kbd> / <kbd>K</kbd> | <kbd>↑</kbd> / <kbd>↓</kbd> o <kbd>J</kbd> / <kbd>K</kbd> | Hosts |
+| Siguiente pestaña de terminal | <kbd>Ctrl</kbd>+<kbd>Tab</kbd> | <kbd>Ctrl</kbd>+<kbd>Tab</kbd> | Terminal |
+| Pestaña de terminal anterior | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> | Terminal |
+| Cerrar pestaña de terminal | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd> | <kbd>⌘</kbd><kbd>W</kbd> | Terminal |
+| Reabrir pestaña cerrada | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> | <kbd>⌘</kbd><kbd>T</kbd> | Terminal |
+| Buscar en el búfer del terminal | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> | <kbd>⌘</kbd><kbd>F</kbd> | Terminal |
+| Zoom acercar / alejar / restablecer | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>=</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | <kbd>⌘</kbd><kbd>=</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | Terminal |
+| Cancelar conexión en curso | <kbd>Esc</kbd> | <kbd>Esc</kbd> | Terminal |
+
+## Temas y densidad
+
+Configura las opciones de apariencia en **Settings** → **Appearance**:
+
+![Ajustes de apariencia mostrando las opciones de tema y densidad](../../../../assets/screenshots/app-settings-appearance.png)
+
+### Temas
+
+- **Dark**: Tema oscuro de alto contraste diseñado para entornos de poca luz.
+- **Light**: Esquema de colores claros y limpios.
+- **Match system**: Cambia automáticamente entre tema oscuro y claro según la configuración de tu sistema operativo.
+
+### Densidad de filas
+
+La densidad controla el espaciado vertical de las filas en toda la aplicación:
+
+- **Compact**: Filas de 32 px. Maximiza la cantidad de elementos visibles en listas extensas.
+- **Comfortable**: Filas de 40 px. Espaciado equilibrado para el uso diario (predeterminado).
+- **Spacious**: Filas de 48 px. Espaciado amplio pensado para pantallas táctiles y de alta resolución.
+
+## Actualizaciones de software
+
+Abre **Settings** → **Updates** para comprobar la versión instalada y buscar actualizaciones. El proceso varía según cómo hayas instalado la aplicación:
+
+- **Paquete Snap**: Las actualizaciones se realizan automáticamente en segundo plano a través de Snap Store. Puedes ejecutar una actualización manual con:
+  ```sh
+  sudo snap refresh bayesian-ssh
+  ```
+- **Instalación manual**: Si instalaste mediante `install.sh` o el gestor de paquetes de tu sistema, actualiza volviendo a ejecutar el instalador o mediante dicho gestor de paquetes.
+- **Binario directo de GitHub**: Haz clic en **Check for updates** para consultar si hay una nueva versión firmada en GitHub. Cuando haya una actualización disponible, haz clic en **Install update** para descargarla y aplicarla. La aplicación solicitará confirmación si hay sesiones de terminal activas.

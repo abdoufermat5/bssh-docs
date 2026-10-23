@@ -1,0 +1,82 @@
+---
+title: 配置
+description: 为你的 SSH 连接配置默认用户名、端口、跳板机以及 Kerberos 设置。
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH 开箱即提供了合理的默认配置。你可以使用 `bssh config` 命令自定义全局设置，例如默认用户、默认端口、跳板机以及认证方式。
+
+## 查看当前配置
+
+直接运行 `bssh config`（不带任何参数）即可打印当前生效的配置：
+
+```sh
+bssh config
+```
+
+输出内容显示当前各项设置：默认用户、跳板机、跳板机用户、端口、默认 Kerberos 状态、日志级别、搜索模式、会话录制、预测开关以及工作目录捕获。
+
+## 设置默认值
+
+通过向 `bssh config` 传递对应参数来修改一项或多项配置：
+
+```sh
+bssh config --default-user deploy --default-port 2222
+```
+
+后续使用 `bssh add` 添加新连接时，若省略 `--user` 或 `--port`，系统将自动采用这些配置好的默认值。
+
+## 配置默认跳板机
+
+如果你的网络环境要求所有 SSH 连接均经过一台统一的跳板机，可设置默认跳板机：
+
+```sh
+bssh config --default-bastion bastion.example.com --default-bastion-user jump
+```
+
+使用 `bssh add` 创建的新连接都会默认通过该跳板机路由。如果某台主机需要直连并跳过默认跳板机，添加时传递 `--no-bastion` 即可：
+
+```sh
+bssh add web-direct 192.168.1.50 --no-bastion
+```
+
+若要移除默认跳板机设置，恢复新连接直接访问：
+
+```sh
+bssh config --clear-bastion
+```
+
+## Kerberos 认证
+
+如果你的网络依赖 Kerberos 或 GSSAPI 票据（如使用 FreeIPA 或 Active Directory 域环境），可默认启用 Kerberos：
+
+```sh
+bssh config --use-kerberos true
+```
+
+新建连接将自动尝试使用 Kerberos 认证。如需默认关闭，执行 `bssh config --use-kerberos false`。
+
+## 搜索模式
+
+Bayesian SSH 支持两种搜索排序模式：
+
+```sh
+bssh config --search-mode bayesian
+```
+
+- `bayesian`：综合匹配质量、使用频率和最近使用时间进行智能排序。此为默认模式。
+- `fuzzy`：标准子字符串匹配，不包含历史记录权重。
+
+## 配置文件
+
+配置文件按环境隔离存储在 `~/.config/bayesian-ssh/environments/<env>/config.json` 中（默认环境对应路径为 `~/.config/bayesian-ssh/environments/default/config.json`）。有关环境变量、文件存储路径以及所有配置项的完整说明，请参阅[配置参考](/zh-cn/reference/configuration/)。
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="快速开始" description="两分钟内添加主机并完成连接。" href="/zh-cn/start/quick-start/" />
+	<LinkCard title="跳板机" description="配置跳板机、多级跳板链与交互式堡垒机。" href="/zh-cn/guides/bastions/" />
+	<LinkCard title="认证" description="管理 SSH 密钥、ssh-agent 与 Kerberos。" href="/zh-cn/guides/authentication/" />
+	<LinkCard title="配置参考" description="所有配置选项、数据文件和环境变量的完整参考。" href="/zh-cn/reference/configuration/" />
+</CardGrid>

@@ -1,0 +1,155 @@
+---
+title: Búsqueda y clasificación
+description: Cómo Bayesian SSH localiza hosts, aprende de tus hábitos y clasifica tus conexiones.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Cuando ejecutas `bssh connect <consulta>` o buscas en la aplicación de escritorio, `bssh` compara tus términos con nombres, nombres de host y etiquetas, clasificando los candidatos mediante un modelo bayesiano. No necesitas memorizar nombres de host exactos: `bssh` sitúa en primer lugar el host que buscas basándose en cómo y cuándo trabajas.
+
+## Cómo funciona la búsqueda
+
+`bssh` aplica simultáneamente varias estrategias de coincidencia:
+
+- **Búsqueda por subcadena**: Busca en nombres de conexión y nombres de host sin distinguir mayúsculas de minúsculas. Por ejemplo, `prod` coincide con `web-prod` y con `db.prod.example.com`.
+- **Separadores ignorados**: Los guiones (`-`), guiones bajos (`_`) y puntos (`.`) se eliminan tanto de la consulta como del nombre de conexión. Escribir `webprod` coincide con `web-prod` y `web_prod`.
+- **Consultas con múltiples palabras**: Las palabras separadas por espacios coinciden si cada término aparece en el nombre de la conexión. Escribir `web prod` coincide con `web-backend-prod`.
+- **Búsqueda por acrónimo**: Cuando la consulta contiene dos o más letras, `bssh` analiza las iniciales de las palabras separadas por guiones, guiones bajos o espacios. Escribir `wp` coincide con `web-prod` o `web-prod-server`.
+- **Prefijos alfanuméricos**: Comprueba si los caracteres alfanuméricos del nombre del host comienzan con tu texto de consulta.
+
+### Consultas por etiqueta
+
+Para buscar exclusivamente dentro de las etiquetas, añade el prefijo `tag:` o `@` a tu consulta:
+
+```sh
+# Coincidir solo con conexiones con la etiqueta prod
+bssh connect tag:prod
+
+# Variante con el prefijo @
+bssh connect @staging
+```
+
+Las búsquedas habituales también revisan etiquetas, pero una consulta explícita limita el filtrado a la base de datos de etiquetas, omitiendo nombres de host y de conexión.
+
+## Clasificación bayesiana
+
+Las conexiones guardadas se clasifican de forma probabilística en lugar de utilizar ponderaciones estáticas:
+
+```text
+score = prior × likelihood × recency × success × context_factor
+```
+
+Cada factor evalúa un aspecto específico de tu historial de uso:
+
+- **A priori de frecuencia (prior)**: Mide con qué frecuencia te conectas a este host respecto al conjunto de hosts guardados. Se calcula con suavizado de Laplace para mantener localizables las conexiones nuevas:
+  ```text
+  prior = (sessions + 1) / (total_connections + 10)
+  ```
+- **Calidad de coincidencia (likelihood)**: Mide la precisión de la consulta. Las coincidencias exactas obtienen `1.0`, los prefijos de nombre `0.9`, las palabras completas `0.85`, los prefijos de palabras `0.75`, las subcadenas `0.6`, las coincidencias sin separadores `0.5`, las etiquetas `0.45`, los nombres de host `0.4`, los acrónimos `0.35` y las coincidencias de reserva `0.1`.
+- **Recencia (recency)**: Aplica una disminución exponencial según las horas transcurridas desde la última conexión:
+  ```text
+  recency = max(0.1, exp(-0.005 × hours_since_used))
+  ```
+  Los hosts que nunca se han utilizado reciben una puntuación de recencia predeterminada de `0.3`.
+- **Tasa de éxito (success)**: Se escala entre `0.5` y `1.0` en función del porcentaje de sesiones finalizadas correctamente (código de salida `0` o `NULL`):
+  ```text
+  success = 0.5 + 0.5 × (successes / total_sessions)
+  ```
+
+## Conexión predictiva y contexto
+
+Al iniciar una sesión SSH, `bssh` captura el contexto local sin recurrir a servicios en segundo plano:
+
+- **Repositorio Git y directorio de trabajo** (`git_root`): Se detecta navegando por los directorios superiores desde tu terminal.
+- **Hora local** (`hour`): La hora local del día (`0–23`), comparada con sus horas vecinas de forma circular (`±1` hora, de modo que `23`, `0` y `1` son adyacentes).
+- **Conexión previa** (`prev_connection_id`): El host al que te conectaste en los últimos 30 minutos.
+
+A lo largo de una ventana móvil de 180 días (`window_days`), `bssh` calcula la razón de verosimilitud suavizada para cada característica de contexto activa:
+
+```text
+lr = ((feature_hits + 1) / (connection_window_sessions + 2)) / ((global_feature_hits + 1) / (global_window_sessions + 2))
+```
+
+Una característica de contexto solo se aplica si se ha registrado al menos 3 veces en el total de sesiones (`N ≥ 3`). El factor resultante `context_factor` se acota entre `0.25` y `8.0`.
+
+## Conexión rápida
+
+Ejecutar `bssh` sin argumentos inicia la conexión predictiva rápida. Examina tu contexto actual y muestra las 3 conexiones más probables, detallando la razón principal por la que se sugiere cada host:
+
+```sh
+bssh
+```
+
+```text
+Suggested connections
+ 1. web-prod      deploy@web1.example.com   · 12/15 of your sessions from ~/work/billing
+ 2. db-prod       postgres@db1              · usually opened right after web-prod
+ 3. bastion-eu    admin@bastion             · used often around 09:00
+Enter = 1 · number · text to search · q to quit:
+```
+
+- Presiona <kbd>Enter</kbd> para conectarte de inmediato a la opción `#1`.
+- Presiona <kbd>1</kbd>, <kbd>2</kbd> o <kbd>3</kbd> para elegir una sugerencia.
+- Escribe cualquier término para realizar una búsqueda interactiva entre tus conexiones.
+- Presiona <kbd>q</kbd> o <kbd>Ctrl</kbd>+<kbd>D</kbd> para salir.
+
+## Inspeccionar puntuaciones con bssh why
+
+Ejecuta `bssh why` para consultar el desglose exacto de factores y la clasificación de una conexión en tu contexto actual:
+
+```sh
+bssh why web-prod
+```
+
+```text
+web-prod — score 3.42 (rank 1 of 37 in the current context)
+  frequency prior      0.73   (15 sessions)
+  recency              0.91   (last used 4h ago)
+  success rate         0.97
+  repo ~/work/billing  ×4.10  (12 of 15 sessions)
+  hour 09:00 ±1        ×1.30  (6 of 15)
+  after db-prod        —      (no previous session in the last 30 min)
+  context factor       ×5.33
+```
+
+Cada línea muestra la aportación al resultado final:
+
+- **frequency prior**: Puntuación base según el historial global de uso.
+- **recency**: Decaimiento temporal según la fecha y hora de la última sesión.
+- **success rate**: Multiplicador derivado de los códigos de salida de las sesiones.
+- **repo**, **hour**, **after previous**: Multiplicadores obtenidos a partir de la razón de verosimilitud de cada indicador de contexto.
+- **context factor**: Producto acotado de todas las características de contexto activas.
+
+## Configuración de búsqueda
+
+Puedes ajustar el comportamiento de búsqueda y la privacidad mediante `bssh config`:
+
+```sh
+# Alternar entre clasificación bayesiana y búsqueda aproximada por subcadena
+bssh config --search-mode bayesian
+bssh config --search-mode fuzzy
+
+# Habilitar o deshabilitar la clasificación predictiva por contexto
+bssh config --prediction on
+bssh config --prediction off
+
+# Habilitar o deshabilitar la captura del directorio de trabajo y repositorio Git
+bssh config --capture-cwd on
+bssh config --capture-cwd off
+```
+
+Estos valores se guardan en `config.json` dentro del directorio del entorno activo:
+
+| Parámetro | Opción CLI | Valor por defecto | Descripción |
+| --- | --- | --- | --- |
+| `search_mode` | `--search-mode` | `bayesian` | Algoritmo empleado para ordenar los resultados (`bayesian` o `fuzzy`). |
+| `prediction.enabled` | `--prediction` | `true` | Incorpora hora, directorio y transiciones de sesión a la clasificación. |
+| `prediction.capture_cwd` | `--capture-cwd` | `true` | Registra el directorio de trabajo y la raíz de Git al iniciar la sesión. |
+| `prediction.window_days` | — | `180` | Días de historial de sesiones analizados para los cálculos de contexto. |
+
+## Siguientes pasos
+
+<CardGrid>
+  <LinkCard title="Conexiones" description="Guarda y administra entradas de hosts SSH." href="/es/guides/connections/" />
+  <LinkCard title="Alias" description="Crea nombres cortos para tus hosts más utilizados." href="/es/guides/aliases/" />
+</CardGrid>

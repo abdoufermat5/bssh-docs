@@ -1,0 +1,155 @@
+---
+title: Search and ranking
+description: How Bayesian SSH matches hosts, learns from your habits, and ranks connections.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+When you run `bssh connect <query>` or search in the desktop app, `bssh` matches your query against names, hostnames, and tags, then ranks candidates using a Bayesian scoring model. You do not need to memorize exact hostnames: `bssh` ranks the host you need first based on how and when you work.
+
+## How matching works
+
+`bssh` applies several matching strategies simultaneously:
+
+- **Substring matching**: Searches across connection names and hostnames without case sensitivity. For example, `prod` matches `web-prod` and `db.prod.example.com`.
+- **Ignored separators**: Hyphens (`-`), underscores (`_`), and periods (`.`) are stripped from both the query and the connection name. Entering `webprod` matches `web-prod` and `web_prod`.
+- **Multi-word queries**: Words separated by spaces match if every word appears in the connection name. Entering `web prod` matches `web-backend-prod`.
+- **Acronym matching**: When a query has two or more letters, `bssh` checks the initials of words separated by hyphens, underscores, or spaces. Entering `wp` matches `web-prod` or `web-prod-server`.
+- **Alphanumeric prefixes**: Matching checks if the alphanumeric characters of a host name start with your query string.
+
+### Tag queries
+
+To search exclusively within tags, prefix your query with `tag:` or `@`:
+
+```sh
+# Match only connections tagged prod
+bssh connect tag:prod
+
+# Alternative @ prefix
+bssh connect @staging
+```
+
+Standard searches also check tags, but explicit tag queries restrict matching exclusively to the tag database, ignoring hostnames and connection names.
+
+## Bayesian ranking
+
+Saved connections are ranked probabilistically rather than with static weights:
+
+```text
+score = prior × likelihood × recency × success × context_factor
+```
+
+Each factor evaluates a distinct aspect of your usage history:
+
+- **Frequency prior**: Measures how often you connect to this host relative to all saved hosts. Computed with Laplace smoothing so new connections remain discoverable:
+  ```text
+  prior = (sessions + 1) / (total_connections + 10)
+  ```
+- **Match likelihood**: Measures query precision. Exact matches score `1.0`, name prefixes `0.9`, whole-word matches `0.85`, word prefixes `0.75`, substrings `0.6`, normalized separator matches `0.5`, tag matches `0.45`, hostname matches `0.4`, acronyms `0.35`, and fallback matches `0.1`.
+- **Recency**: Applies an exponential decay based on the elapsed hours since the last connection:
+  ```text
+  recency = max(0.1, exp(-0.005 × hours_since_used))
+  ```
+  Hosts that have never been used receive a default recency score of `0.3`.
+- **Success rate**: Scales between `0.5` and `1.0` based on the ratio of sessions that exited cleanly (exit code `0` or `NULL`):
+  ```text
+  success = 0.5 + 0.5 × (successes / total_sessions)
+  ```
+
+## Predictive connect and context
+
+When you launch an SSH session, `bssh` captures local context without background daemons:
+
+- **Git repository & working directory** (`git_root`): Detected by walking up parent directories from your shell's current path.
+- **Local time** (`hour`): The local hour of the day (`0–23`), matched against circular neighbours (`±1` hour, so `23`, `0`, and `1` are adjacent).
+- **Previous connection** (`prev_connection_id`): The host you connected to within the last 30 minutes.
+
+Over a 180-day rolling window (`window_days`), `bssh` calculates the smoothed likelihood ratio for each active context feature:
+
+```text
+lr = ((feature_hits + 1) / (connection_window_sessions + 2)) / ((global_feature_hits + 1) / (global_window_sessions + 2))
+```
+
+A context feature is only applied if it has been observed at least 3 times across all sessions (`N ≥ 3`). The resulting `context_factor` is clamped between `0.25` and `8.0`.
+
+## Quick connect
+
+Running `bssh` with no arguments launches predictive quick connect. It inspects your current shell context and displays your top 3 predicted connections along with the strongest reason each host was suggested:
+
+```sh
+bssh
+```
+
+```text
+Suggested connections
+ 1. web-prod      deploy@web1.example.com   · 12/15 of your sessions from ~/work/billing
+ 2. db-prod       postgres@db1              · usually opened right after web-prod
+ 3. bastion-eu    admin@bastion             · used often around 09:00
+Enter = 1 · number · text to search · q to quit:
+```
+
+- Press <kbd>Enter</kbd> to connect immediately to `#1`.
+- Press <kbd>1</kbd>, <kbd>2</kbd>, or <kbd>3</kbd> to select a suggestion.
+- Type any query to perform an interactive search across your connections.
+- Press <kbd>q</kbd> or <kbd>Ctrl</kbd>+<kbd>D</kbd> to quit.
+
+## Inspect scores with bssh why
+
+Run `bssh why` to inspect the exact factor-by-factor score breakdown and ranking of a connection in your current context:
+
+```sh
+bssh why web-prod
+```
+
+```text
+web-prod — score 3.42 (rank 1 of 37 in the current context)
+  frequency prior      0.73   (15 sessions)
+  recency              0.91   (last used 4h ago)
+  success rate         0.97
+  repo ~/work/billing  ×4.10  (12 of 15 sessions)
+  hour 09:00 ±1        ×1.30  (6 of 15)
+  after db-prod        —      (no previous session in the last 30 min)
+  context factor       ×5.33
+```
+
+Each row displays the weight contributed to the final score:
+
+- **frequency prior**: All-time usage base score.
+- **recency**: Temporal decay based on the last session timestamp.
+- **success rate**: Multiplier reflecting session exit codes.
+- **repo**, **hour**, **after previous**: Multipliers derived from the likelihood ratio of each context feature.
+- **context factor**: Combined clamped product of all active context features.
+
+## Search configuration
+
+You can configure search behavior and privacy settings using `bssh config`:
+
+```sh
+# Toggle between Bayesian ranking and simple fuzzy substring matching
+bssh config --search-mode bayesian
+bssh config --search-mode fuzzy
+
+# Enable or disable context-aware predictive ranking
+bssh config --prediction on
+bssh config --prediction off
+
+# Enable or disable capturing current working directory and git repository
+bssh config --capture-cwd on
+bssh config --capture-cwd off
+```
+
+These settings are stored in `config.json` under the active environment directory:
+
+| Setting | CLI flag | Default | Description |
+| --- | --- | --- | --- |
+| `search_mode` | `--search-mode` | `bayesian` | Algorithm used for ranking search results (`bayesian` or `fuzzy`). |
+| `prediction.enabled` | `--prediction` | `true` | Incorporates time, directory, and session transitions into ranking. |
+| `prediction.capture_cwd` | `--capture-cwd` | `true` | Records working directory and git root on session launch. |
+| `prediction.window_days` | — | `180` | Number of days of session history evaluated for context ratios. |
+
+## Next steps
+
+<CardGrid>
+  <LinkCard title="Connections" description="Save and manage SSH host entries." href="/guides/connections/" />
+  <LinkCard title="Aliases" description="Create short nicknames for frequently used hosts." href="/guides/aliases/" />
+</CardGrid>

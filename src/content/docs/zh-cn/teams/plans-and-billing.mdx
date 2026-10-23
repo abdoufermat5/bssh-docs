@@ -1,0 +1,134 @@
+---
+title: 方案与账单
+description: 了解 bssh Teams 的席位限制、订阅选项以及只读模式运行机制。
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+bssh Teams 对小型团队完全免费，并为成长型团队提供按席位计费的灵活方案。账单由团队管理员按团队分别管理。
+
+## 席位与免费方案
+
+团队占用的席位数量由以下两部分构成：
+
+- **活跃成员**：已接受邀请并加入团队的每位成员。
+- **待处理邀请**：已发出但尚未被接受或撤销的邀请。每张待处理邀请会占用 1 个席位，有效期为 7 天，管理员亦可随时使用 `bssh teams uninvite` 提前撤销。
+
+在托管同步服务器上创建的每个团队均可自动获得 **3 个免费席位**。免费方案包含端到端加密保险库、客户端同步、设备验证和签名审计日志的完整功能，无需绑定信用卡。
+
+## 订阅付费方案
+
+当团队成员及待处理邀请总数超过 3 个席位时，管理员需要为当前团队实际占用的席位总数订阅付费方案。订阅按席位计费，支持按月或按年结算。
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+查看当前方案、已占用席位及续费日期：
+
+```sh
+bssh teams billing platform
+```
+
+为团队订阅付费方案：
+
+```sh
+bssh teams billing platform --checkout --seats 8
+```
+
+如需按年结算以享受年度优惠，添加 `--yearly` 参数：
+
+```sh
+bssh teams billing platform --checkout --yearly
+```
+
+如果省略 `--seats`，bssh 默认使用当前已占用的席位数量（且至少比免费席位多 1 个）。执行命令后，系统将在默认网页浏览器中打开 Stripe Checkout 结账页面。
+
+</TabItem>
+<TabItem label="桌面应用">
+
+1. 在侧边栏中切换到 **Teams** 视图。
+2. 选择你的团队并切换到 **Members & devices** 标签页。
+3. 找到 **Plan and seats** 卡片，该卡片展示了当前方案、续费日期以及席位使用指示条。
+4. 点击 **Upgrade…** 选择所需席位数及计费周期（按月或按年）。
+5. 点击结账按钮将在浏览器中打开 Stripe 页面。完成付款后，返回应用并在卡片中点击 **Refresh** 即可更新方案状态。
+
+</TabItem>
+</Tabs>
+
+## 管理订阅
+
+管理员可以通过 Stripe 客户门户更新付款方式、下载发票、调整席位数量或取消订阅。
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+在浏览器中打开客户账单门户：
+
+```sh
+bssh teams billing platform --manage
+```
+
+</TabItem>
+<TabItem label="桌面应用">
+
+在团队的 **Members & devices** 标签页中，点击 **Plan and seats** 下方的 **Manage billing**。这将在浏览器中打开 Stripe 客户门户。
+
+</TabItem>
+</Tabs>
+
+## 支付安全
+
+Bayesian SSH 客户端及中心同步服务器绝不会接触、处理或保存任何信用卡卡号。`--checkout` 和 `--manage` 仅生成指向 Stripe 的一次性安全跳转链接。所有银行卡交易和账单地址修改均在 Stripe 自身的合规基础设施上完成。
+
+## 只读模式
+
+当出现以下情况时，团队将进入**只读模式**：
+
+- 付费订阅到期未续费或被取消，且团队成员加待处理邀请总数超过 3 个免费席位。
+- 管理员在账单门户中将付费席位数调低至低于当前成员及待处理邀请总数。
+
+### 只读模式下仍可进行的操作
+
+处于只读模式的团队在日常运维中依然可用：
+
+- **同步**：成员可以继续运行 `bssh teams sync` 拉取已有连接。
+- **连接**：使用 `bssh connect` 连接团队主机完全不受影响。
+- **上传审计日志**：会话启动事件仍会正常签名并上传到审计日志中。
+- **设备审批**：管理员仍可运行 `bssh teams grant` 为新设备授予密钥。
+- **移除成员**：管理员仍可移除成员（`bssh teams remove`）或撤销待处理邀请（`bssh teams uninvite`）。
+
+### 只读模式下禁止的操作
+
+任何对共享保险库的写入操作均会被拒绝：
+
+- 禁止添加或修改共享连接（`bssh teams share`）。
+- 禁止发出新的团队邀请（`bssh teams invite`）。
+
+### 恢复写入权限
+
+如需恢复正常写入权限，管理员可以选择：
+
+1. 使用 `bssh teams billing <team> --checkout` 重新订阅付费方案，或者
+2. 移除成员或撤销待处理邀请，将席位总数缩减至 3 个或以下。
+
+## 扣费失败
+
+如果续费扣款失败，Stripe 会进入自动重试宽限期，订阅状态将变为 `past_due`。
+
+在重试宽限期内：
+
+- 团队**不会**立即被切换为只读模式。所有连接、同步和日常配置操作均可正常使用。
+- 桌面应用的 **Plan and seats** 区域会显示警告提示：*"The last payment failed; Stripe is retrying. Update the card in Manage billing."*
+- 命令行执行 `bssh teams billing <team>` 会显示 `Subscription status: past_due`。
+- 管理员应尽快打开账单门户（`bssh teams billing <team> --manage` 或点击 **Manage billing**），在宽限期结束前更新支付卡信息。
+
+## 自托管服务器
+
+自托管同步服务器不包含 Stripe 账单集成：
+
+- 自托管实例的席位上限是固定的，由服务器的运维方直接配置。
+- 在自托管实例上运行 `bssh teams billing <team>` 会显示：
+  ```text
+  💳 platform: 5 of 20 seats used (this server has no billing)
+  ```
+- 桌面应用会明确标注该服务器未启用账单系统，席位上限由其运维方设定。

@@ -1,0 +1,230 @@
+---
+title: Dépannage
+description: Diagnostiquez bssh avec doctor et audit, et corrigez les pannes courantes de connexion, de Kerberos et de Teams.
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+Commencez par les deux vérifications intégrées : `bssh doctor` pour l'installation locale, `bssh audit` pour les permissions et l'hygiène des connexions. Beaucoup de pannes apparaissent dans l'une des deux.
+
+## Lancer les vérifications
+
+`bssh doctor` inspecte six éléments, dans cet ordre :
+
+- **Configuration** : l'environnement actif et le chemin de sa base de données.
+- **Database** : ouvre et initialise le fichier de base de données.
+- **SSH client** : `ssh` est dans `PATH`.
+- **SSH config** : le chemin configuré du fichier de configuration SSH existe.
+- **SSH agent** : quand `auth.use_agent` est actif, la socket d'agent de `auth.agent_socket` ou `SSH_AUTH_SOCK` existe.
+- **Kerberos** : quand Kerberos est actif par défaut, `klist` et `kinit` sont dans `PATH`.
+
+Chaque vérification affiche `[OK]`, `[WARN]` ou `[FAILED]`, une ligne de détail et, sauf si elle a réussi, une ligne `Suggestion:`. La sortie se termine par `Summary: no blocking problems found.` ou `Summary: N blocking problem(s) found.`, et la commande renvoie un code non nul si une vérification a échoué. Un `WARN` ne fait pas échouer l'exécution.
+
+`bssh audit` rend compte de la sécurité de la même machine : politique de clé d'hôte du transport, permissions du répertoire de configuration et du fichier de base de données, clés privées dans `~/.ssh` (y compris les clés DSA faibles), connexions qui reposent sur un mot de passe et connexions utilisées pour la dernière fois il y a plus de 90 jours. Il affiche une note sur 100, puis une entrée par constat, avec description et remédiation.
+
+```text
+==================================================
+        Bayesian SSH Security Audit Report        
+==================================================
+Environment: default
+
+Security Score: 100/100 (Grade: A+, Rating: EXCELLENT)
+
+Audit Breakdown (Total Findings: 0)
+
+No security issues found! Your SSH environment is cleanly configured.
+```
+
+`bssh audit --fix` répare les permissions trop ouvertes du répertoire de configuration, de la base de données, de `~/.ssh` et des clés privées. Il ne relâche jamais un fichier plus strict et ignore les liens symboliques dans `~/.ssh`.
+
+## Kerberos : ticket absent ou expiré
+
+Une connexion Kerberos vérifie d'abord `klist -s`. Sans ticket valide, `bssh` lance `kinit -f` dans votre terminal et attend le mot de passe. En cas d'échec, la commande s'arrête sur `Failed to create Kerberos ticket:` suivi du message du client Kerberos.
+
+Vérifiez et renouvelez le ticket vous-même :
+
+```sh
+klist
+kinit
+klist -s    # renvoie 0 quand un ticket est valide
+```
+
+Reconnectez-vous une fois que `klist -s` réussit. Pour ignorer Kerberos le temps d'une session :
+
+```sh
+bssh connect web-prod -k false
+```
+
+Si `klist` ou `kinit` manque, `bssh doctor` signale la vérification Kerberos en `WARN` et propose d'installer les outils clients ou de désactiver `use_kerberos_by_default`.
+
+## Connexion refusée ou délai dépassé
+
+Une connexion directe rapporte l'erreur de son propre client, par exemple `TCP/SSH connect failed: ...`. Une connexion via `ssh` (un bastion ou Kerberos) rapporte le message d'OpenSSH, par exemple `Connection refused` ou `Connection timed out`.
+
+Vérifiez ce que bssh a enregistré et si le port répond :
+
+```sh
+bssh show web-prod
+bssh ping web-prod -t 5
+```
+
+`bssh ping` exécute `ssh` avec `BatchMode=yes` : un hôte n'est donc joignable que si la connexion et l'authentification réussissent. Chaque sonde est plafonnée à deux fois la valeur de `-t` plus cinq secondes : avec `-t 5`, un hôte bloqué est signalé par `timed out after 15s`. La commande renvoie un code non nul si un hôte est injoignable. Un refus signifie en général que le démon SSH n'écoute pas sur ce port ; un délai dépassé évoque un pare-feu, un VPN inactif ou un bastion erroné.
+
+Pour vérifier tous les hôtes d'un tag :
+
+```sh
+bssh ping -g prod
+```
+
+## Échecs d'authentification
+
+Le message dépend de la façon dont la connexion est établie.
+
+Une connexion directe utilise le client SSH de bssh. Il essaie les fichiers d'identité configurés, puis la clé de la connexion, puis les noms de clés par défaut de `~/.ssh`. Une clé protégée par une phrase secrète est ignorée, et si aucune clé ne fonctionne, bssh demande un mot de passe (`deploy@web-prod.example.com's password:`). Si le mot de passe est aussi refusé, la commande s'arrête sur `Authentication failed`.
+
+Une connexion via un bastion ou Kerberos exécute le client OpenSSH : l'agent et `~/.ssh/config` s'appliquent, et le message du serveur arrive tel quel, par exemple `Permission denied (publickey)`.
+
+Vérifiez quelle clé la connexion utilise, puis que la clé est en place :
+
+```sh
+bssh show web-prod
+bssh key list
+```
+
+`bssh key list` liste les clés de `~/.ssh` qui ont une clé publique, avec leur empreinte et le contrôle de permissions de la clé privée. Un fichier de clé ne doit être lisible que par vous ; `bssh audit --fix` répare cela.
+
+Si la clé enregistrée est mauvaise, remplacez-la le temps d'une session :
+
+```sh
+bssh connect web-prod -i ~/.ssh/id_ed25519
+```
+
+Une connexion sans clé ni Kerberos aboutit à l'invite de mot de passe, et `bssh audit` la signale.
+
+## Échecs de bastion
+
+Sans Kerberos, un bastion est un hôte de rebond : `bssh` lance `ssh` avec une `ProxyCommand` qui ouvre le bastion et transmet la connexion vers la cible. Le premier saut en échec rapporte l'erreur : regardez quel hôte elle nomme.
+
+- Testez le bastion seul, par exemple `bssh connect bastion` si vous l'avez enregistré.
+- Connectez-vous directement à la cible pour valider le reste de la route : `bssh connect web-prod --no-bastion`.
+- Changez l'utilisateur du bastion avec `-B deploy`, ou le bastion avec `-b bastion2.example.com`.
+
+Avec Kerberos et un bastion à la fois, le bastion est un bastion interactif : `bssh` ouvre une session dessus et passe la cible en argument, donc le refus du bastion apparaît dans le terminal. [Bastions](/fr/guides/bastions/) couvre les deux modes et les réglages du bastion par défaut.
+
+## Clé d'hôte modifiée
+
+Une connexion passant par le client SSH de bssh dont la clé ne correspond plus à `known_hosts` est refusée, avec les deux empreintes dans l'erreur et les lignes `This could indicate a man-in-the-middle attack.` et `Remove the old key from known_hosts if this is expected.` Une connexion via OpenSSH utilise son propre contrôle de clé d'hôte.
+
+<Steps>
+1. Demandez au propriétaire de l'hôte si la clé a changé, par exemple après une reconstruction ou une réinstallation. Ne continuez que si c'est le cas.
+2. Supprimez l'ancienne entrée :
+   ```sh
+   ssh-keygen -R web-prod.example.com
+   ```
+3. Reconnectez-vous. Avec la politique par défaut `accept-new`, le client propre de bssh affiche la nouvelle empreinte et l'ajoute à `known_hosts`.
+</Steps>
+
+Une clé marquée `@revoked` dans `known_hosts` est toujours refusée, avec `REVOKED host key presented by` et `The key is marked @revoked in known_hosts; refusing to connect.` Avec le client propre de bssh, `strict_host_key_checking=strict` refuse aussi un hôte inconnu. Le réglage se trouve dans `transport.strict_host_key_checking` de la configuration d'environnement ; voir [Référence de configuration](/fr/reference/configuration/).
+
+Ne le passez jamais à `off` pour contourner cette erreur : cela désactive aussi la vérification qui vient de vous protéger, et `bssh audit` le signale comme un constat critique.
+
+## Base de données verrouillée ou endommagée
+
+SQLite n'autorise qu'un écrivain à la fois. `bssh` attend cinq secondes le verrou d'écriture puis rapporte `database is locked` de SQLite. La ligne de commande et l'application de bureau partagent le même fichier de base de données : une opération longue dans l'une peut bloquer l'autre.
+
+Fermez l'autre fenêtre ou commande et réessayez. Ce sont les écritures depuis plusieurs processus à la fois, par exemple une série de transferts parallèles, qui atteignent la limite.
+
+Si la base ne s'ouvre plus du tout, `bssh doctor` signale la vérification Database en `FAILED` avec `could not initialize <path>: <reason>`. Restaurez une sauvegarde, et prenez-en une nouvelle d'abord si la base s'ouvre encore :
+
+```sh
+bssh backup
+bssh restore ~/.config/bayesian-ssh/environments/default/backups/backup-2026-10-23-120000.db
+```
+
+`bssh restore` valide le fichier avant de toucher à la base active et le refuse s'il ne s'ouvre pas en lecture seule comme SQLite (`is not a valid SQLite database`), s'il échoue à `PRAGMA quick_check` (`failed the SQLite integrity check`) ou s'il ne contient pas la table `connections` (`is not a bayesian-ssh database (no 'connections' table)`). Avant d'écraser, il écrit une sauvegarde de sécurité dans le répertoire `backups/` de la base sous le nom `pre-restore-<timestamp>.db`, puis supprime les fichiers `-journal`, `-wal` et `-shm` obsolètes pour qu'ils ne soient pas rejoués sur le fichier restauré.
+
+## Limites du confinement Snap
+
+Le snap s'exécute en confinement strict. Après l'installation, `~/.ssh` ne lui est pas visible tant que vous n'avez pas connecté l'interface une fois :
+
+```sh
+sudo snap connect bayesian-ssh:ssh-keys
+```
+
+Même ensuite, `~/.ssh` est monté en lecture seule, avec deux conséquences :
+
+- `bssh key generate` ne peut pas écrire de clé dans `~/.ssh`. Générez les clés avec `ssh-keygen` hors du snap, ou installez un paquet natif, et pointez une connexion vers le fichier avec `-i`.
+- Les nouvelles clés d'hôte ne peuvent pas être ajoutées à `known_hosts`, donc un hôte inconnu ne peut pas être accepté depuis le snap. Connectez-vous une fois avec un `ssh` natif, qui écrit dans le même `~/.ssh`.
+
+Les tickets créés dans le snap fonctionnent tels quels. Pour réutiliser les tickets créés sur l'hôte, connectez l'interface Kerberos :
+
+```sh
+sudo snap connect bayesian-ssh:kerberos-tickets
+```
+
+Cela n'atteint que les caches de fichiers nommés par `KRB5CCNAME=FILE:/tmp/krb5cc_*` ; les caches KCM et KEYRING, par défaut avec SSSD et sur Fedora et RHEL, ne sont pas visibles depuis un snap strict. Utilisez une installation native dans ce cas.
+
+Le snap garde sa configuration et sa base dans `~/snap/bayesian-ssh/current/.config/bayesian-ssh/`, séparées d'une installation native. Les commandes lancées depuis une installation native ne voient pas les connexions du snap, et inversement.
+
+## Erreurs Teams
+
+### La phrase secrète ne déverrouille pas l'appareil
+
+La ligne de commande affiche `wrong Teams passphrase` ; l'application de bureau affiche **That passphrase didn't unlock this device's keys.**
+
+La phrase secrète protège les clés Teams de cet appareil et ne peut pas être réinitialisée. Saisissez-la à nouveau avec soin. Si `BSSH_TEAMS_PASSPHRASE` est définie, elle remplace l'invite : une valeur périmée dans votre shell produit donc la même erreur :
+
+```sh
+env | grep BSSH_TEAMS_PASSPHRASE
+```
+
+Si la phrase secrète est perdue, les clés de cet appareil restent verrouillées : il n'y a pas de récupération et personne ne peut la réinitialiser. La récupération passe par une nouvelle configuration d'appareil, avec un administrateur qui accorde la clé d'équipe au nouvel appareil.
+
+### L'empreinte de l'administrateur ne correspond pas
+
+Rejoindre une équipe épingle l'empreinte de l'appareil de l'administrateur. Quand aucun appareil d'administrateur ne la porte, bssh refuse et nomme l'équipe : `Nothing was trusted. Check the fingerprint with your admin (a mismatch can also mean the server is not the one you think)`. Ce dernier point compte quand vous rejoignez un serveur auto-hébergé : vérifiez aussi l'URL du serveur.
+
+L'administrateur affiche son empreinte avec `bssh teams whoami`. Terminez l'adhésion avec l'identifiant d'équipe indiqué dans l'erreur :
+
+```sh
+bssh teams join --team <TEAM_ID> --fingerprint <FINGERPRINT>
+```
+
+### L'appareil attend la clé d'équipe
+
+Après l'adhésion, `bssh teams sync` affiche `waiting for an admin to grant this device the team key`. Envoyez votre empreinte à un administrateur ; il liste les appareils en attente et accorde le vôtre :
+
+```sh
+bssh teams whoami                                  # le membre
+bssh teams grant platform                          # l'administrateur : liste les appareils en attente
+bssh teams grant platform --fingerprint <FINGERPRINT>
+```
+
+### L'équipe est en lecture seule ou sans siège libre
+
+Les deux erreurs viennent du serveur avec un message actionnable, que `bssh` affiche tel quel.
+
+- `the team has no free seat` : un administrateur s'abonne avec `bssh teams billing <team> --checkout` ou, si l'équipe a déjà un abonnement, modifie ses sièges dans le portail de facturation avec `--manage`. Sur un serveur auto-hébergé sans facturation, libérez un siège en retirant un membre ou en révoquant une invitation en attente.
+- `the team is read-only` : l'équipe compte plus de membres que sa limite de sièges, parce que l'abonnement a expiré ou paie moins de sièges qu'il n'y a de membres. Un administrateur corrige avec `bssh teams billing <team> --checkout` ou `--manage`. Les récupérations et les attributions de clés continuent de fonctionner pendant que l'équipe est en lecture seule.
+
+### La chaîne d'audit ne se vérifie pas
+
+Le serveur répond `audit chain broken at seq <number>: <reason>` quand des événements qu'un appareil avait envoyés ne sont plus dans la chaîne. `bssh` ajoute alors : `The server's copy of your audit log is missing events this device uploaded before. That can mean they were deleted on the server: tell your team admin.`
+
+Gardez l'appareil en ligne jusqu'à ce qu'un `bssh teams sync` réussisse, pour que ses événements en file atteignent le serveur. Un administrateur peut consulter le journal à tout moment :
+
+```sh
+bssh teams audit platform
+```
+
+La commande renvoie un code non nul quand un événement échoue à se vérifier. [Journal d'audit](/fr/teams/audit-log/) explique ce que la chaîne prouve.
+
+### Le serveur exige un client plus récent
+
+Le serveur a répondu HTTP 426 et `bssh` affiche `the server needs a newer bssh; please upgrade`. L'opérateur a relevé la version minimale du client. Mettez à jour la ligne de commande et l'application de bureau comme vous les avez installées.
+
+## Obtenir de l'aide
+
+Ouvrez un [ticket](https://github.com/abdoufermat5/bayesian-ssh/issues) et joignez la sortie de `bssh --version` et de `bssh doctor`. Relisez la sortie avant de la publier : les chemins et les noms d'environnement vont généralement bien, les noms d'hôtes et les sorties de commande peut-être pas.
+
+Pour un serveur Teams auto-hébergé, joignez aussi les lignes du journal de l'API autour de l'échec.

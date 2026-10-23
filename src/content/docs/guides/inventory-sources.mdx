@@ -1,0 +1,223 @@
+---
+title: Inventory sources
+description: Connect dynamic cloud providers, Ansible inventories, and SSH configs to synchronize hosts automatically.
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Inventory sources allow Bayesian SSH to discover and synchronize hosts from external infrastructure providers, such as AWS, Google Cloud, Tailscale, Ansible, and OpenSSH config files.
+
+Instead of manually adding individual servers, you configure a source once and sync its hosts whenever your infrastructure changes.
+
+## How inventory sources work
+
+1. **Register**: Add an inventory source configuration using `bssh source add`. Registering a source stores the connection parameters but does not import hosts immediately.
+2. **Sync**: Run `bssh source sync` to discover remote instances, map them into Bayesian SSH connections, and update changes.
+3. **Track**: Each synced host receives an `external_id` (such as an EC2 instance ID or Tailscale node ID). When instance IP addresses or attributes change, `bssh` updates the existing connection rather than creating a duplicate.
+
+## Supported source kinds
+
+Bayesian SSH supports five standard inventory source kinds, plus team vaults:
+
+| Kind | Command argument | Prerequisites | Description |
+| --- | --- | --- | --- |
+| OpenSSH | `ssh-config` | Config file path | Reads hosts from an OpenSSH configuration file. |
+| Ansible | `ansible` | `ansible-inventory` | Queries an Ansible inventory file or dynamic inventory script. |
+| Tailscale | `tailscale` | `tailscale` CLI | Discovers devices across your Tailscale tailnet. |
+| AWS EC2 | `aws` | `aws` CLI & credentials | Scans running EC2 instances across one or more regions. |
+| Google Cloud | `gcp` | `gcloud` CLI & auth | Discovers running Compute Engine instances in a project. |
+| Teams vault | `team` | bssh Teams account | Synchronized through [bssh Teams](/teams/overview/) via `bssh teams sync`. |
+
+### OpenSSH config
+
+To sync hosts continuously from an OpenSSH configuration file:
+
+```sh
+# Sync from default ~/.ssh/config
+bssh source add local-config ssh-config
+
+# Sync from a custom path
+bssh source add office-hosts ssh-config --path ~/.ssh/config.d/office
+```
+
+### Ansible inventory
+
+The `ansible` source kind calls `ansible-inventory -i <file> --list` to parse host variables and group memberships. Ansible groups are automatically mapped to Bayesian SSH tags:
+
+```sh
+bssh source add prod-infra ansible --inventory ~/infra/hosts.ini
+```
+
+### Tailscale
+
+The `tailscale` source kind runs `tailscale status --json` to discover active machines on your private network:
+
+```sh
+# Discover active Tailscale peers
+bssh source add my-tailnet tailscale
+
+# Include offline peers as well
+bssh source add my-tailnet tailscale --include-offline
+```
+
+### Amazon Web Services (AWS EC2)
+
+The `aws` source kind calls `aws ec2 describe-instances` to discover running EC2 instances. You must provide at least one `--region`:
+
+```sh
+bssh source add aws-prod aws \
+  --region us-east-1,eu-west-1 \
+  --profile production \
+  --address private \
+  --user ubuntu \
+  --bastion bastion.example.com
+```
+
+- `--region <REGION>`: One or more AWS regions (comma-separated or repeated).
+- `--profile <PROFILE>`: Optional AWS CLI credential profile name.
+- `--address <private|public|dns>`: Network address to connect to (default: `private`).
+- `--user <USER>`: Default SSH user for discovered instances.
+- `--bastion <HOST>` and `--bastion-user <USER>`: Optional jump host applied to all discovered instances.
+
+### Google Cloud Platform (GCP)
+
+The `gcp` source kind calls `gcloud compute instances list` to discover running instances in a specific project:
+
+```sh
+bssh source add gcp-prod gcp \
+  --project my-gcp-project-123 \
+  --address internal \
+  --user debian
+```
+
+- `--project <PROJECT>`: GCP project ID (required).
+- `--address <internal|external>`: Network address to connect to (default: `internal`).
+- `--user <USER>`: Default SSH user for discovered instances.
+- `--bastion <HOST>` and `--bastion-user <USER>`: Optional jump host applied to all discovered instances.
+
+### Teams vaults
+
+When you create or join a team in bssh Teams, a source of kind `team` is registered automatically. Team vaults are encrypted end-to-end and reconciled using `bssh teams sync` rather than `bssh source sync`. For full details, see the [bssh Teams overview](/teams/overview/).
+
+## List configured sources
+
+Run `bssh source list` to inspect all configured inventory sources, total host counts, stale host numbers, and last synchronization status:
+
+```sh
+bssh source list
+```
+
+```text
+📦 Inventory sources
+NAME                 KIND          HOSTS STALE  LAST SYNC        ERROR
+aws-prod             aws              42     2  15m ago          
+my-tailnet           tailscale        18     0  2h ago           
+prod-infra           ansible          25     1  1d ago           
+team-core            team             12     0  10m ago          
+```
+
+## Synchronize sources
+
+Run `bssh source sync` followed by the source name to reconcile its remote hosts with your local database:
+
+```sh
+bssh source sync aws-prod
+```
+
+```text
+Syncing 'aws-prod' (aws):
++ added web-api-1 (10.0.4.12)
++ added web-api-2 (10.0.4.13)
+~ updated worker-01 (host 10.0.4.50 → 10.0.4.55)
+- stale legacy-cache
+Added 2, updated 1, marked 1 stale, restored 0.
+```
+
+### Preview changes with a dry run
+
+To inspect the changes a sync would make without writing them to your database, pass `--dry-run`:
+
+```sh
+bssh source sync aws-prod --dry-run
+```
+
+### Sync all sources
+
+To update every configured source sequentially:
+
+```sh
+bssh source sync --all
+```
+
+If one source encounters a network or authentication error, `bssh` continues synchronizing the remaining sources and reports all failures at the end.
+
+## How synced hosts appear
+
+Synced hosts are fully integrated into Bayesian SSH workflows:
+
+- **List view**: In `bssh list`, synced hosts display a source indicator in brackets (such as `[aws-prod]`) in the info column.
+- **Detailed view**: Running `bssh list -d` displays the source name on the `│ source:` line.
+- **Stable naming**: When a host is first discovered, `bssh` assigns a unique name. If an existing connection shares that name, the new host is scoped with an `@source` suffix (for example, `web-01@aws-prod`). Names are assigned once and preserved across subsequent syncs.
+- **IP updates**: Because hosts are identified by their immutable `external_id`, dynamic IP reassignments in AWS or GCP automatically update the existing connection instead of generating duplicates.
+
+## Stale hosts and pruning
+
+When an instance is stopped, terminated, or removed from your cloud account, it is not immediately deleted from Bayesian SSH.
+
+1. **Marked stale**: On the next sync, the missing host is flagged as `stale` and assigned a `stale_since` timestamp.
+2. **Identification**: In `bssh list`, the host appears with `(stale)` appended to its name (for example, `legacy-cache (stale)`).
+3. **Connection notice**: You can still connect to a stale host. When you run `bssh connect legacy-cache`, `bssh` prints a warning before connecting:
+   ```text
+   ⚠️  not seen in the last sync of aws-prod (since 2026-10-15)
+   ```
+4. **Automatic restoration**: If the instance comes back online in a future sync, `bssh` automatically clears the stale flag (`↺ back legacy-cache`).
+
+### Prune expired stale hosts
+
+To remove hosts that have been stale for an extended period, pass `--prune`:
+
+```sh
+# Prune hosts stale for longer than the default 30 days
+bssh source sync aws-prod --prune
+
+# Custom stale threshold (for example, 14 days)
+bssh source sync aws-prod --prune --prune-after 14
+```
+
+## Read-only vs editable connections
+
+- **Provider precedence**: Synced connections are managed by their external inventory provider. While you can modify a connection using `bssh edit`, any subsequent `bssh source sync` will overwrite fields owned by the provider (such as host address, port, user, key, and tags) with upstream data.
+- **Customizing a host**: To create a persistent, custom configuration based on a synced host, clone it with `bssh duplicate`:
+  ```sh
+  bssh duplicate web-api-1 my-custom-api
+  ```
+  The duplicated connection is an independent local host without a source attachment and will not be overwritten by future syncs.
+
+## Remove an inventory source
+
+To remove a configured inventory source, use `bssh source remove`:
+
+```sh
+bssh source remove aws-prod
+```
+
+```text
+⚠️  WARNING: Remove source 'aws-prod' (aws), 42 host connection(s) will be detached.
+Remove source 'aws-prod'? [y/N] y
+✅ Source 'aws-prod' removed.
+```
+
+By default, removing a source **detaches** its connections. The connections remain in your database as standard, fully editable local hosts, and their source link and stale state are removed.
+
+To delete both the source configuration and all connections discovered through it, pass `--delete-hosts`:
+
+```sh
+bssh source remove aws-prod --delete-hosts -f
+```
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Saved connections" description="Connect to, search, and manage your saved connections." href="/guides/connections/" />
+	<LinkCard title="bssh Teams overview" description="Share encrypted connection vaults across your team." href="/teams/overview/" />
+</CardGrid>

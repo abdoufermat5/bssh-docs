@@ -1,0 +1,148 @@
+---
+title: Bastion hosts
+description: Route SSH connections through jump hosts and interactive bastions.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bastion hosts (jump hosts) let you reach servers behind firewalls or isolated private networks. Bayesian SSH supports both standard jump hosts using TCP port forwarding and interactive bastions requiring dedicated jump shell protocols.
+
+## Configure a default bastion
+
+When all or most of your servers sit behind the same gateway, configure a default bastion in your global settings:
+
+```sh
+bssh config --default-bastion bastion.example.com --default-bastion-user jump
+```
+
+Newly added connections inherit these settings automatically:
+
+- `--default-bastion <HOST>`: Gateway host applied to new connections.
+- `--default-bastion-user <USER>`: Username for the gateway host.
+
+View your current configuration by running `bssh config` without arguments:
+
+```sh
+bssh config
+```
+
+```text
+Current settings:
+  Default user: ana
+  Default bastion: bastion.example.com
+  Default bastion user: jump
+  Default port: 22
+  Use Kerberos by default: No
+```
+
+To remove the default bastion so that future connections are direct by default, run:
+
+```sh
+bssh config --clear-bastion
+```
+
+## Set a bastion on a connection
+
+You can configure a bastion for a specific host when adding or editing a connection.
+
+<Tabs syncKey="surface">
+<TabItem label="Command line">
+
+Pass `-b` (or `--bastion`) and optionally `-B` (or `--bastion-user`) when saving a host:
+
+```sh
+bssh add db-prod 10.0.4.12 -b bastion.example.com -B jump
+```
+
+If you omit `-B`, the bastion username defaults to the connection user.
+
+To change or add a bastion on an existing connection:
+
+```sh
+bssh edit db-prod --bastion bastion.example.com --bastion-user jump
+```
+
+</TabItem>
+<TabItem label="Desktop app">
+
+In the desktop app, open the connection modal by clicking **New host** or editing an existing host.
+
+Fill in the **Jump host** field with the bastion address (such as `bastion.example.com`) and the **Jump user** field if the bastion login differs from the host login. Saved hosts routed through a bastion display a **Jump** badge in the host list.
+
+</TabItem>
+</Tabs>
+
+## Connect directly without a bastion
+
+To bypass any configured bastion:
+
+- **When adding a host**: Pass `--no-bastion` to prevent the global default bastion from being assigned:
+  ```sh
+  bssh add direct-srv 192.168.1.50 --no-bastion
+  ```
+- **When editing a host**: Remove an existing bastion configuration:
+  ```sh
+  bssh edit db-prod --no-bastion
+  ```
+- **When connecting**: Bypass the saved bastion for a single session:
+  ```sh
+  bssh connect db-prod --no-bastion
+  ```
+- **When importing**: Mark every imported host as a direct connection, so none of them uses the default bastion:
+  ```sh
+  bssh import --no-bastion
+  ```
+
+You can also temporarily override the bastion for a single connection session:
+
+```sh
+bssh connect db-prod -b temp-bastion.example.com -B jump
+```
+
+## How the route is chosen
+
+When you initiate a connection, `bssh` resolves the route using the following hierarchy:
+
+1. **Session flags**: Command-line flags passed to `bssh connect` (`-b`, `-B`, `--no-bastion`) take precedence over stored settings.
+2. **Saved connection settings**: Values stored on the connection record (`bastion` and `bastion_user`).
+3. **Global defaults**: The `default_bastion` and `default_bastion_user` configured via `bssh config` are assigned when adding new connections, unless `--no-bastion` or an explicit bastion is specified.
+
+Once the route is resolved, `bssh` chooses the transport mechanism:
+
+- **Direct connection**: When no bastion is configured and Kerberos is disabled, `bssh` connects directly using its native Rust SSH transport (`russh`).
+- **Classic jump host**: When a bastion is configured and Kerberos is disabled (`use_kerberos: false`), `bssh` delegates to an OpenSSH subprocess using `ProxyCommand` (`ssh -W %h:%p`). This tunnels TCP traffic through the bastion while enforcing your configured host key policies on both hops.
+- **Interactive bastion**: When both a bastion and Kerberos are configured (`use_kerberos: true`), `bssh` uses interactive bastion protocol handling.
+
+## Interactive bastions
+
+Some security gateways do not allow TCP forwarding (`-W` or `-J`). Instead, they act as application-level gateways (such as OVH "The Bastion" running `--osh`). Users authenticate to the bastion using Kerberos, and the bastion runs an interactive shell that accepts `target_user@target_host` as an argument.
+
+Bayesian SSH identifies an interactive bastion whenever a connection has both a bastion configured and Kerberos enabled:
+
+```sh
+bssh add secure-db 10.0.8.20 -b bastion.example.com -B jump -k true
+```
+
+### Interactive shell sessions
+
+When connecting interactively, `bssh` connects to port 22 on the bastion and passes the destination target as the remote command argument:
+
+```sh
+ssh -p 22 -- jump@bastion.example.com ana@10.0.8.20
+```
+
+The gateway authenticates your Kerberos ticket and drops you into the target host session.
+
+### Remote commands and file transfers
+
+Because interactive bastions reject standard OpenSSH argument relaying and subsystem forwarding:
+
+- **Command execution**: When running non-interactive commands or directory listings through an interactive bastion, `bssh` manages PTY communication using output markers to separate command output from gateway login banners.
+- **File transfers**: Interactive bastions block standard SFTP subsystem channels. When uploading or downloading files, `bssh` automatically detects the interactive gateway and falls back to SCP. For OVH-style gateways, `bssh` automatically generates a wrapper script in `~/.local/share/bayesian-ssh/scp-wrapper.sh` that translates SCP requests into the gateway's `--osh scp` protocol.
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Authentication" description="SSH keys, agent forwarding, Kerberos, and host key verification." href="/guides/authentication/" />
+	<LinkCard title="Tunnels" description="Port forwarding and SOCKS5 dynamic proxies." href="/guides/tunnels/" />
+</CardGrid>

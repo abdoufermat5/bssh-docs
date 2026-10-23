@@ -1,0 +1,134 @@
+---
+title: Plans and billing
+description: Understand seat limits, subscription options, and read-only behavior for bssh Teams.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+bssh Teams is free for small teams and offers simple per-seat billing for growing organizations. Billing is managed per team by team administrators.
+
+## Seats and the free tier
+
+A team's seat count is determined by:
+
+- **Active members**: Every person who has accepted an invite and joined the team.
+- **Pending invites**: Invitations that have been issued but not yet accepted or revoked. Each pending invite holds one seat for 7 days or until an admin revokes it with `bssh teams uninvite`.
+
+Every team created on the hosted sync server receives **3 free seats** automatically. The free plan includes full access to end-to-end encrypted vaults, client synchronization, device verification, and signed audit logging. No credit card is required.
+
+## Subscribing to a paid plan
+
+When your team exceeds 3 seats, an administrator subscribes for all seats currently in use. Subscriptions are billed per seat on a monthly or yearly cycle.
+
+<Tabs syncKey="surface">
+<TabItem label="Command line">
+
+Check the current plan, seats in use, and renewal date:
+
+```sh
+bssh teams billing platform
+```
+
+Subscribe the team to a paid plan:
+
+```sh
+bssh teams billing platform --checkout --seats 8
+```
+
+To pay annually instead of monthly, add the `--yearly` flag:
+
+```sh
+bssh teams billing platform --checkout --yearly
+```
+
+If you omit `--seats`, bssh defaults to the number of seats currently in use, rounded to at least one seat above the free plan. The command opens Stripe Checkout in your default web browser.
+
+</TabItem>
+<TabItem label="Desktop app">
+
+1. Open the **Teams** view from the sidebar.
+2. Select your team and switch to the **Members & devices** tab.
+3. Locate the **Plan and seats** section, which displays the current plan, renewal date, and a visual seat meter.
+4. Click **Upgrade…** to select your seat count and billing interval (monthly or yearly).
+5. Click the checkout button to open Stripe Checkout in your browser. Once payment completes, click **Refresh** on the billing card to update your plan details.
+
+</TabItem>
+</Tabs>
+
+## Managing your subscription
+
+Administrators can update payment methods, download invoices, adjust seat counts, or cancel subscriptions through the Stripe Customer Portal.
+
+<Tabs syncKey="surface">
+<TabItem label="Command line">
+
+Open the customer billing portal in your browser:
+
+```sh
+bssh teams billing platform --manage
+```
+
+</TabItem>
+<TabItem label="Desktop app">
+
+In the team's **Members & devices** tab under **Plan and seats**, click **Manage billing**. This opens the Stripe Customer Portal in your browser.
+
+</TabItem>
+</Tabs>
+
+## Payment security
+
+Bayesian SSH and the sync server never handle, process, or store credit card numbers. Both `--checkout` and `--manage` generate secure single-use redirect URLs to Stripe. All card transactions and billing address changes occur directly on Stripe's infrastructure.
+
+## Read-only mode
+
+A team enters **read-only mode** if:
+
+- An active subscription lapses or is cancelled, and the team has more members and pending invites than the 3 free seats.
+- An administrator reduces the paid seat count in the billing portal below the team's current member and invite count.
+
+### What works in read-only mode
+
+A read-only team remains functional for day-to-day operations:
+
+- **Sync**: Teammates can run `bssh teams sync` to pull existing connections.
+- **Connect**: Connecting to team hosts with `bssh connect` works without interruption.
+- **Audit uploads**: Session start events continue to be signed and uploaded to the audit log.
+- **Device approvals**: Admins can run `bssh teams grant` to approve keys for devices.
+- **Removals**: Admins can remove members (`bssh teams remove`) or revoke pending invites (`bssh teams uninvite`).
+
+### What is refused in read-only mode
+
+Modifications to the shared vault are blocked:
+
+- Adding or modifying connections (`bssh teams share`) is rejected.
+- Sending new team invitations (`bssh teams invite`) is rejected.
+
+### Restoring write access
+
+To restore write access, an administrator can either:
+
+1. Re-subscribe the team using `bssh teams billing <team> --checkout`, or
+2. Remove members or revoke pending invites until the total seat count is 3 or fewer.
+
+## Failed payments
+
+If a renewal payment fails, Stripe enters an automatic retry period. The subscription status changes to `past_due`.
+
+During this retry window:
+
+- The team is **not** immediately placed into read-only mode. All operations, syncs, and connections continue to work.
+- The desktop app displays a warning notice under **Plan and seats**: *"The last payment failed; Stripe is retrying. Update the card in Manage billing."*
+- On the command line, `bssh teams billing <team>` displays `Subscription status: past_due`.
+- An administrator should open the billing portal (`bssh teams billing <team> --manage` or **Manage billing**) and update the payment card before the retry period expires.
+
+## Self-hosted servers
+
+Self-hosted sync servers run without Stripe billing integration.
+
+- Seat limits on self-hosted instances are fixed and configured directly by the server operator.
+- Running `bssh teams billing <team>` on a self-hosted instance shows:
+  ```text
+  💳 platform: 5 of 20 seats used (this server has no billing)
+  ```
+- The desktop application indicates that the server has no billing and that its operator sets the seat limit.

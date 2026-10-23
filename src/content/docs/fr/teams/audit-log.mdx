@@ -1,0 +1,67 @@
+---
+title: Journal d'audit
+description: Ce que bssh Teams enregistre, comment le journal est vérifié sur votre machine et comment le lire.
+---
+
+Le journal d'audit enregistre qui s'est connecté à quel hôte de l'équipe, et quand. L'appareil de chaque membre écrit ses propres événements et les signe, et les administrateurs vérifient tout le journal sur leur propre machine au lieu de faire confiance au serveur.
+
+## Ce qui est enregistré
+
+Se connecter à un hôte de l'équipe enregistre un événement de début de session localement, même hors ligne et lorsque Teams est verrouillé. L'événement n'a pas besoin de phrase secrète : à la prochaine synchronisation, l'appareil le signe avec sa clé, le chaîne à l'événement précédent de l'appareil et le téléverse, avec l'heure réelle du début de session.
+
+Le serveur ajoute quand il a reçu chaque événement et l'adresse d'où il venait. Ces deux champs permettent de comparer ce qu'un appareil a rapporté avec ce que le serveur a vu.
+
+## Consulter le journal
+
+Les administrateurs lisent le journal avec `bssh teams audit` :
+
+```sh
+bssh teams audit platform
+bssh teams audit platform --host db-prod@platform
+bssh teams audit platform --member ana@example.com --since 2026-01-01
+```
+
+| Option | Ce qu'elle restreint |
+| --- | --- |
+| `--host <CONNECTION>` | Les événements d'une connexion d'équipe |
+| `--member <EMAIL>` | Les événements d'un membre |
+| `--since <DATE>` | Les événements survenus depuis une date (`YYYY-MM-DD`) ou une heure RFC 3339 |
+| `--limit <LIMIT>` | Combien d'événements récupérer, du plus récent au plus ancien (valeur par défaut et maximum : 1000) |
+
+La commande affiche pour chaque événement son heure, le membre et l'appareil, l'événement, l'hôte, l'adresse source et le résultat du contrôle. En ligne de commande, les heures utilisent l'heure locale de la machine. L'application de bureau les affiche en UTC.
+
+## Vérification
+
+Chaque événement est vérifié sur votre machine : sa signature avec la clé de l'appareil auteur, et la chaîne de chaque appareil avec l'événement précédent. Rien n'est approuvé sur la foi du serveur.
+
+- Un événement modifié ou forgé échoue au contrôle de sa signature.
+- Un événement d'un appareil que l'équipe ne connaît pas s'affiche comme **Unknown device**.
+- Un événement qui appartient à une autre équipe s'affiche comme **Other team**.
+- Un événement réordonné ou dupliqué rompt la chaîne de son appareil, et un événement supprimé y laisse un trou.
+
+Quand quelque chose échoue, `bssh teams audit` affiche les problèmes et sort avec un code non nul : la commande peut donc tourner dans un contrôle de conformité.
+
+## La limite des événements les plus récents
+
+Le journal est récupéré du plus récent au plus ancien, 1000 événements par défaut et au plus 1000 avec `--limit`. Si la récupération atteint la limite, la commande indique qu'elle n'affiche que les plus récents. Les événements récupérés sont quand même vérifiés, mais les plus anciens ne l'ont pas été ; restreignez avec `--since` ou `--host` pour les couvrir.
+
+Une limite ne peut pas être détectée à partir du journal seul. Si le serveur supprime les événements les plus récents d'un membre avant que ce membre n'en téléverse de plus récents, ce qui reste est encore un journal valide. La synchronisation suivante du membre signale alors une erreur de chaîne d'audit. L'application de bureau garde cet avertissement à l'écran, et sur l'entrée Teams de la barre latérale, jusqu'à ce qu'une synchronisation ultérieure réussisse. En ligne de commande, surveillez le message de chaîne d'audit après une synchronisation.
+
+## Dans l'application de bureau
+
+Ouvrez l'équipe et choisissez **Audit log**. L'onglet vérifie le journal dès son ouverture, et de nouveau à chaque changement de filtre ou lorsque vous choisissez **Verify again**. Administrateurs uniquement.
+
+La bannière donne l'un de trois verdicts :
+
+- **Verified on this device** : chaque événement a été vérifié, depuis le premier de chaque appareil.
+- **Verified, partial: older events weren't checked** : les événements affichés sont valides, mais les plus anciens n'ont pas été vérifiés, parce que seuls les plus récents ont été récupérés ou parce que le journal ne commence pas au premier événement d'un appareil.
+- **Verification failed: treat this log as tampered** : les problèmes sont listés ; vérifiez le journal sur une autre machine d'administration avant de faire confiance aux lignes.
+
+Filtrez par **Member**, **Host** et **Since (UTC)**, et choisissez **Export CSV** pour en garder une copie. La colonne **Check** indique **Valid**, **Bad signature**, **Unknown device** ou **Other team** pour chaque événement. Les heures sont en UTC.
+
+![L'onglet Audit log : verdict, filtres, contrôles par événement et export CSV](../../../../assets/screenshots/teams-audit.png)
+
+## Étapes suivantes
+
+- [Synchronisation](/fr/teams/sync/) : elle téléverse les événements en attente et signale une chaîne rompue.
+- [Membres et appareils](/fr/teams/members/) pour les rôles et les empreintes.

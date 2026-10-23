@@ -1,0 +1,130 @@
+---
+title: Tunnels
+description: Forward local ports and open SOCKS5 dynamic proxies through SSH.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH includes commands to open local port forwarding tunnels and dynamic SOCKS5 proxies without manual OpenSSH command flags. Tunnels run in the foreground and shut down cleanly when interrupted.
+
+## Local port forwarding
+
+The `bssh forward` command creates an SSH local port-forward tunnel (`-L` style). Traffic directed to a local listening port is tunneled through the remote SSH host to a destination address.
+
+```sh
+bssh forward db01 -L 5432:localhost:5432
+```
+
+### Spec format
+
+The `-L` spec follows standard OpenSSH syntax:
+
+```text
+[bind_addr:]bind_port:remote_host:remote_port
+```
+
+- `bind_addr`: Local IP address to bind to. Defaults to `127.0.0.1` when omitted.
+- `bind_port`: Local port where `bssh` listens for incoming connections.
+- `remote_host`: Destination host address as reached from the remote SSH server.
+- `remote_port`: Destination port on `remote_host`.
+
+IPv6 addresses can be enclosed in square brackets:
+
+```sh
+bssh forward web-prod -L [::1]:8080:[fe80::1]:80
+```
+
+### Common examples
+
+**Forward a remote database to your local machine:**
+
+```sh
+bssh forward db01 -L 5432:localhost:5432
+```
+
+You can now point local tools (such as `psql` or database clients) to `localhost:5432`.
+
+**Access an internal service through a jump host:**
+
+```sh
+bssh forward bastion -L 8080:internal-api.corp:80
+```
+
+Local requests to `http://localhost:8080` are forwarded through `bastion` to port 80 on `internal-api.corp`.
+
+**Listen on all local network interfaces:**
+
+```sh
+bssh forward web-prod -L 0.0.0.0:8080:localhost:80
+```
+
+Specifying `0.0.0.0` allows other machines on your local network to access the forwarded port.
+
+## SOCKS5 dynamic proxy
+
+The `bssh proxy` command opens an SSH dynamic port forward (`-D` style) that acts as a local SOCKS5 proxy. Any application configured with SOCKS5 proxy support can route traffic through the remote SSH host.
+
+```sh
+bssh proxy web-prod -D 1080
+```
+
+### Options
+
+- `-D <PORT>`: Local port for the SOCKS5 proxy listener (required).
+- `--bind <ADDR>`: Local bind address (optional, default: `127.0.0.1`).
+
+To make the SOCKS5 proxy reachable from your local network:
+
+```sh
+bssh proxy bastion -D 9050 --bind 0.0.0.0
+```
+
+### Configure clients
+
+Configure applications to route traffic through `socks5://127.0.0.1:1080`.
+
+For example, test the proxy using `curl`:
+
+```sh
+curl --socks5-hostname 127.0.0.1:1080 https://api.ipify.org
+```
+
+The returned IP address matches the remote SSH host rather than your local network address.
+
+## How tunnels run and route
+
+When you launch `bssh forward` or `bssh proxy`:
+
+1. `bssh` resolves the target connection using fuzzy matching and Bayesian ranking.
+2. It prints connection status and listener information:
+   ```text
+   →  SOCKS5 proxy on 127.0.0.1:1080 via web-prod (native)
+      Configure your client: socks5://127.0.0.1:1080
+      Press Ctrl+C to stop.
+   ```
+3. Direct connections without Kerberos or bastions use the native Rust SSH transport (`russh`).
+4. Connections that route through a bastion or require Kerberos automatically fall back to an OpenSSH subprocess (`ssh -L` or `ssh -D`), preserving jump host routing and credential handling.
+
+## Stop a tunnel or proxy
+
+Both `bssh forward` and `bssh proxy` run as interactive foreground processes.
+
+To terminate a tunnel:
+
+1. In the terminal running the command, press <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+2. `bssh` intercepts the termination signal, cleanly stops the local listener, closes the remote SSH channels, and exits:
+   ```text
+   Shutting down proxy…
+   Done.
+   ```
+
+## Desktop app
+
+Tunnels and proxies are managed through the command-line interface. The desktop app focuses on interactive terminal sessions, file transfers via SFTP, saved host management, session history, and team sharing; it does not currently feature a separate Tunnels view.
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Bastion hosts" description="Route connections through jump hosts and interactive bastions." href="/guides/bastions/" />
+	<LinkCard title="Remote commands" description="Execute commands and transfer files across hosts." href="/guides/remote-commands/" />
+</CardGrid>

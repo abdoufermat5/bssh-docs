@@ -1,0 +1,61 @@
+---
+title: Inicio rápido
+description: Guarda tu primer host SSH, conéctate mediante búsqueda aproximada, importa tu configuración SSH existente e inicia la aplicación de escritorio.
+---
+
+import { Steps, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Conéctate a tu primer servidor en menos de dos minutos con Bayesian SSH.
+
+## De cero a conectado
+
+<Steps>
+1. ### Guardar un host
+
+   Añade una entrada de conexión a la base de datos local con `bssh add`. Proporciona un nombre fácil de recordar y el nombre de host o la dirección IP de destino:
+
+   ```sh
+   bssh add web-prod web-prod.example.com -u deploy --tags prod,web
+   ```
+
+   Opcionalmente puedes especificar un puerto (`-p 2222`), una clave SSH (`-i ~/.ssh/id_ed25519`) o un bastión de salto (`-b bastion.example.com`).
+
+2. ### Conectarse mediante búsqueda aproximada
+
+   Conéctate a tu host guardado con `bssh connect`:
+
+   ```sh
+   bssh connect prod
+   ```
+
+   No necesitas escribir el nombre completo ni exacto. `bssh` busca entre partes de nombres, alias, nombres de host y etiquetas. Se ignoran los separadores, de modo que `webprod` coincide con `web-prod`. Cuando varios hosts coinciden, la clasificación bayesiana sitúa en primer lugar el host que usas con más frecuencia o de forma más reciente.
+
+3. ### Importar tu configuración SSH
+
+   Si ya tienes hosts definidos en tu configuración de OpenSSH, impórtalos en Bayesian SSH:
+
+   ```sh
+   bssh import
+   ```
+
+   `bssh import` lee `~/.ssh/config` por defecto. Analiza las directivas `Host`, `HostName`, `User`, `Port` e `IdentityFile`, omitiendo los bloques `Match`, y crea las conexiones automáticamente.
+
+4. ### Abrir la aplicación de escritorio
+
+   Inicia la interfaz gráfica en segundo plano:
+
+   ```sh
+   bssh desktop
+   ```
+
+   La aplicación de escritorio comparte la misma base de datos local que la línea de comandos. Puedes explorar tus hosts, filtrarlos por etiquetas, abrir pestañas de terminal integradas, transferir archivos y abrir la paleta de comandos con <kbd>Ctrl</kbd>+<kbd>K</kbd>.
+</Steps>
+
+## Siguientes pasos
+
+<CardGrid>
+	<LinkCard title="Gestión de conexiones" description="Editar, duplicar, eliminar y organizar conexiones con etiquetas." href="/es/guides/connections/" />
+	<LinkCard title="Búsqueda y clasificación" description="Cómo la búsqueda aproximada y la clasificación bayesiana seleccionan el host correcto." href="/es/guides/search-and-ranking/" />
+	<LinkCard title="Configuración inicial" description="Configura usuarios, puertos y bastiones por defecto." href="/es/start/configuration/" />
+	<LinkCard title="bssh Teams" description="Comparte conexiones con tu equipo mediante cifrado de extremo a extremo." href="/es/teams/overview/" />
+</CardGrid>

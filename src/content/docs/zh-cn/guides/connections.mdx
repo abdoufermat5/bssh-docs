@@ -1,0 +1,249 @@
+---
+title: 连接
+description: 保存、查看、编辑、复制、测试与组织你的 SSH 连接。
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+连接条目存储了远程服务器的主机名、端口、用户名、认证设置、跳板机路由以及标签。你可以通过命令行或桌面应用管理这些连接。
+
+## 保存连接
+
+运行 `bssh add` 并提供易记的连接名称以及目标主机名或 IP 地址：
+
+```sh
+bssh add web-prod web.example.com -u deploy
+```
+
+添加主机时，可指定自定义端口、私钥路径或启用 Kerberos 认证：
+
+```sh
+# 自定义端口与身份文件
+bssh add db01 10.0.1.5 -p 2222 -i ~/.ssh/id_ed25519
+
+# 通过跳板机路由并使用 Kerberos
+bssh add internal-api api.internal -b bastion.example.com -B jumpuser -k true
+```
+
+使用 `-t` 或 `--tags` 分配标签。可重复传入该选项，或使用逗号分隔多个标签值：
+
+```sh
+# 可重复选项
+bssh add staging-app 10.0.2.10 -t staging -t backend
+
+# 逗号分隔的标签
+bssh add staging-app 10.0.2.10 -t staging,backend
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `-u, --user <USER>` | SSH 用户名（回退至配置的默认值或 `$USER`）。 |
+| `-p, --port <PORT>` | SSH 端口（默认采用配置的端口，通常为 `22`）。 |
+| `-i, --key <FILE>` | SSH 私钥路径。 |
+| `-b, --bastion <HOST>` | 要经由路由的跳板机主机。 |
+| `-B, --bastion-user <USER>` | 跳板机用户名。 |
+| `--no-bastion` | 标记为直连（忽略默认跳板机配置）。 |
+| `-k, --kerberos <BOOL>` | 启用 Kerberos（`true` 或 `false`）。 |
+| `-t, --tags <TAG>` | 用于分组与过滤的标签（可重复指定或逗号分隔）。 |
+
+<Tabs syncKey="surface">
+  <TabItem label="命令行">
+    ```sh
+    bssh add web-prod web.example.com -u deploy -t prod,web
+    ```
+  </TabItem>
+  <TabItem label="桌面应用">
+    在工具栏中点击 **New host** 或按下 <kbd>Ctrl</kbd>+<kbd>N</kbd>（macOS 上为 <kbd>Cmd</kbd>+<kbd>N</kbd>）打开新建连接表单。
+
+    ![桌面应用中的主机列表](../../../../assets/screenshots/app-hosts.png)
+  </TabItem>
+</Tabs>
+
+## 列出连接
+
+运行 `bssh list` 查看当前活跃环境中的所有已存连接。列表按照贝叶斯评分排序，最常用和最近使用的主机排在最前面：
+
+```sh
+bssh list
+```
+
+```text
+🔗 Connections
+══════════════════════════════════════════════════════════════════════
+#   NAME                 HOST                      PORT     INFO
+──────────────────────────────────────────────────────────────────────
+1   web-prod             deploy@web.example.com    22       [prod,web]
+2   db01                 postgres@10.0.1.5         2222     [db,prod]
+──────────────────────────────────────────────────────────────────────
+Total: 2 connection(s)
+```
+
+按标签或最近使用进行筛选，或查看完整配置详情：
+
+```sh
+# 仅显示带有 prod 标签的连接
+bssh list -t prod
+
+# 仅显示最近使用的连接
+bssh list --recent
+
+# 显示包括 ID、跳板机与密钥在内的完整连接详情
+bssh list --detailed
+```
+
+## 查看连接详情
+
+运行 `bssh show` 查看已存连接的完整配置。可传入连接名称、别名或 ID：
+
+```sh
+bssh show web-prod
+```
+
+```text
+🔗 Connection Details: web-prod
+
+  ID:       9a699d0b-7607-4ee2-8ebc-1f00596ed6d1
+  Host:     web.example.com:22
+  User:     deploy
+  Kerberos: Disabled
+  Created:  2026-10-23 08:39:36 UTC
+  Tags:     prod, web
+
+  SSH Command: ssh -p 22 deploy@web.example.com
+```
+
+输出中会展示所有已存储字段，以及 `bssh` 建立会话时所构建的完整 `ssh` 命令。
+
+## 编辑连接
+
+运行 `bssh edit` 修改现有配置。只有传入的选项才会被更新，其余字段均保持不变：
+
+```sh
+# 修改 SSH 用户名与端口
+bssh edit web-prod --user deployer --port 2200
+
+# 更换跳板机主机
+bssh edit db01 --bastion jump.example.com
+
+# 移除跳板机并切换为直连
+bssh edit db01 --no-bastion
+```
+
+使用 `--add-tags` 与 `--remove-tags` 管理标签：
+
+```sh
+# 添加 canary 并移除 legacy 标签
+bssh edit staging --add-tags canary,api --remove-tags legacy
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `--name <NAME>` | 重命名连接。 |
+| `--host <HOST>` | 修改主机名或 IP 地址。 |
+| `--user <USER>` | 修改 SSH 用户名。 |
+| `--port <PORT>` | 修改 SSH 端口。 |
+| `--key <FILE>` | 设置或修改 SSH 私钥路径。 |
+| `--bastion <HOST>` | 设置或更换跳板机主机。 |
+| `--bastion-user <USER>` | 修改跳板机用户名。 |
+| `--no-bastion` | 移除跳板机并直接连接。 |
+| `--kerberos <BOOL>` | 启用或禁用 Kerberos（`true` 或 `false`）。 |
+| `--add-tags <TAG>` | 添加标签（可重复指定或逗号分隔）。 |
+| `--remove-tags <TAG>` | 移除标签（可重复指定或逗号分隔）。 |
+
+## 复制连接
+
+运行 `bssh duplicate` 以新名称克隆现有连接。端口、用户、密钥、跳板机及标签等全部配置均会被保留：
+
+```sh
+bssh duplicate web-prod web-staging
+```
+
+复制完成后，可使用 `bssh edit` 调整主机名或环境标签：
+
+```sh
+bssh edit web-staging --host staging.example.com --add-tags staging --remove-tags prod
+```
+
+## 测试可达性
+
+运行 `bssh ping` 测试 SSH 连通性，而无需开启交互式终端。`bssh` 会通过 TCP 建立连接并在批处理模式下完成 SSH 握手：
+
+```sh
+# 测试单个主机
+bssh ping web-prod
+
+# 并行测试所有已存连接
+bssh ping --all
+
+# 测试与特定标签匹配的主机
+bssh ping -g prod -t 10
+```
+
+`bssh ping` 同样遵循每台主机上配置的跳板机和交互式堡垒机路由。`-t` 或 `--timeout` 选项用于指定连接超时秒数（默认：`5`）。
+
+## 使用标签组织连接
+
+标签允许你按照用途、区域或环境分类主机。运行 `bssh groups` 可列出所有标签分组及各组内包含的连接数：
+
+```sh
+bssh groups
+```
+
+```text
+Available groups:
+  - prod (5 connections)
+  - staging (2 connections)
+  - web (3 connections)
+
+Use `bssh groups <name>` to see connections in a group.
+```
+
+若要查看指定分组内的全部连接，传入标签名称即可：
+
+```sh
+bssh groups prod
+```
+
+```text
+Connections in group 'prod':
+  - web-prod (deploy@web.example.com)
+  - db-prod (postgres@db.example.com)
+```
+
+## 删除连接
+
+运行 `bssh remove` 删除已存连接。可传入连接名称、别名或 ID：
+
+```sh
+bssh remove web-prod
+```
+
+`bssh` 将展示主机详情并提示确认。传入 `-f` 或 `--force` 可跳过确认提示：
+
+```sh
+bssh remove web-prod -f
+```
+
+你也可以按标签批量删除连接：
+
+```sh
+# 删除带有 staging 标签的所有连接
+bssh remove -t staging
+```
+
+`bssh` 会在提示确认前列出所有匹配的主机及总数。若要直接删除而不提示确认，请加上 `-f`：
+
+```sh
+bssh remove -t staging -f
+```
+
+:::caution
+删除连接将永久清除该连接在当前活跃环境中的所有历史会话记录。
+:::
+
+## 后续步骤
+
+<CardGrid>
+  <LinkCard title="搜索与排序" description="了解模糊匹配与贝叶斯评分如何为主机排序。" href="/zh-cn/guides/search-and-ranking/" />
+  <LinkCard title="别名" description="为常用连接创建简短别名。" href="/zh-cn/guides/aliases/" />
+</CardGrid>

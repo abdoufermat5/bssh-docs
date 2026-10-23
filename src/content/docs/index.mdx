@@ -1,0 +1,51 @@
+---
+title: Bayesian SSH
+description: A keyboard-first SSH manager that learns which host you want. Command line and desktop app, with end-to-end encrypted team sharing.
+template: splash
+hero:
+  title: Every host, one keystroke away.
+  tagline: Bayesian SSH is a keyboard-first SSH manager for the command line and the desktop. It learns which host you want, and shares connections with your team through an end-to-end encrypted vault.
+  actions:
+    - text: Get started
+      link: /start/quick-start/
+      icon: right-arrow
+    - text: Install
+      link: /start/installation/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import hosts from '../../assets/screenshots/app-hosts.png';
+
+```sh frame="terminal"
+curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash
+bssh add web-prod web-prod.example.com --tags prod,web
+bssh connect prod
+```
+
+<CardGrid>
+	<Card title="Finds the host you mean" icon="magnifier">
+		Type part of a name, a tag or an abbreviation. Results are ranked by how often and how recently you use each host.
+	</Card>
+	<Card title="Bastions and Kerberos built in" icon="server">
+		Jump hosts, interactive bastions and Kerberos tickets are handled for you, per connection or by default.
+	</Card>
+	<Card title="Command line and desktop" icon="laptop">
+		The same hosts in `bssh` and in the desktop app, with terminals, file transfer and session history.
+	</Card>
+	<Card title="Shared with your team" icon="padlock">
+		bssh Teams syncs connections through a vault encrypted on your devices, with a signed audit log.
+	</Card>
+</CardGrid>
+
+<Image src={hosts} alt="The Bayesian SSH desktop app listing saved hosts with their tags and last use" class="landing-shot" />
+
+## Where to go next
+
+<CardGrid>
+	<LinkCard title="Quick start" description="Save a host and connect in two minutes." href="/start/quick-start/" />
+	<LinkCard title="Guides" description="Connections, bastions, tunnels, transfers and the desktop app." href="/guides/connections/" />
+	<LinkCard title="bssh Teams" description="Share connections with end-to-end encryption and audit every session." href="/teams/overview/" />
+	<LinkCard title="Command reference" description="Every command and flag." href="/reference/cli/" />
+</CardGrid>

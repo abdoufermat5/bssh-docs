@@ -1,0 +1,115 @@
+---
+title: 桌面应用
+description: 在 Bayesian SSH 桌面应用中管理主机、开启终端、浏览文件并配置偏好设置。
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+Bayesian SSH 不仅提供命令行工具，还包含了一款以键盘为先的桌面应用。两者共用同一个本地 SQLite 数据库、配置文件和环境配置。
+
+## 启动应用
+
+你可以从系统的应用菜单中打开桌面界面，也可以在终端中执行命令启动：
+
+```sh
+bssh desktop
+```
+
+该命令会在后台启动 `bayesian-ssh-desktop`，并脱离当前终端会话。你也可以直接运行其二进制文件：
+
+```sh
+bayesian-ssh-desktop
+```
+
+若需在特定环境下启动桌面应用，可传入 `--env` 参数：
+
+```sh
+bssh desktop --env staging
+```
+
+## 界面布局
+
+侧边栏将各项功能划分为独立的视图：
+
+![桌面应用主机列表展示已保存连接、标签与快捷操作](../../../../assets/screenshots/app-hosts.png)
+
+- **Hosts**：查看、筛选并搜索已保存的连接。展示排序权重、连接状态、标签以及快捷操作。
+- **Terminals**：内置的多标签终端模拟器。支持同时连接到多台主机、切换或重排标签页，并在终端输出中搜索文本。
+- **Files**：SFTP 文件管理器，用于浏览远程目录、上传和下载文件。你可以在设置中启用或禁用该视图。
+- **Keys**：查看本地 SSH 密钥、生成新密钥对，并查看当前加载到 SSH 代理中的密钥。
+- **Security check**：直接在界面中运行安全审计（`bssh audit`），快速排查弱加密算法、缺失的密钥或不安全的文件权限。
+- **History**：查看历史连接会话记录及连接时间戳。
+- **Teams**：管理团队连接、成员邀请、设备审批以及已校验的审计日志。
+- **Settings**：调整应用偏好、外观主题、终端字体、软件更新和环境配置。
+
+<Aside type="note">
+本地端口转发与 SOCKS 代理需通过命令行工具使用 `bssh forward`（或别名 `bssh tunnel`）进行管理。详情请参阅[隧道指南](/zh-cn/guides/tunnels/)。
+</Aside>
+
+## 命令面板与快捷键
+
+在任何界面按下 <kbd>Ctrl</kbd>+<kbd>K</kbd>（macOS 上为 <kbd>⌘</kbd><kbd>K</kbd>）均可打开全局命令面板。
+
+在 Linux 或 Windows 下的活动终端标签页内，请按下 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>（macOS 上仍为 <kbd>⌘</kbd><kbd>K</kbd>）以打开命令面板，从而避免与 shell 内置快捷键冲突。
+
+![在命令面板中搜索操作与主机指令](../../../../assets/screenshots/app-palette.png)
+
+命令面板支持快速检索主机、切换视图、编辑连接、浏览文件和执行命令。按下 <kbd>?</kbd>、<kbd>F1</kbd> 或 <kbd>Ctrl</kbd>+<kbd>/</kbd>（macOS 上为 <kbd>⌘</kbd><kbd>/</kbd>）可打开完整的快捷键速查表。
+
+### 常用快捷键
+
+| 操作 | Linux / Windows | macOS | 适用范围 |
+| --- | --- | --- | --- |
+| 打开命令面板 | <kbd>Ctrl</kbd>+<kbd>K</kbd> | <kbd>⌘</kbd><kbd>K</kbd> | 全局任意位置 |
+| 在终端内打开命令面板 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> | <kbd>⌘</kbd><kbd>K</kbd> | 终端 |
+| 打开设置 | <kbd>Ctrl</kbd>+<kbd>,</kbd> | <kbd>⌘</kbd><kbd>,</kbd> | 全局任意位置 |
+| 快捷键速查表 | <kbd>?</kbd> / <kbd>F1</kbd> / <kbd>Ctrl</kbd>+<kbd>/</kbd> | <kbd>?</kbd> / <kbd>F1</kbd> / <kbd>⌘</kbd><kbd>/</kbd> | 全局任意位置 |
+| 聚焦筛选与搜索 | <kbd>/</kbd> | <kbd>/</kbd> | 全局 |
+| 按数字切换视图（<kbd>1</kbd>–<kbd>7</kbd>） | <kbd>1</kbd> 到 <kbd>7</kbd> | <kbd>1</kbd> 到 <kbd>7</kbd> | 全局 |
+| 新建主机 | <kbd>N</kbd> 或 <kbd>Ctrl</kbd>+<kbd>N</kbd> | <kbd>N</kbd> 或 <kbd>⌘</kbd><kbd>N</kbd> | 全局 |
+| 连接到选中主机 | <kbd>Enter</kbd> | <kbd>Enter</kbd> | Hosts |
+| 在新标签页中连接 | <kbd>Shift</kbd>+<kbd>Enter</kbd> | <kbd>Shift</kbd>+<kbd>Enter</kbd> | Hosts |
+| 浏览文件（SFTP） | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | <kbd>⌘</kbd><kbd>Enter</kbd> | Hosts |
+| 编辑主机 | <kbd>E</kbd> | <kbd>E</kbd> | Hosts |
+| 共享到团队 | <kbd>S</kbd> | <kbd>S</kbd> | Hosts |
+| 复制 ssh 命令 | <kbd>C</kbd> | <kbd>C</kbd> | Hosts |
+| 删除主机 | <kbd>Delete</kbd> | <kbd>Delete</kbd> | Hosts |
+| 移动选中项 | <kbd>↑</kbd> / <kbd>↓</kbd> 或 <kbd>J</kbd> / <kbd>K</kbd> | <kbd>↑</kbd> / <kbd>↓</kbd> 或 <kbd>J</kbd> / <kbd>K</kbd> | Hosts |
+| 下一个终端标签页 | <kbd>Ctrl</kbd>+<kbd>Tab</kbd> | <kbd>Ctrl</kbd>+<kbd>Tab</kbd> | 终端 |
+| 上一个终端标签页 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> | 终端 |
+| 关闭终端标签页 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd> | <kbd>⌘</kbd><kbd>W</kbd> | 终端 |
+| 重新打开已关闭标签页 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> | <kbd>⌘</kbd><kbd>T</kbd> | 终端 |
+| 在终端输出中查找 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> | <kbd>⌘</kbd><kbd>F</kbd> | 终端 |
+| 放大 / 缩小 / 恢复字体 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>=</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | <kbd>⌘</kbd><kbd>=</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | 终端 |
+| 取消正在进行的连接 | <kbd>Esc</kbd> | <kbd>Esc</kbd> | 终端 |
+
+## 主题与紧凑度
+
+在 **Settings** → **Appearance** 中配置界面外观：
+
+![外观设置展示主题与行高紧凑度选项](../../../../assets/screenshots/app-settings-appearance.png)
+
+### 主题
+
+- **Dark**：专为弱光环境设计的高对比度深色主题。
+- **Light**：清晰干净的浅色主题。
+- **Match system**：自动跟随操作系统的深浅色模式切换。
+
+### 行紧凑度
+
+紧凑度用于控制列表中每行的高度间距：
+
+- **Compact**：每行高 32 px。为包含大量主机的数据列表呈现更多内容。
+- **Comfortable**：每行高 40 px。适合日常使用的平衡间距（默认设置）。
+- **Spacious**：每行高 48 px。更宽松的行距，适合高分辨率显示器或触控设备。
+
+## 软件更新
+
+前往 **Settings** → **Updates** 可查看当前运行版本并检测软件更新。更新逻辑取决于你的安装方式：
+
+- **Snap 软件包**：更新由 Snap Store 在后台自动管理。你也可以手动触发刷新：
+  ```sh
+  sudo snap refresh bayesian-ssh
+  ```
+- **手动安装**：如果通过 `install.sh` 脚本或系统的包管理器进行安装，请重新运行安装脚本或通过包管理器更新。
+- **GitHub 发行版二进制文件**：点击 **Check for updates** 即可检查 GitHub Releases 是否有新的签名版本。检测到新版本后，点击 **Install update** 进行下载并更新。若仍有处于活动状态的终端会话，应用会在重启前提示确认。

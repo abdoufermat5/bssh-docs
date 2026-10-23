@@ -1,0 +1,118 @@
+---
+title: Aliases
+description: Create short nicknames for connections and use them across all bssh commands.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+An alias is a short, memorable nickname mapped to an existing connection. Instead of typing long identifiers like `production-payment-gateway-01`, you can create an alias such as `pay` and use it interchangeably across all `bssh` commands.
+
+## Create an alias
+
+Run `bssh alias add` with the new alias and the target connection name, alias, or ID:
+
+```sh
+bssh alias add wp web-prod
+```
+
+```text
+✅ Added alias 'wp' → 'web-prod'
+   You can now use: bssh connect wp
+```
+
+You can assign multiple aliases to the same connection:
+
+```sh
+bssh alias add prod web-prod
+bssh alias add primary web-prod
+```
+
+`bssh` validates aliases to prevent naming conflicts:
+- An alias cannot match an existing connection name.
+- An alias cannot duplicate an already registered alias.
+
+## List aliases
+
+Run `bssh alias list` to view all aliases in the active environment, grouped by host:
+
+```sh
+bssh alias list
+```
+
+```text
+📝 All Connection Aliases
+
+  web-prod (web.example.com)
+    └─ wp
+    └─ prod
+
+  db01 (10.0.1.5)
+    └─ db
+```
+
+To view only the aliases associated with a specific connection, provide the connection name:
+
+```sh
+bssh alias list web-prod
+```
+
+```text
+📝 Aliases for 'web-prod':
+   • wp
+   • prod
+```
+
+## Remove an alias
+
+Run `bssh alias remove` with the alias name to delete it:
+
+```sh
+bssh alias remove wp
+```
+
+Removing an alias only deletes the shortcut mapping. The underlying connection, its settings, and its session history are unaffected.
+
+## How aliases resolve
+
+Aliases resolve everywhere `bssh` accepts a target connection. You can use an alias in any command that takes a `<TARGET>` argument:
+
+```sh
+# Connect to the remote host
+bssh connect wp
+
+# View connection details
+bssh show wp
+
+# Edit connection settings
+bssh edit wp --port 2222
+
+# Test SSH connectivity
+bssh ping wp
+
+# Inspect Bayesian ranking score
+bssh why wp
+
+# Run a remote command
+bssh exec wp -- uptime
+
+# Upload files
+bssh upload wp -r ./dist /var/www/html
+
+# Forward a local port
+bssh forward wp -L 8080:localhost:80
+```
+
+### Precedence
+
+When you pass a target identifier, `bssh` checks exact connection names first. If no connection matches, it searches for a matching alias. If no alias matches, it performs interactive fuzzy matching across your saved connections.
+
+### Environment scope
+
+Aliases are stored within the active environment's local SQLite database (`history.db`). Each environment maintains an independent set of aliases, ensuring nicknames defined in one profile do not conflict with or leak into another.
+
+## Next steps
+
+<CardGrid>
+  <LinkCard title="Connections" description="Save, list, edit, and organize SSH connections." href="/guides/connections/" />
+  <LinkCard title="Environments" description="Isolate connections and aliases into independent profiles." href="/guides/environments/" />
+</CardGrid>

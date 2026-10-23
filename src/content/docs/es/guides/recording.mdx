@@ -1,0 +1,153 @@
+---
+title: Grabación y reproducción de sesión
+description: Graba la salida del terminal en formato asciicast, busca en salidas anteriores y reproduce sesiones desde la CLI o la aplicación de escritorio.
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Bayesian SSH puede grabar la salida de tus sesiones SSH en archivos con formato asciicast v2. Puedes realizar búsquedas de texto completo en las salidas de sesiones anteriores, reproducir sesiones en tu terminal o en la aplicación de escritorio y configurar políticas de retención para administrar el espacio en disco.
+
+:::caution
+Las grabaciones capturan la salida del terminal de manera literal. Si un comando muestra secretos, tokens de acceso o claves privadas en pantalla, dichos datos se almacenan en el archivo de grabación y se indexan en la base de búsqueda local. Las pulsaciones de teclas nunca se graban.
+:::
+
+## Habilitar la grabación de sesión
+
+La grabación de sesión está deshabilitada de forma predeterminada. Puedes activarla globalmente, limitarla a etiquetas específicas o alternarla por conexión.
+
+<Tabs syncKey="surface">
+	<TabItem label="Línea de comandos">
+		Habilita la grabación globalmente:
+
+		```sh
+		bssh config --recording on
+		```
+
+		Para grabar únicamente hosts con etiquetas específicas:
+
+		```sh
+		bssh config --recording-tags prod,critical
+		```
+
+		Para deshabilitar la grabación nuevamente:
+
+		```sh
+		bssh config --recording off
+		```
+
+		También puedes anular la configuración global para una conexión individual mediante `--record` o `--no-record`:
+
+		```sh
+		# Grabar esta sesión aunque la grabación esté apagada globalmente
+		bssh connect web-prod --record
+
+		# No grabar esta sesión aunque la grabación esté encendida globalmente
+		bssh connect web-prod --no-record
+		```
+	</TabItem>
+	<TabItem label="Aplicación de escritorio">
+		Abre **Settings** en la barra lateral y ve a **Session recording**:
+
+		1. Marca **Record sessions** para habilitar la grabación en todas las conexiones.
+		2. En **Only for tags**, introduce una lista de etiquetas separadas por comas (por ejemplo `prod, staging`) para limitar la grabación a los hosts coincidentes. Deja el campo vacío para grabar todas las conexiones.
+	</TabItem>
+</Tabs>
+
+### Parámetros de configuración
+
+Puedes ajustar los parámetros de grabación en el archivo `config.json` de tu entorno bajo la clave `recording`:
+
+```json
+{
+  "recording": {
+    "enabled": false,
+    "tags": ["prod"],
+    "max_bytes_per_session": 52428800,
+    "retention_days": 90
+  }
+}
+```
+
+- **`max_bytes_per_session`**: evita que un flujo descontrolado de registros llene tu disco. Si una sesión supera este tamaño (predeterminado: 50 MiB), `bssh` escribe `[bssh: recording truncated]` y detiene la captura por el resto de la sesión.
+- **`retention_days`**: tiempo en días tras el cual las grabaciones antiguas y sus índices de búsqueda se eliminan (predeterminado: 90 días).
+
+## Almacenamiento y permisos de archivos
+
+Las grabaciones se guardan en el directorio `recordings/` dentro de la carpeta de datos de tu entorno (por defecto, `~/.local/share/bayesian-ssh/recordings/` en Linux).
+
+- **Formato**: cada sesión se escribe como un archivo [asciicast v2](https://github.com/asciinema/asciicast-format) con nombre `<session_id>.cast`. Estos archivos se pueden reproducir con `bssh replay` o cualquier reproductor compatible con asciicast.
+- **Permisos**: los archivos se crean directamente con permisos estrictos `0600` (`-rw-------`) antes de escribir cualquier dato. Otros usuarios locales de tu equipo no pueden leer las grabaciones.
+
+## Reproducir una sesión grabada
+
+Para reproducir una sesión en tu terminal, proporciona su identificador de sesión o un prefijo único (de al menos 6 caracteres) a `bssh replay`:
+
+```sh
+bssh replay 3f2a91c0
+```
+
+Puedes regular la velocidad de reproducción y limitar los tiempos de inactividad:
+
+```sh
+# Duplicar la velocidad de reproducción
+bssh replay 3f2a91c0 --speed 2.0
+
+# Limitar las pausas de inactividad a un máximo de 1 segundo (predeterminado: 2)
+bssh replay 3f2a91c0 --idle-cap 1.0
+```
+
+| Opción | Predeterminado | Descripción |
+| --- | --- | --- |
+| `-s, --speed <FACTOR>` | `1` | Multiplicador de velocidad de reproducción (por ejemplo, `2` para el doble de velocidad). |
+| `--idle-cap <SECONDS>` | `2` | Duración máxima de pausa en segundos durante periodos de inactividad. |
+
+En la aplicación de escritorio, abre la vista **History** y haz clic en cualquier sesión con el icono de grabación para iniciar el reproductor integrado. El reproductor admite reproducir, pausar, desplazarse por la línea de tiempo, cambiar la velocidad (1x, 2x, 4x) y saltar directamente al final.
+
+## Buscar texto en grabaciones de sesiones
+
+Bayesian SSH indexa el texto de las sesiones grabadas usando el módulo FTS5 (búsqueda de texto completo) de SQLite. Antes de la indexación, se limpian las secuencias de escape de color ANSI y movimientos de cursor para permitir búsquedas limpias sobre el texto plano.
+
+Para buscar una frase en todas las grabaciones:
+
+```sh
+bssh history --grep "kernel panic"
+```
+
+```text
+CONNECTION           STARTED              SESSION    SNIPPET
+────────────────────────────────────────────────────────────────────────────────────────
+web-prod             2026-10-23 09:14:22  3f2a91c0   ...systemd-journald: kernel panic - not syncing...
+staging-api          2026-10-22 17:05:12  f4a10e82   ...kernel panic detected in crashdump...
+```
+
+Puedes combinar `--grep` con filtros de conexión o fecha:
+
+```sh
+bssh history -c web-prod --days 14 --grep "certificate expired"
+```
+
+## Limpieza de grabaciones antiguas
+
+Cuando las grabaciones de sesión superan el umbral configurado en `retention_days` (predeterminado: 90 días), `bssh` elimina automáticamente los archivos `.cast` vencidos y limpia sus registros de la base de datos y del índice FTS5.
+
+Esta purga ocurre automáticamente:
+
+- Al terminar una sesión SSH.
+- Al ejecutar `bssh close --cleanup`.
+
+```sh
+bssh close --cleanup
+```
+
+```text
+🗑️  Pruned 3 expired recording(s) (older than 90 days)
+```
+
+Para conservar las grabaciones de forma indefinida, establece `"retention_days": 0` en tu archivo `config.json`.
+
+## Próximos pasos
+
+<CardGrid>
+	<LinkCard title="Historial de sesiones" description="Filtra el historial, revisa códigos de salida y consulta estadísticas." href="/es/guides/sessions/" />
+	<LinkCard title="Referencia de configuración" description="Revisa todos los parámetros de grabación disponibles en config.json." href="/es/reference/configuration/" />
+</CardGrid>

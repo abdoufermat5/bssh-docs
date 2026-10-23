@@ -1,0 +1,58 @@
+---
+title: Synchronisation
+description: Ce que fait une synchronisation Teams, comment les modifications hors ligne et les conflits sont gérés, et ce que la page Teams indique.
+---
+
+La synchronisation échange les changements avec le serveur de synchronisation de l'équipe : les connexions nouvelles et modifiées descendent, vos modifications et vos événements d'audit montent. Teams fonctionne d'abord en local. Vous gardez une copie locale complète, et une connexion SSH n'attend jamais une synchronisation.
+
+## Lancer une synchronisation
+
+```sh
+bssh teams sync            # toutes les équipes de cette machine
+bssh teams sync platform   # une équipe
+```
+
+Une exécution récupère les nouvelles entrées et les vérifie, envoie vos modifications, téléverse les événements d'audit en attente et met à jour les connexions de l'équipe dans `bssh list`.
+
+Chaque équipe affiche une ligne avec ce qui a changé : nombre d'entrées récupérées et envoyées, conflits résolus, hôtes mis à jour, événements d'audit téléversés, clé tournée. Si une équipe échoue, les autres s'exécutent quand même ; la commande sort alors avec un code non nul et nomme les équipes en échec.
+
+Dans l'application de bureau, synchronisez depuis la page Teams : **Sync** à côté d'une équipe, ou **Sync all** dans l'en-tête. Ouvrez une équipe et utilisez **Sync** pour ne synchroniser qu'elle. Une synchronisation se lance aussi d'elle-même lorsqu'une clé accordée arrive pendant que la page Teams est ouverte.
+
+## Travailler hors ligne
+
+Les modifications, les partages et les événements d'audit attendent localement qu'une synchronisation atteigne le serveur. Un partage fait hors ligne est mis en file : bssh indique qu'il sera partagé dès qu'une synchronisation aboutira, et la prochaine synchronisation réussie l'envoie.
+
+Rien ne bloque sur le réseau. Vous pouvez lister, connecter et utiliser les connexions d'équipe que vous avez déjà.
+
+## Conflits
+
+Le coffre est un journal de révisions en ajout seul, par équipe. Quand deux membres modifient la même connexion, le conflit se résout selon le dernier écrivain, entrée par entrée, et la version perdante reste dans l'historique du serveur : rien n'est perdu.
+
+Si vous avez modifié une connexion qu'un autre membre a supprimée, votre modification est abandonnée et la synchronisation indique de quelle entrée il s'agit.
+
+## Entrées qui échouent aux contrôles
+
+Chaque entrée récupérée est vérifiée avant d'être appliquée. Une entrée d'un auteur inconnu, ou qui ne poursuit pas la chaîne de révisions qu'elle prétend, par exemple une ancienne version réétiquetée comme nouvelle, est rejetée et signalée avec sa révision et la raison.
+
+Les entrées rejetées ne sont jamais appliquées, et la synchronisation continue avec le reste. Un serveur qui rejoue d'anciennes versions ou un auteur inconnu peut en être la cause ; prévenez l'administrateur de votre équipe. L'application de bureau garde un avis **Integrity problems** sur l'équipe jusqu'à ce qu'une synchronisation ultérieure ne signale plus rien.
+
+## Ce que montre l'application de bureau
+
+La page **Teams** liste vos équipes avec votre rôle, le nombre d'hôtes et la dernière synchronisation. Survolez l'heure de synchronisation pour l'heure UTC exacte. **Needs attention** contient ce qui attend une personne, et l'entrée Teams de la barre latérale indique combien d'éléments attendent :
+
+- **Waiting for the key** : cet appareil a adhéré mais aucun administrateur ne lui a encore accordé la clé d'équipe.
+- **N devices waiting** : les administrateurs voient les appareils en attente d'une clé.
+- **You were removed** : cet appareil ne peut plus synchroniser l'équipe.
+- **Integrity problems** : des entrées ont échoué aux contrôles ci-dessus.
+- **Audit log failed** : le journal d'audit ne se vérifie plus sur cette machine.
+- **Audit chain broken** : il manque à la copie serveur de votre journal d'audit des événements que cet appareil avait téléversés.
+- **Rotation stopped** : une rotation de clé ne s'est pas terminée après le retrait d'un membre.
+
+La page vérifie ce qui demande une intervention toutes les 30 secondes tant qu'elle est ouverte. Ils restent listés jusqu'à leur résolution.
+
+![La page Teams : rôle, nombre d'hôtes, dernière synchronisation et points à traiter par équipe](../../../../assets/screenshots/teams-home.png)
+
+## Étapes suivantes
+
+- [Journal d'audit](/fr/teams/audit-log/) pour ce que la synchronisation téléverse et comment il est vérifié.
+- [Membres et appareils](/fr/teams/members/) pour accorder sa clé à un appareil en attente.

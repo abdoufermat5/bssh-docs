@@ -1,0 +1,115 @@
+---
+title: Desktop application
+description: Manage hosts, open terminals, browse files, and configure settings in the Bayesian SSH desktop application.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+Bayesian SSH provides a keyboard-driven desktop application alongside the command-line tool. Both use the same local SQLite database, configuration, and environment profiles.
+
+## Launching the application
+
+Launch the desktop interface from your application menu, or run it from a terminal:
+
+```sh
+bssh desktop
+```
+
+The command starts `bayesian-ssh-desktop` in the background, detached from your terminal session. You can also run the binary directly:
+
+```sh
+bayesian-ssh-desktop
+```
+
+To start the desktop application with a specific environment profile, pass the `--env` flag:
+
+```sh
+bssh desktop --env staging
+```
+
+## Interface layout
+
+The sidebar organizes your workflow into dedicated views:
+
+![The desktop app host list showing saved connections, tags, and quick actions](../../../assets/screenshots/app-hosts.png)
+
+- **Hosts**: View, filter, and search saved connections. See rankings, connection status, tags, and quick actions.
+- **Terminals**: A built-in multi-tab terminal emulator. Connect to multiple hosts simultaneously, switch or reorder tabs, and search terminal output.
+- **Files**: An SFTP file manager for browsing remote directories, uploading, and downloading files. You can toggle this view in Settings.
+- **Keys**: Inspect local SSH keys, generate new keypairs, and view keys currently active in your SSH agent.
+- **Security check**: Run security audits directly from the interface (`bssh audit`) to identify weak algorithms, missing keys, or insecure permissions.
+- **History**: Review past connection sessions and usage timestamps.
+- **Teams**: Manage team connections, member invitations, device approvals, and verified audit logs.
+- **Settings**: Adjust application preferences, appearance, terminal fonts, updates, and environment profiles.
+
+<Aside type="note">
+Local port forwarding and SOCKS proxies are managed on the command line using `bssh forward` (or `bssh tunnel`). See the [Tunnels guide](/guides/tunnels/) for port-forwarding options.
+</Aside>
+
+## Command palette and keyboard shortcuts
+
+Open the command palette from anywhere by pressing <kbd>Ctrl</kbd>+<kbd>K</kbd> (or <kbd>⌘</kbd><kbd>K</kbd> on macOS).
+
+Inside an active terminal tab on Linux or Windows, press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (<kbd>⌘</kbd><kbd>K</kbd> on macOS) to open the palette without intercepting shell control chords.
+
+![Command palette searching actions and host verbs](../../../assets/screenshots/app-palette.png)
+
+The command palette allows you to search hosts, switch views, edit connections, browse files, and run commands. Press <kbd>?</kbd>, <kbd>F1</kbd>, or <kbd>Ctrl</kbd>+<kbd>/</kbd> (<kbd>⌘</kbd><kbd>/</kbd> on macOS) to open the full keyboard shortcut sheet.
+
+### Common shortcuts
+
+| Action | Linux / Windows | macOS | Context |
+| --- | --- | --- | --- |
+| Command palette | <kbd>Ctrl</kbd>+<kbd>K</kbd> | <kbd>⌘</kbd><kbd>K</kbd> | Anywhere |
+| Command palette inside terminal | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> | <kbd>⌘</kbd><kbd>K</kbd> | Terminal |
+| Settings | <kbd>Ctrl</kbd>+<kbd>,</kbd> | <kbd>⌘</kbd><kbd>,</kbd> | Anywhere |
+| Keyboard shortcuts sheet | <kbd>?</kbd> / <kbd>F1</kbd> / <kbd>Ctrl</kbd>+<kbd>/</kbd> | <kbd>?</kbd> / <kbd>F1</kbd> / <kbd>⌘</kbd><kbd>/</kbd> | Anywhere |
+| Focus filter or search | <kbd>/</kbd> | <kbd>/</kbd> | Global |
+| Switch view by number (<kbd>1</kbd>–<kbd>7</kbd>) | <kbd>1</kbd> to <kbd>7</kbd> | <kbd>1</kbd> to <kbd>7</kbd> | Global |
+| New host | <kbd>N</kbd> or <kbd>Ctrl</kbd>+<kbd>N</kbd> | <kbd>N</kbd> or <kbd>⌘</kbd><kbd>N</kbd> | Global |
+| Connect to selected host | <kbd>Enter</kbd> | <kbd>Enter</kbd> | Hosts |
+| Connect in a new tab | <kbd>Shift</kbd>+<kbd>Enter</kbd> | <kbd>Shift</kbd>+<kbd>Enter</kbd> | Hosts |
+| Browse files | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | <kbd>⌘</kbd><kbd>Enter</kbd> | Hosts |
+| Edit host | <kbd>E</kbd> | <kbd>E</kbd> | Hosts |
+| Share with a team | <kbd>S</kbd> | <kbd>S</kbd> | Hosts |
+| Copy ssh command | <kbd>C</kbd> | <kbd>C</kbd> | Hosts |
+| Delete host | <kbd>Delete</kbd> | <kbd>Delete</kbd> | Hosts |
+| Navigate selection | <kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>J</kbd> / <kbd>K</kbd> | <kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>J</kbd> / <kbd>K</kbd> | Hosts |
+| Next terminal tab | <kbd>Ctrl</kbd>+<kbd>Tab</kbd> | <kbd>Ctrl</kbd>+<kbd>Tab</kbd> | Terminal |
+| Previous terminal tab | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> | Terminal |
+| Close terminal tab | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd> | <kbd>⌘</kbd><kbd>W</kbd> | Terminal |
+| Reopen closed tab | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> | <kbd>⌘</kbd><kbd>T</kbd> | Terminal |
+| Find in terminal buffer | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> | <kbd>⌘</kbd><kbd>F</kbd> | Terminal |
+| Zoom in / out / reset | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>=</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | <kbd>⌘</kbd><kbd>=</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | Terminal |
+| Cancel connection in progress | <kbd>Esc</kbd> | <kbd>Esc</kbd> | Terminal |
+
+## Themes and density
+
+Configure appearance preferences under **Settings** → **Appearance**:
+
+![Appearance settings showing theme and density options](../../../assets/screenshots/app-settings-appearance.png)
+
+### Themes
+
+- **Dark**: High-contrast dark theme designed for low-light environments.
+- **Light**: Clean, light color scheme.
+- **Match system**: Automatically switches between dark and light themes based on your desktop operating system settings.
+
+### Row density
+
+Density controls the vertical spacing of list rows throughout the application:
+
+- **Compact**: 32 px rows. Maximizes visible items for large host lists.
+- **Comfortable**: 40 px rows. Balanced spacing for everyday use (default).
+- **Spacious**: 48 px rows. Relaxed spacing suited for touch screens and high-resolution displays.
+
+## Software updates
+
+Open **Settings** → **Updates** to inspect your current version and check for software updates. The update mechanism reflects your installation method:
+
+- **Snap package**: Updates are handled automatically in the background by the Snap Store. You can update manually using:
+  ```sh
+  sudo snap refresh bayesian-ssh
+  ```
+- **Manual installation**: If installed via `install.sh` or your operating system package manager, update by re-running the installation script or through your package manager.
+- **Direct GitHub release**: Click **Check for updates** to query GitHub for newer signed releases. When an update is available, click **Install update** to download and apply it. The application prompts for confirmation if active terminal sessions are running.

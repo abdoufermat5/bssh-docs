@@ -1,0 +1,192 @@
+---
+title: Comandos remotos y transferencias
+description: Ejecuta comandos y transfiere archivos en uno o varios hosts en paralelo.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH ofrece comandos para ejecutar scripts en múltiples hosts y transferir archivos en paralelo. Admite selección masiva por etiquetas, seguimiento de progreso y cambio automático entre SFTP y SCP.
+
+## Ejecutar comandos con bssh exec
+
+El comando `bssh exec` ejecuta órdenes puntuales a través de SSH sin necesidad de abrir una shell interactiva.
+
+Escribe siempre `--` antes del comando remoto para separar las opciones de `bssh` respecto a los argumentos del comando.
+
+### Ejecución en un solo host
+
+Ejecuta un comando en un host determinado:
+
+```sh
+bssh exec web-prod -- uname -a
+```
+
+Al dirigirte a un único host, `bssh exec` transmite directamente stdout y stderr a tu terminal y termina con el mismo código de salida que el proceso remoto.
+
+### Ejecución en múltiples hosts
+
+Puedes seleccionar varios servidores en paralelo mediante etiquetas o ejecutar una orden en todo tu inventario.
+
+**Filtrar hosts por etiqueta:**
+
+```sh
+bssh exec -t prod -- systemctl status nginx
+```
+
+**Ejecutar en todas las conexiones guardadas:**
+
+```sh
+bssh exec --all -- uptime
+```
+
+La ejecución multihost procesa hasta 16 servidores de forma simultánea. La salida de cada host queda separada por un encabezado:
+
+```text
+🚀 Executing 'uptime' across 2 host(s)...
+
+==================================================
+Host: web-prod (deploy@web.example.com)
+==================================================
+ 12:45:10 up 45 days,  3:12,  1 user,  load average: 0.15, 0.08, 0.02
+(Exit Code: 0)
+
+==================================================
+Host: db-prod (deploy@10.0.4.12)
+==================================================
+ 12:45:10 up 90 days, 14:02,  0 users,  load average: 0.42, 0.38, 0.30
+(Exit Code: 0)
+```
+
+Si un comando escribe en stderr, esa información se aísla en un bloque `[STDERR]`. Si algún servidor falla, `bssh exec` finaliza con un error señalando cuántos hosts no pudieron completar la orden.
+
+### Previsualizar la ejecución con --dry-run
+
+Para comprobar qué hosts se verán afectados antes de ejecutar las órdenes:
+
+```sh
+bssh exec -t prod --dry-run -- systemctl restart nginx
+```
+
+```text
+🔍 [DRY-RUN PREVIEW]
+Command to execute: systemctl restart nginx
+Target hosts (2):
+  - web01 (deploy@10.0.4.10)
+  - web02 (deploy@10.0.4.11)
+
+Dry-run complete. No remote commands were executed.
+```
+
+<Tabs syncKey="surface">
+<TabItem label="Línea de comandos">
+
+Ejecuta `bssh exec [TARGET] -- <COMMAND>...` directamente desde tu terminal.
+
+</TabItem>
+<TabItem label="Aplicación de escritorio">
+
+En la aplicación de escritorio, haz clic en **Batch run** en la cabecera de la lista de hosts o pulsa <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd>Cmd</kbd>+<kbd>K</kbd> en macOS) para abrir la paleta de comandos y elige **Run command on hosts**. Puedes seleccionar hosts por etiqueta, escribir un script y revisar la salida de cada host de forma independiente.
+
+</TabItem>
+</Tabs>
+
+## Subir archivos con bssh upload
+
+El comando `bssh upload` transfiere un archivo o directorio local a uno o varios hosts remotos en paralelo.
+
+```sh
+bssh upload web-prod ./app.tar.gz /opt/app/
+```
+
+### Seleccionar varios hosts
+
+Puedes indicar los hosts de forma explícita, mediante etiquetas o abarcando todas las conexiones:
+
+- **Lista separada por comas**:
+  ```sh
+  bssh upload web1,web2 ./app.tar.gz /opt/app/
+  ```
+- **Por etiqueta**:
+  ```sh
+  bssh upload -t prod ./app.tar.gz /opt/app/
+  ```
+- **Todas las conexiones guardadas**:
+  ```sh
+  bssh upload --all ./app.tar.gz /opt/app/
+  ```
+
+### Opciones de subida
+
+- `-r, --recursive`: Sube un árbol de directorios de forma recursiva.
+  ```sh
+  bssh upload web-prod -r ./config/ /etc/myapp/
+  ```
+- `--mode <OCTAL>`: Establece los permisos del archivo remoto (por defecto: `0o644`).
+  ```sh
+  bssh upload web-prod ./deploy-key.pem /root/.ssh/id_rsa --mode 0o600
+  ```
+- `-j, --parallel <N>`: Número máximo de subidas concurrentes a hosts (por defecto: `16`).
+  ```sh
+  bssh upload -t prod -j 8 ./release.tar.gz /var/www/
+  ```
+- `--offset <BYTES>`: Reanuda una subida interrumpida desde una posición en bytes (solo para un único host).
+- `--dry-run`: Previsualiza los hosts seleccionados y las rutas remotas resueltas sin transferir datos.
+
+### Progreso y gestión de protocolos
+
+Al ejecutarse en una terminal interactiva, `bssh upload` muestra barras de progreso individuales para cada host con el recuento de bytes, la velocidad de transferencia y el tiempo estimado restante.
+
+`bssh` utiliza SFTP nativo en conexiones directas. Al transferir a través de un bastión o una sesión de Kerberos, recurre automáticamente a SCP. En bastiones interactivos (como «The Bastion» de OVH), la subida se efectúa mediante un script envoltorio generado automáticamente según el protocolo `--osh scp`.
+
+<Tabs syncKey="surface">
+<TabItem label="Línea de comandos">
+
+Utiliza `bssh upload [OPTIONS] [TARGETS] <LOCAL> <REMOTE>` en tu terminal.
+
+</TabItem>
+<TabItem label="Aplicación de escritorio">
+
+En la aplicación de escritorio, pulsa en **Files** en la barra lateral para abrir el gestor de archivos SFTP. Puedes explorar directorios remotos, arrastrar y soltar archivos para subirlos, o abrir la ventana **Upload files** desde la lista de hosts para enviar archivos a varios hosts al mismo tiempo.
+
+</TabItem>
+</Tabs>
+
+## Descargar archivos con bssh download
+
+El comando `bssh download` transfiere archivos o directorios desde un servidor remoto a tu equipo local.
+
+```sh
+bssh download web-prod /var/log/nginx/access.log ./access.log
+```
+
+### Opciones de descarga
+
+- `-r, --recursive`: Descarga recursivamente un árbol de directorios remoto completo:
+  ```sh
+  bssh download db-prod -r /backups/daily/ ./local-backups/
+  ```
+
+### Gestión de protocolos
+
+Al igual que en las subidas, `bssh download` utiliza SFTP nativo en conexiones directas y cambia a SCP cuando se accede a través de bastiones o si el subsistema SFTP no se encuentra disponible.
+
+En terminales interactivas, una barra de progreso refleja el avance, la velocidad y el total de bytes descargados.
+
+## Tabla de opciones de comandos
+
+| Opción | Comandos | Descripción |
+| --- | --- | --- |
+| `-a, --all` | `exec`, `upload` | Aplica a todas las conexiones guardadas en paralelo. |
+| `-t, --tag <TAG>` | `exec`, `upload` | Aplica a conexiones con esta etiqueta. |
+| `--dry-run` | `exec`, `upload` | Muestra los hosts destinatarios sin ejecutar ni transferir. |
+| `-r, --recursive` | `upload`, `download` | Procesa directorios de manera recursiva. |
+| `--mode <OCTAL>` | `upload` | Define los permisos del archivo remoto (por defecto: `0o644`). |
+| `-j, --parallel <N>` | `upload` | Máximo de transferencias paralelas (por defecto: `16`). |
+| `--offset <BYTES>` | `upload` | Reanuda la subida desde un desplazamiento en bytes (un solo host). |
+
+## Próximos pasos
+
+<CardGrid>
+	<LinkCard title="Hosts bastión" description="Enruta conexiones a través de hosts de salto y bastiones interactivos." href="/es/guides/bastions/" />
+	<LinkCard title="Túneles" description="Reenvío de puertos y proxys dinámicos SOCKS5." href="/es/guides/tunnels/" />
+</CardGrid>

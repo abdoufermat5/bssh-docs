@@ -1,0 +1,249 @@
+---
+title: Self-hosting the server
+description: Run the bssh Teams sync server on your own infrastructure with Docker and PostgreSQL.
+---
+
+import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+The bssh Teams sync server is one container image backed by PostgreSQL. The hosted service runs the same image, so a self-hosted server behaves the same way, with the data on your own infrastructure. Without Stripe configured, there is no billing: each team has a fixed number of seats.
+
+The server stores ciphertext and metadata only. It never holds hostnames, notes, private keys or recording contents, and it is never in the SSH data path. [Teams security](/teams/security/) explains the trust model.
+
+## What you need
+
+- A Linux host with Docker and the Compose plugin.
+- PostgreSQL, for example `postgres:17` as in the Compose file below.
+- A DNS name and a TLS certificate for it. Clients refuse plain HTTP unless the host is loopback, and they require TLS 1.3.
+- Access from your team's machines to that name.
+
+## Get the image
+
+The image is distributed as a Docker image archive named `bssh-cloud-api_<version>.tar`, for example `bssh-cloud-api_0.2.0.tar`. Request access in a [GitHub issue](https://github.com/abdoufermat5/bayesian-ssh/issues).
+
+Load the archive on the server:
+
+```sh
+docker load -i bssh-cloud-api_0.2.0.tar
+```
+
+The loaded image is tagged with its version, for example `bssh-cloud-api:0.2.0`.
+
+## Configuration
+
+Everything is set at run time; no environment-specific value is baked into the image.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `DATABASE_URL` / `DATABASE_URL_FILE` | required | PostgreSQL URL, or a file holding it. For TLS, add `?sslmode=verify-full&sslrootcert=/path/ca.crt`. |
+| `BIND_ADDR` | `127.0.0.1:8080` (`0.0.0.0:8080` in the image) | Listen address. |
+| `TLS_CERT_FILE`, `TLS_KEY_FILE` | unset | PEM certificate chain and key: the server serves HTTPS itself. Set both or neither; without them it serves plain HTTP for a TLS proxy in front. |
+| `SIGNUP_MODE` | `invite` | `invite`: only invited emails and `SIGNUP_BOOTSTRAP_EMAILS` may create accounts. `open` accepts anyone and is for development only. |
+| `SIGNUP_BOOTSTRAP_EMAILS` / `SIGNUP_BOOTSTRAP_EMAILS_FILE` | empty | Emails that may create an account without an invite: team creators, onboarded by hand. Comma- or newline-separated; both sources are merged. |
+| `TRUST_PROXY_HEADERS` | off | Record the audit client IP from `X-Forwarded-For` / `X-Real-IP`. Only behind a proxy that overwrites them and is the only way in. |
+| `DEFAULT_SEATS` | `5` | Seats of a new team when billing is off. |
+| `MIN_CLIENT_VERSION` | `0.0.0` | Oldest client version accepted. |
+| `RUST_LOG` | unset | Log filter, for example `info`. |
+
+The `_FILE` variants name a file whose trimmed contents replace the variable. Use them for secrets, which then stay out of `docker inspect` and the environment.
+
+## Create the secrets
+
+<Steps>
+1. Create the secret files and write a database password:
+   ```sh
+   mkdir -p secrets
+   chmod 700 secrets
+
+   printf '%s' 'a-long-random-password' > secrets/postgres_password
+   printf '%s' 'postgres://bssh:a-long-random-password@postgres:5432/bssh' > secrets/database_url
+   printf '%s\n' 'ana@example.com' > secrets/bootstrap_emails
+
+   chmod 600 secrets/*
+   ```
+
+2. Keep the password in `database_url` identical to the one in `postgres_password`, URL-encoded if it contains reserved characters. To use a PostgreSQL server outside Compose, change the host in `database_url` and add the TLS parameters.
+</Steps>
+
+The API reads these files at startup; restart it after changing one.
+
+## Run with Docker Compose
+
+```yaml
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: bssh
+      POSTGRES_DB: bssh
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./secrets/postgres_password:/run/secrets/postgres_password:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bssh -d bssh"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  api:
+    image: bssh-cloud-api:0.2.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL_FILE: /run/secrets/database_url
+      BIND_ADDR: 0.0.0.0:8080
+      SIGNUP_BOOTSTRAP_EMAILS_FILE: /run/secrets/bootstrap_emails
+      TRUST_PROXY_HEADERS: "true"
+      DEFAULT_SEATS: "5"
+      RUST_LOG: info
+    volumes:
+      - ./secrets/database_url:/run/secrets/database_url:ro
+      - ./secrets/bootstrap_emails:/run/secrets/bootstrap_emails:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+```
+
+```sh
+docker compose up -d
+docker compose logs -f api
+```
+
+The API runs its database migrations at startup, before it accepts connections, and logs its version, for example `bssh-cloud 0.2.0`. If a migration fails, the process exits and the log says why.
+
+The API is published on the loopback address only, because TLS is terminated in front of it. `curl http://127.0.0.1:8080/healthz` returns `ok`; use it for monitoring.
+
+## Put TLS in front
+
+Either let the server serve TLS by mounting a certificate chain and its key and setting `TLS_CERT_FILE` and `TLS_KEY_FILE`, or leave both unset and terminate TLS in a reverse proxy on the same host. In both cases the API must not be reachable from outside, and the certificate must be valid for the name your team uses.
+
+Clients require TLS 1.3, so the proxy must offer it. This nginx server block is a minimal setup:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name teams.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/teams.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/teams.example.com/privkey.pem;
+    ssl_protocols TLSv1.3;
+
+    client_max_body_size 8m;   # a vault push is at most 4 MiB
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+Set `TRUST_PROXY_HEADERS: "true"` only when the proxy is the only way in and overwrites these two headers. The server records the first `X-Forwarded-For` address in the audit log, so a proxy that appends to a client-supplied header would let clients choose the address they are recorded under.
+
+## Onboard the team
+
+The server does not send email: an admin passes each invite on. The first person, the team creator, needs no invite, because their email is listed in `SIGNUP_BOOTSTRAP_EMAILS`.
+
+<Steps>
+1. Add the creator's email to `secrets/bootstrap_emails`.
+
+2. Restart the API so it reads the file again:
+   ```sh
+   docker compose restart api
+   ```
+</Steps>
+
+On the creator's machine, create the account and the team:
+
+<Tabs syncKey="surface">
+	<TabItem label="Command line">
+		```sh
+		bssh teams init --server https://teams.example.com --email ana@example.com
+		bssh teams create platform
+		```
+	</TabItem>
+	<TabItem label="Desktop app">
+		Open **Teams**, fill in **Sync server** (`https://teams.example.com`), **Your email**, **Device name** and a **Passphrase**, then choose **Set up this device** and **Create team**.
+	</TabItem>
+</Tabs>
+
+Then invite everyone else from the admin's machine:
+
+```sh
+bssh teams invite platform sam@example.com
+```
+
+The invite carries the server URL and a single-use token, shown once. The invitee joins with it and the admin's device fingerprint, then the admin grants the team key. [Members and devices](/teams/members/) walks through the exchange. Add `--admin` to make the invitee an admin.
+
+## Seats
+
+On a server without billing, a new team gets `DEFAULT_SEATS` seats, stored with the team. Changing the variable affects teams created afterwards, not existing ones.
+
+Members and pending invites both count against the limit. When a team is full, a new invite fails. An invitation whose acceptance finds no free seat stays pending, and works once a seat frees up. Free a seat by removing a member or revoking a pending invite:
+
+```sh
+bssh teams uninvite platform ana@example.com
+bssh teams remove platform ana@example.com
+```
+
+On a server without billing, a team is never read-only and its seats never change on their own.
+
+## Backups and restores
+
+Enable PostgreSQL point-in-time recovery on your database, or use your provider's equivalent, and take regular logical dumps as a second line:
+
+```sh
+docker compose exec -T postgres pg_dump -U bssh -d bssh > bssh-$(date +%F).sql
+```
+
+A backup holds every team's ciphertext and metadata. Store it where only operators can read it, and encrypt it at rest.
+
+Test restores instead of trusting them. Restore a dump into a scratch database, start a second API against it, and check that `/healthz` answers and that a client can sync:
+
+```sh
+docker compose exec -T postgres createdb -U bssh bssh_restore
+docker compose exec -T postgres psql -U bssh -d bssh_restore < bssh-2026-10-23.sql
+```
+
+## Upgrades
+
+<Steps>
+1. Take a database backup.
+2. Load the new archive and check its tag:
+   ```sh
+   docker load -i bssh-cloud-api_<new-version>.tar
+   ```
+
+3. Update the image tag in the Compose file, then:
+   ```sh
+   docker compose up -d
+   ```
+</Steps>
+
+Migrations run automatically at startup, and the API stays under `/v1`, so clients do not need a change for a server upgrade. Clients older than `MIN_CLIENT_VERSION` are refused with HTTP 426, and `bssh teams` reports `the server needs a newer bssh; please upgrade`.
+
+The image ships forward migrations only, so rolling back to an older image means restoring the database backup taken before the upgrade.
+
+## What the server stores
+
+The server keeps ciphertext it cannot decrypt, plus the metadata that makes server-side audit possible:
+
+- team id, member and invitee emails, roles and seat count, device names and public keys
+- opaque entry ids, revision numbers and ciphertext sizes
+- audit events: *member M used entry E at time T from IP A*
+
+Hostnames, usernames, ports, tags, notes and bastion settings are encrypted on the clients. Private keys are not uploaded: a shared connection carries no key path, and each member's own connection keeps its key file on their machine. Passwords are never stored either; the prompt happens in your terminal. Treat the database and its backups as sensitive anyway: without a member's device keys they do not reveal the vault, but the metadata is complete.
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Teams security" description="What the server can and cannot see, and how recovery works." href="/teams/security/" />
+	<LinkCard title="Troubleshooting" description="Fix a sync, authentication or audit error." href="/reference/troubleshooting/" />
+</CardGrid>

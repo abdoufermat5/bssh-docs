@@ -1,0 +1,176 @@
+---
+title: Authentication
+description: Manage SSH keys, ssh-agent sockets, Kerberos tickets, and host key verification.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH supports public key authentication, automatic ssh-agent socket discovery, Kerberos single sign-on, and host key verification. Authentication can be configured globally, per connection, or overridden at runtime.
+
+## Manage SSH keys
+
+The `bssh key` subcommand manages local SSH keys in `~/.ssh/` and deploys public keys to remote servers.
+
+### List local keys
+
+To inspect your local keys and their file permissions:
+
+```sh
+bssh key list
+```
+
+```text
+SSH Key Inventory (~/.ssh/)
+--------------------------------------------------
+Key: id_ed25519
+  Type:        ssh-ed25519
+  Fingerprint: SHA256:7v8Wk9...
+  Comment:     ana@example.com
+  Private Key: /home/ana/.ssh/id_ed25519
+  Permission:  0600 (SECURE)
+```
+
+`bssh` verifies that private keys have secure file permissions (`0600`). If a key is readable by other local users, `bssh` displays a warning.
+
+### Generate a keypair
+
+Create a new keypair directly in `~/.ssh/`:
+
+```sh
+bssh key generate --name id_ed25519_prod
+```
+
+By default, `bssh` generates an Ed25519 keypair. To generate an RSA 4096-bit key instead, pass `-t rsa`:
+
+```sh
+bssh key generate --name id_rsa_legacy -t rsa
+```
+
+When generating keys, `bssh` automatically ensures that `~/.ssh/` has directory permissions of `0700` and that the private key file has permissions of `0600`.
+
+### Copy public keys to remote servers
+
+To install your public key on a remote host's `~/.ssh/authorized_keys`:
+
+```sh
+bssh key copy web-prod
+```
+
+`bssh key copy` automatically searches for `~/.ssh/id_ed25519.pub`, then `~/.ssh/id_rsa.pub`, or uses the key associated with the saved connection. You can also specify an exact public key:
+
+```sh
+bssh key copy web-prod -k ~/.ssh/id_ed25519_prod.pub
+```
+
+The command connects to the target (routing through any configured bastion), safely quotes the key to prevent shell injection, creates `~/.ssh` with permissions `0700` if needed, appends the key, and sets permissions to `0600` on `~/.ssh/authorized_keys`.
+
+<Tabs syncKey="surface">
+<TabItem label="Command line">
+
+Use `bssh key list`, `bssh key generate`, and `bssh key copy` in your terminal.
+
+</TabItem>
+<TabItem label="Desktop app">
+
+In the desktop app, navigate to the **Keys** view in the sidebar. The view displays all detected keys, their fingerprints, types, and permissions status.
+
+- Click **Generate key** to create an Ed25519 or RSA keypair.
+- Click **Deploy** on any key to choose a target server and copy the public key.
+- If any private key has insecure permissions, a banner appears with a one-click fix command.
+
+</TabItem>
+</Tabs>
+
+## Configure a key per connection
+
+You can associate a specific private key with any saved host.
+
+- **When adding a connection**:
+  ```sh
+  bssh add db-prod 10.0.4.12 -i ~/.ssh/id_ed25519_db
+  ```
+- **When editing a connection**:
+  ```sh
+  bssh edit db-prod --key ~/.ssh/id_ed25519_db
+  ```
+- **When connecting**: Override the key for a single session:
+  ```sh
+  bssh connect db-prod -i ~/.ssh/id_ed25519_temp
+  ```
+
+If no key is configured on a connection, `bssh` relies on your running SSH agent or default OpenSSH identity files.
+
+## Use ssh-agent
+
+`bssh` discovers active SSH agent sockets on your system without requiring manual configuration.
+
+To prevent socket-adoption attacks—where an untrusted local user creates a socket in `/tmp` to intercept signing requests—`bssh` verifies that the socket file is owned by your current user ID before connecting.
+
+It probes for sockets in the following order:
+
+1. **Standard OpenSSH temporary directories**: `/tmp/ssh-*/agent.*`
+2. **User runtime directories and desktop agents**:
+   - `/run/user/<uid>/ssh-agent.socket` (systemd user service)
+   - `/run/user/<uid>/gcr/ssh` (GNOME Keyring)
+   - `/run/user/<uid>/keyring/ssh`
+   - `/run/user/<uid>/openssh_agent`
+   - `/run/user/<uid>/1password/t/agent.sock` and `~/.1password/agent.sock` (1Password SSH agent)
+3. **Process environment variables**: Scans `/proc/*/environ` for `SSH_AUTH_SOCK` values owned by your user ID.
+4. **GPG agent SSH bridge**: `/run/user/<uid>/gnupg/S.gpg-agent.ssh` and `~/.gnupg/S.gpg-agent.ssh`.
+
+## Kerberos authentication
+
+Bayesian SSH includes native Kerberos (GSSAPI) support.
+
+### Enable Kerberos
+
+- **Globally by default**:
+  ```sh
+  bssh config --use-kerberos true
+  ```
+- **Per connection**:
+  ```sh
+  bssh add krb-srv krb.example.com -k true
+  bssh edit krb-srv --kerberos true
+  ```
+- **Per session**:
+  ```sh
+  bssh connect krb-srv -k true
+  bssh connect krb-srv -k false
+  ```
+
+### Ticket verification
+
+Before connecting to a Kerberos-enabled host, `bssh` inspects the local credential cache (resolving `KRB5CCNAME` or the default ccache from `/etc/krb5.conf`). It verifies that you hold an active Ticket Granting Ticket (TGT), checks the principal name, and warns if the ticket is expired.
+
+In the desktop app, a Kerberos status indicator appears in the sidebar. Click it to view ticket expiration details or open the ticket acquisition modal to run `kinit`.
+
+## Host key verification
+
+Host keys protect against man-in-the-middle attacks. `bssh` verifies host keys against `~/.ssh/known_hosts`, supporting both plain entries and OpenSSH hashed entries (`|1|salt|hash`).
+
+### Verification outcomes
+
+When checking a remote host key, `bssh` encounters one of four states:
+
+- **KnownGood**: The host and key match an entry in `known_hosts`. Connection proceeds normally.
+- **Unknown**: The host is not yet recorded in `known_hosts`.
+- **Mismatch**: An entry exists for this host, but the presented key does not match. This indicates a changed host key or a potential man-in-the-middle attack.
+- **Revoked**: The key is marked `@revoked` in `known_hosts`. `bssh` refuses the connection immediately.
+
+### Checking policies
+
+Host key checking is governed by the `strict_host_key_checking` transport configuration:
+
+- `accept-new` (default): Automatically trusts and appends keys for previously unknown hosts on first connection (Trust on First Use). Rejects mismatched or revoked keys.
+- `strict`: Refuses to connect to any host whose key is not already present in `known_hosts`.
+- `off`: Ignores host key mismatches.
+
+Run `bssh audit` to check for security misconfigurations. If `strict_host_key_checking` is set to `off`, the audit command reports a critical finding.
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Bastion hosts" description="Route connections through jump hosts and interactive bastions." href="/guides/bastions/" />
+	<LinkCard title="Security reference" description="Security architecture, permissions, and credential storage." href="/reference/security/" />
+</CardGrid>

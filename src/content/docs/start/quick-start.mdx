@@ -1,0 +1,61 @@
+---
+title: Quick start
+description: Save your first SSH host, connect using fuzzy search, import your existing SSH configuration, and launch the desktop app.
+---
+
+import { Steps, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Connect to your first server in under two minutes with Bayesian SSH.
+
+## From zero to connected
+
+<Steps>
+1. ### Save a host
+
+   Add a connection entry to the local database with `bssh add`. Provide a friendly name and the target hostname or IP address:
+
+   ```sh
+   bssh add web-prod web-prod.example.com -u deploy --tags prod,web
+   ```
+
+   You can optionally specify a port (`-p 2222`), an SSH key (`-i ~/.ssh/id_ed25519`), or a jump host (`-b bastion.example.com`).
+
+2. ### Connect using fuzzy search
+
+   Connect to your saved host with `bssh connect`:
+
+   ```sh
+   bssh connect prod
+   ```
+
+   You do not need the full or exact name. `bssh` matches parts of names, aliases, hostnames, and tags. Separators are ignored, so `webprod` matches `web-prod`. When multiple hosts match, Bayesian ranking places the host you use most often or most recently at the top.
+
+3. ### Import your SSH configuration
+
+   If you already have hosts defined in your OpenSSH configuration, import them into Bayesian SSH:
+
+   ```sh
+   bssh import
+   ```
+
+   `bssh import` reads `~/.ssh/config` by default. It parses `Host`, `HostName`, `User`, `Port`, and `IdentityFile` directives, skipping `Match` blocks, and creates saved connections automatically.
+
+4. ### Open the desktop app
+
+   Launch the graphical interface in the background:
+
+   ```sh
+   bssh desktop
+   ```
+
+   The desktop app shares the same local database as the CLI. You can browse hosts, filter by tags, open embedded terminal tabs, transfer files, and open the command palette with <kbd>Ctrl</kbd>+<kbd>K</kbd>.
+</Steps>
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Managing connections" description="Edit, duplicate, remove, and tag connections." href="/guides/connections/" />
+	<LinkCard title="Search and ranking" description="How fuzzy search and Bayesian ranking pick the right host." href="/guides/search-and-ranking/" />
+	<LinkCard title="First-time configuration" description="Set default usernames, ports, and bastions." href="/start/configuration/" />
+	<LinkCard title="bssh Teams" description="Share connections with your team using end-to-end encryption." href="/teams/overview/" />
+</CardGrid>

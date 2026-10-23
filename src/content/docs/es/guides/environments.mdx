@@ -1,0 +1,136 @@
+---
+title: Entornos
+description: Aísla tus conexiones, historial y configuración en perfiles independientes.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Los entornos te permiten gestionar múltiples perfiles aislados dentro de `bssh`. Cada entorno mantiene su propia base de datos independiente de conexiones, etiquetas, alias, historial de sesiones y configuración predeterminada.
+
+## Qué elementos se aíslan
+
+Cada entorno se almacena en su propio directorio dentro de `~/.config/bayesian-ssh/environments/<nombre>/`:
+
+- **`history.db`**: Una base de datos SQLite independiente que contiene:
+  - Conexiones guardadas y credenciales
+  - Etiquetas y grupos
+  - Alias cortos
+  - Historial y duración de sesiones pasadas
+  - Fuentes de inventario configuradas
+- **`config.json`**: Ajustes específicos del perfil, entre ellos:
+  - Usuario SSH y puerto predeterminados
+  - Bastión y usuario del bastión predeterminados
+  - Modo de búsqueda (`bayesian` o `fuzzy`)
+  - Preferencias de grabación de sesiones
+  - Ajustes de predicción por contexto
+
+El entorno inicial integrado se denomina `default`. El entorno activo actual se registra en `~/.config/bayesian-ssh/active_env`.
+
+## Gestionar entornos
+
+### Listar entornos
+
+Ejecuta `bssh env list` para consultar todos los entornos disponibles. El perfil activo se indica con un asterisco:
+
+```sh
+bssh env list
+```
+
+```text
+Environments:
+    client-a
+  * default (active)
+```
+
+### Crear un entorno
+
+Ejecuta `bssh env create` con un nombre único para inicializar un nuevo perfil:
+
+```sh
+bssh env create client-a
+```
+
+```text
+✅ Created new environment 'client-a'
+To start using it, run: bayesian-ssh env use client-a
+```
+
+Crear un entorno genera una base de datos `history.db` limpia y un archivo `config.json` con los valores predeterminados habituales.
+
+### Cambiar de entorno
+
+Ejecuta `bssh env use` para activar otro perfil:
+
+```sh
+bssh env use client-a
+```
+
+```text
+✅ Now using environment 'client-a'
+```
+
+Una vez cambiado, todos los comandos posteriores de `bssh` operarán sobre la base de datos del entorno seleccionado hasta que vuelvas a modificarlo.
+
+### Eliminar un entorno
+
+Ejecuta `bssh env remove` para borrar un entorno y su base de datos asociada:
+
+```sh
+bssh env remove client-a
+```
+
+```text
+🗑️ Removed environment 'client-a'
+```
+
+`bssh` aplica restricciones de seguridad al eliminar perfiles:
+- No puedes eliminar el entorno que esté activo en ese momento. Cambia primero a otro entorno.
+- No puedes eliminar el entorno integrado `default`.
+
+:::caution
+Eliminar un entorno borra de forma permanente su directorio, base de datos SQLite, conexiones y todo su historial de sesiones.
+:::
+
+## Soporte en la aplicación de escritorio
+
+<Tabs syncKey="surface">
+  <TabItem label="Línea de comandos">
+    ```sh
+    # Cambiar de perfil desde el terminal
+    bssh env use client-a
+    ```
+  </TabItem>
+  <TabItem label="Aplicación de escritorio">
+    En la aplicación de escritorio, haz clic en el selector de perfiles en la parte superior de la barra lateral para cambiar de perfil, o elige **Manage profiles…** para añadir o eliminar perfiles.
+  </TabItem>
+</Tabs>
+
+## Reemplazo puntual por comando
+
+Para ejecutar un único comando en otro entorno sin modificar tu perfil activo permanente, utiliza la opción `--env`:
+
+```sh
+# Listar conexiones en el entorno client-b
+bssh --env client-b list
+
+# Conectarse a un host guardado en client-b
+bssh --env client-b connect db-prod
+
+# Probar la conectividad de los hosts en client-b
+bssh --env client-b ping --all
+```
+
+La opción `--env` tiene prioridad únicamente para esa invocación. Tu entorno activo permanece sin cambios.
+
+## Flujos de trabajo habituales
+
+- **Separación por clientes**: Consultores y agencias pueden mantener entornos específicos para cada cliente (`client-acme`, `client-beta`). Las conexiones, rutas de bastión y alias nunca se mezclan ni aparecen en las búsquedas de otros clientes.
+- **Uso profesional y personal**: Separa por completo tus servidores domésticos y proyectos personales de la infraestructura corporativa de producción.
+- **Cumplimiento y auditorías**: Configura grabación estricta de sesiones y bastiones obligatorios en un entorno de `production`, manteniendo un entorno de pruebas (`sandbox`) sin restricciones.
+
+## Siguientes pasos
+
+<CardGrid>
+  <LinkCard title="Conexiones" description="Guarda y administra entradas de hosts SSH." href="/es/guides/connections/" />
+  <LinkCard title="Referencia de configuración" description="Consulta cada ajuste y ruta de archivos." href="/es/reference/configuration/" />
+</CardGrid>

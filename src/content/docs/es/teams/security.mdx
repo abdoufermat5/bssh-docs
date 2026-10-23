@@ -1,0 +1,82 @@
+---
+title: Seguridad y modelo de confianza
+description: Límites de confianza, mitigación de amenazas, primitivas criptográficas y gestión de claves en bssh Teams.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+bssh Teams se basa en una arquitectura de conocimiento cero (zero-knowledge): el servidor de sincronización no es de confianza para la confidencialidad, pero sí es de confianza para la disponibilidad y el orden de los eventos. Toda la información confidencial de los hosts se cifra en tus dispositivos antes de abandonar tu equipo.
+
+Toda la criptografía del cliente y los controladores de protocolos de red son de código abierto en el repositorio público para su inspección independiente.
+
+## Perímetro de confianza
+
+El servidor de sincronización nunca tiene acceso a las claves criptográficas necesarias para descifrar tu bóveda.
+
+| El servidor puede ver | El servidor no puede ver |
+| --- | --- |
+| Identificador del equipo, correos de miembros, roles y número de puestos | Nombres de host, direcciones IP, nombres de usuario, puertos, etiquetas y notas |
+| Identificadores opacos de entrada, números de revisión y tamaño de texto cifrado | Contraseñas, claves privadas SSH y configuraciones de enrutamiento por bastión |
+| Eventos de auditoría: *el miembro M usó la entrada E en el momento T desde la IP A* | La clave del equipo o las claves privadas de dispositivo de los miembros |
+
+<Aside type="note">
+La visibilidad de estos metadatos por parte del servidor es intencionada: permite al servidor indexar revisiones, ordenar los flujos de sincronización y atender consultas de auditoría de los administradores sin examinar jamás el contenido en claro.
+</Aside>
+
+## Modelo de amenazas
+
+El modelo de seguridad protege los datos del equipo frente a intrusiones en la infraestructura, accesos no autorizados y participantes deshonestos:
+
+| Amenaza | Mitigación |
+| --- | --- |
+| **Ataque a la base de datos o almacenamiento del servidor** | Los datos confidenciales se cifran en el cliente antes de la transmisión. Un atacante que acceda al almacenamiento del servidor solo obtiene texto cifrado y metadatos. |
+| **Operador de servidor comprometido o malicioso** | Los clientes fijan (pin) las claves públicas de los administradores del equipo. El servidor no puede inyectar un dispositivo de miembro no autorizado sin la firma criptográfica de un administrador. |
+| **Miembro revocado** | Eliminar a un miembro rota la clave del equipo inmediatamente. Las escrituras posteriores se cifran con la nueva clave. (Consulta la limitación descrita abajo sobre datos en caché). |
+| **Robo de portátil o dispositivo** | La base de datos local y las claves de Teams del dispositivo se cifran con Argon2id y AES-256-GCM. Un administrador puede revocar el dispositivo comprometido de forma remota. |
+| **Espía en la red (man-in-the-middle)** | El transporte se restringe estrictamente a TLS 1.3, combinado con cifrado de extremo a extremo de las cargas útiles. Las conexiones HTTP en texto plano se rechazan. |
+| **Manipulación del registro de auditoría** | Cada evento se firma con la clave Ed25519 del dispositivo del miembro y se encadena a los eventos anteriores mediante hashes SHA-256. Las herramientas de verificación detectan eventos falsificados, reordenados o eliminados. |
+| **Cliente o miembro malicioso** | El servidor valida los permisos de rol, el alcance del equipo y los límites de tasa en todas las escrituras. Los clientes verifican las firmas en cada carga útil descargada. |
+
+## Criptografía
+
+bssh Teams emplea primitivas criptográficas estándar y ampliamente probadas:
+
+- **Cifrado simétrico**: AES-256-GCM cifra las entradas de la bóveda. Cada carga útil utiliza un nonce aleatorio único de 96 bits y un byte de versión explícito.
+- **Derivación de claves**: Argon2id protege las frases de contraseña locales del dispositivo contra ataques de fuerza bruta. HKDF-SHA256 deriva las subclaves operativas.
+- **Acuerdo y envoltura de claves**: El acuerdo de claves X25519 envuelve la clave compartida del equipo de manera individual para cada dispositivo miembro aprobado.
+- **Firmas digitales**: Pares de claves Ed25519 firman los cambios en los miembros, las concesiones de dispositivos y los eventos del registro de auditoría.
+- **Grabaciones de sesión**: La salida del terminal y las grabaciones de sesión permanecen por completo en tu equipo local. Nunca se suben al servidor de sincronización ni se comparten con el equipo.
+- **Protección en memoria**: Las claves criptográficas sensibles en memoria se eliminan automáticamente al destruirse (zeroize).
+
+## Verificación de dispositivos y huellas fuera de banda
+
+Para garantizar que el servidor de sincronización no pueda colar un dispositivo impostor en tu equipo, la aprobación de dispositivos requiere una verificación fuera de banda:
+
+1. Cuando un usuario se une a un equipo, su dispositivo calcula una huella pública (`SHA256:...`).
+2. El usuario comparte esta huella con un administrador del equipo a través de un canal independiente y de confianza (como una aplicación de mensajería segura, llamada telefónica o en persona).
+3. El administrador aprueba el dispositivo (`bssh teams grant`) únicamente tras comprobar que la huella coincide exactamente con la recibida por el canal seguro.
+4. Tras la verificación, el dispositivo del administrador envuelve la clave del equipo con la clave pública del nuevo dispositivo.
+
+## Rotación de claves y sus límites
+
+Cuando un administrador elimina a un miembro (`bssh teams remove`), bssh realiza una rotación de la clave del equipo:
+
+- Se genera una nueva clave de equipo que se envuelve únicamente para los dispositivos aprobados restantes.
+- Todas las entradas de conexión nuevas o modificadas se cifran usando la nueva clave.
+- El dispositivo del miembro eliminado ya no puede descargar actualizaciones ni descifrar nuevas entradas.
+
+<Aside type="caution">
+**Copias en caché**: La rotación de clave impide el acceso a actualizaciones futuras, pero un miembro revocado conserva los datos que ya sincronizó en su máquina local antes de su baja. Si un antiguo colaborador ya no debe tener acceso a ciertos servidores, renueva las credenciales en dichos servidores (contraseñas, claves autorizadas SSH y tokens de acceso).
+</Aside>
+
+## Reglas de recuperación
+
+bssh Teams no incluye intencionadamente **ningún mecanismo de recuperación en el servidor**:
+
+- No existen puertas traseras administrativas, claves maestras de recuperación ni procedimientos de restablecimiento en el servidor.
+- Si un miembro olvida su frase de contraseña local o pierde su dispositivo, un administrador puede volver a invitarlo, envolviendo la clave del equipo para su nuevo dispositivo.
+- Si **todos los administradores del equipo pierden sus dispositivos y frases de contraseña**, la bóveda cifrada del equipo se pierde de forma irrecuperable. Mantén siempre al menos dos administradores con dispositivos distintos en cada equipo.
+
+## Ruta de red
+
+El servidor de sincronización **nunca se encuentra en la ruta de conexión SSH**. Las sesiones SSH se establecen directamente desde tu máquina local hacia el servidor de destino, o a través de los bastiones configurados. Ningún tráfico SSH, credencial o byte de la shell interactiva pasa a través del servidor de sincronización.

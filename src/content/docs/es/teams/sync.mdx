@@ -1,0 +1,58 @@
+---
+title: Sincronización
+description: Qué hace una sincronización de Teams, cómo se tratan los cambios sin conexión y los conflictos, y qué muestra la página Teams.
+---
+
+La sincronización intercambia cambios con el servidor de sincronización del equipo: bajan las conexiones nuevas y modificadas, y suben tus cambios y tus eventos de auditoría. Teams funciona primero en local. Conservas una copia local completa, y una conexión SSH nunca espera a una sincronización.
+
+## Ejecutar una sincronización
+
+```sh
+bssh teams sync            # todos los equipos de esta máquina
+bssh teams sync platform   # un equipo
+```
+
+Una ejecución descarga las entradas nuevas y las verifica, envía tus cambios, sube los eventos de auditoría en cola y actualiza las conexiones del equipo en `bssh list`.
+
+Cada equipo imprime una línea con lo que cambió: recuentos de entradas descargadas y enviadas, conflictos resueltos, hosts actualizados, eventos de auditoría subidos, clave rotada. Si un equipo falla, los demás siguen; el comando termina entonces con un código distinto de cero y nombra los equipos que fallaron.
+
+En la aplicación de escritorio, sincroniza desde la página Teams: **Sync** junto a un equipo, o **Sync all** en la cabecera. Abre un equipo y usa **Sync** para sincronizar solo ese. Una sincronización también se lanza sola cuando llega una clave concedida mientras la página Teams está abierta.
+
+## Trabajar sin conexión
+
+Los cambios, las conexiones que compartas y los eventos de auditoría esperan en local hasta que una sincronización llegue al servidor. Compartir una conexión sin conexión la deja en cola: bssh dice que se compartirá en cuanto pase una sincronización, y la siguiente que tenga éxito la envía.
+
+Nada se bloquea por la red. Puedes listar, conectar y trabajar con las conexiones de equipo que ya tienes.
+
+## Conflictos
+
+La bóveda es un registro de revisiones de solo adición, por equipo. Cuando dos miembros editan la misma conexión, el conflicto se resuelve a favor del último que escribe, entrada por entrada, y la versión perdedora permanece en el historial del servidor, así que no se pierde nada.
+
+Si editaste una conexión que otro miembro eliminó, tu cambio se descarta y la sincronización indica de qué entrada se trata.
+
+## Entradas que no pasan las comprobaciones
+
+Cada entrada descargada se verifica antes de aplicarse. Una entrada de un autor desconocido, o que no continúa la cadena de revisiones que afirma, por ejemplo una versión antigua reetiquetada como nueva, se rechaza y se informa con su revisión y el motivo.
+
+Las entradas rechazadas nunca se aplican, y la sincronización continúa con el resto. Un servidor que repite versiones antiguas o un autor desconocido pueden causarlo; avisa al administrador de tu equipo. La aplicación de escritorio mantiene un aviso **Integrity problems** en el equipo hasta que una sincronización posterior llegue sin problemas.
+
+## Lo que muestra la aplicación de escritorio
+
+La página **Teams** enumera tus equipos con tu rol, el número de hosts y la última sincronización. Pasa el cursor sobre la hora de sincronización para ver la hora UTC exacta. **Needs attention** contiene lo que espera a una persona, y la entrada Teams de la barra lateral indica cuántos elementos esperan:
+
+- **Waiting for the key**: este dispositivo se ha unido pero ningún administrador le ha concedido aún la clave del equipo.
+- **N devices waiting**: los administradores ven los dispositivos que esperan una clave.
+- **You were removed**: este dispositivo ya no puede sincronizar el equipo.
+- **Integrity problems**: entradas que no pasaron las comprobaciones anteriores.
+- **Audit log failed**: el registro de auditoría ya no se verifica en esta máquina.
+- **Audit chain broken**: a la copia del servidor de tu registro de auditoría le faltan eventos que este dispositivo subió antes.
+- **Rotation stopped**: una rotación de clave no terminó tras quitar a un miembro.
+
+La página comprueba lo que necesita atención cada 30 segundos mientras está abierta. Siguen listados hasta que se resuelven.
+
+![La página Teams: rol, número de hosts, última sincronización y lo que necesita atención en cada equipo](../../../../assets/screenshots/teams-home.png)
+
+## Siguientes pasos
+
+- [Registro de auditoría](/es/teams/audit-log/) para lo que sube la sincronización y cómo se verifica.
+- [Miembros y dispositivos](/es/teams/members/) para conceder su clave a un dispositivo en espera.

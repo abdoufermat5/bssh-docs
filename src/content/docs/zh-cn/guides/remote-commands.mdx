@@ -1,0 +1,192 @@
+---
+title: 远程命令与传输
+description: 跨单台或多台主机并发执行命令与传输文件。
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH 提供了用于跨多台主机执行脚本及并发传输文件的命令。它支持按标签批量筛选目标、实时跟踪进度，以及在 SFTP 与 SCP 之间自动降级。
+
+## 使用 bssh exec 执行远程命令
+
+`bssh exec` 命令可在不开启交互式 shell 的情况下通过 SSH 执行单次命令。
+
+请务必在远程命令前加上 `--`，以分隔 `bssh` 自身的参数与远程命令参数。
+
+### 单台主机执行
+
+在指定主机上执行命令：
+
+```sh
+bssh exec web-prod -- uname -a
+```
+
+针对单台主机时，`bssh exec` 会将 stdout 与 stderr 实时输出到本地终端，并以远程进程的退出状态码退出。
+
+### 多台主机并发执行
+
+你可以通过标签筛选目标服务器，或在整个清单的所有主机上并发执行命令。
+
+**按标签筛选主机：**
+
+```sh
+bssh exec -t prod -- systemctl status nginx
+```
+
+**在所有已保存连接上执行：**
+
+```sh
+bssh exec --all -- uptime
+```
+
+多主机并发执行最多可同时在 16 台主机上运行。每台主机的输出通过独立的分隔块区分：
+
+```text
+🚀 Executing 'uptime' across 2 host(s)...
+
+==================================================
+Host: web-prod (deploy@web.example.com)
+==================================================
+ 12:45:10 up 45 days,  3:12,  1 user,  load average: 0.15, 0.08, 0.02
+(Exit Code: 0)
+
+==================================================
+Host: db-prod (deploy@10.0.4.12)
+==================================================
+ 12:45:10 up 90 days, 14:02,  0 users,  load average: 0.42, 0.38, 0.30
+(Exit Code: 0)
+```
+
+如果命令产生了 stderr 输出，该内容会被整理在单独的 `[STDERR]` 块中。如果存在执行失败的主机，`bssh exec` 最终会返回错误并报告失败主机的数量。
+
+### 使用 --dry-run 预览目标主机
+
+在实际执行前确认将要操作的主机列表：
+
+```sh
+bssh exec -t prod --dry-run -- systemctl restart nginx
+```
+
+```text
+🔍 [DRY-RUN PREVIEW]
+Command to execute: systemctl restart nginx
+Target hosts (2):
+  - web01 (deploy@10.0.4.10)
+  - web02 (deploy@10.0.4.11)
+
+Dry-run complete. No remote commands were executed.
+```
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+直接在终端中使用 `bssh exec [TARGET] -- <COMMAND>...`。
+
+</TabItem>
+<TabItem label="桌面应用">
+
+在桌面应用中，点击主机列表顶部的 **Batch run** 或按下 <kbd>Ctrl</kbd>+<kbd>K</kbd>（macOS 上为 <kbd>Cmd</kbd>+<kbd>K</kbd>）打开命令面板并选择 **Run command on hosts**。你可以按标签选择目标主机、输入脚本并分别查看各主机的执行输出。
+
+</TabItem>
+</Tabs>
+
+## 使用 bssh upload 上传文件
+
+`bssh upload` 命令用于将本地文件或目录并发传输至一台或多台远程主机。
+
+```sh
+bssh upload web-prod ./app.tar.gz /opt/app/
+```
+
+### 指定多台目标主机
+
+你可以显式传入主机列表、按标签匹配，或面向全部已存主机：
+
+- **以逗号分隔列表**：
+  ```sh
+  bssh upload web1,web2 ./app.tar.gz /opt/app/
+  ```
+- **按标签筛选**：
+  ```sh
+  bssh upload -t prod ./app.tar.gz /opt/app/
+  ```
+- **所有保存的连接**：
+  ```sh
+  bssh upload --all ./app.tar.gz /opt/app/
+  ```
+
+### 上传选项
+
+- `-r, --recursive`：递归上传整个目录树。
+  ```sh
+  bssh upload web-prod -r ./config/ /etc/myapp/
+  ```
+- `--mode <OCTAL>`：设置远程文件权限（默认：`0o644`）。
+  ```sh
+  bssh upload web-prod ./deploy-key.pem /root/.ssh/id_rsa --mode 0o600
+  ```
+- `-j, --parallel <N>`：最大并发上传主机数（默认：`16`）。
+  ```sh
+  bssh upload -t prod -j 8 ./release.tar.gz /var/www/
+  ```
+- `--offset <BYTES>`：从指定字节偏移处恢复中断的上传（仅支持单台主机）。
+- `--dry-run`：预览匹配到的目标主机与解析后的远程路径，而不传输任何文件。
+
+### 进度与传输协议处理
+
+在交互式终端中运行时，`bssh upload` 会针对每台主机显示进度条，展示已传字节、传输速率和预估剩余时间。
+
+`bssh` 在直连时采用原生 SFTP。如果连接经过跳板机或处于 Kerberos 会话中，它会自动降级至 SCP。在交互式堡垒机（如 OVH “The Bastion”）上，它会通过自动生成的包装脚本按照 `--osh scp` 协议完成文件传输。
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+在终端中使用 `bssh upload [OPTIONS] [TARGETS] <LOCAL> <REMOTE>`。
+
+</TabItem>
+<TabItem label="桌面应用">
+
+在桌面应用中，点击侧边栏的 **Files** 打开 SFTP 文件管理器。你可以浏览远程目录，通过拖拽上传文件，或在主机列表中打开 **Upload files** 弹窗同时向多台主机分发文件。
+
+</TabItem>
+</Tabs>
+
+## 使用 bssh download 下载文件
+
+`bssh download` 命令用于从远程服务器拉取文件或目录至本地。
+
+```sh
+bssh download web-prod /var/log/nginx/access.log ./access.log
+```
+
+### 下载选项
+
+- `-r, --recursive`：递归下载远程目录下的完整结构：
+  ```sh
+  bssh download db-prod -r /backups/daily/ ./local-backups/
+  ```
+
+### 传输协议处理
+
+与上传一致，`bssh download` 在直连时使用原生 SFTP，在途经跳板机或远程不支持 SFTP 子系统时自动降级至 SCP。
+
+在交互式终端中，进度条会实时反馈下载进度、传输速度以及总字节数。
+
+## 常用命令参数对照表
+
+| 选项 | 适用命令 | 说明 |
+| --- | --- | --- |
+| `-a, --all` | `exec`, `upload` | 并发作用于所有已保存的连接。 |
+| `-t, --tag <TAG>` | `exec`, `upload` | 作用于包含该标签的主机连接。 |
+| `--dry-run` | `exec`, `upload` | 预览目标主机，不实际执行命令或传输。 |
+| `-r, --recursive` | `upload`, `download` | 递归处理目录层级结构。 |
+| `--mode <OCTAL>` | `upload` | 设置远程文件权限（默认：`0o644`）。 |
+| `-j, --parallel <N>` | `upload` | 最大并发主机数（默认：`16`）。 |
+| `--offset <BYTES>` | `upload` | 从字节偏移处恢复上传（仅单主机）。 |
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="跳板机" description="通过跳板机和交互式堡垒机路由连接。" href="/zh-cn/guides/bastions/" />
+	<LinkCard title="隧道" description="端口转发与 SOCKS5 动态代理。" href="/zh-cn/guides/tunnels/" />
+</CardGrid>

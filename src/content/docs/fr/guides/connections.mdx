@@ -1,0 +1,249 @@
+---
+title: Connexions
+description: Enregistrez, listez, modifiez, dupliquez, testez et organisez vos connexions SSH.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Une connexion enregistre le nom d'hôte, le port, le nom d'utilisateur, les paramètres d'authentification, l'acheminement par bastion et les tags d'un serveur distant. Vous pouvez gérer vos connexions depuis la ligne de commande ou via l'application de bureau.
+
+## Enregistrer une connexion
+
+Exécutez `bssh add` avec un nom convivial ainsi que le nom d'hôte ou l'adresse IP cible :
+
+```sh
+bssh add web-prod web.example.com -u deploy
+```
+
+Spécifiez un port personnalisé, une clé privée ou une authentification Kerberos lors de l'ajout de l'hôte :
+
+```sh
+# Port personnalisé et fichier d'identité
+bssh add db01 10.0.1.5 -p 2222 -i ~/.ssh/id_ed25519
+
+# Acheminement via un hôte bastion avec Kerberos
+bssh add internal-api api.internal -b bastion.example.com -B jumpuser -k true
+```
+
+Attribuez des tags à l'aide de `-t` ou `--tags`. Passez plusieurs options ou séparez les valeurs par des virgules :
+
+```sh
+# Options répétables
+bssh add staging-app 10.0.2.10 -t staging -t backend
+
+# Tags séparés par des virgules
+bssh add staging-app 10.0.2.10 -t staging,backend
+```
+
+| Option | Description |
+| --- | --- |
+| `-u, --user <USER>` | Nom d'utilisateur SSH (utilise par défaut la configuration ou `$USER`). |
+| `-p, --port <PORT>` | Port SSH (port configuré par défaut, généralement `22`). |
+| `-i, --key <FILE>` | Chemin vers une clé privée SSH. |
+| `-b, --bastion <HOST>` | Bastion ou hôte de rebond par lequel transiter. |
+| `-B, --bastion-user <USER>` | Nom d'utilisateur pour l'hôte bastion. |
+| `--no-bastion` | Marquer comme connexion directe (ignore le bastion par défaut). |
+| `-k, --kerberos <BOOL>` | Activer Kerberos (`true` ou `false`). |
+| `-t, --tags <TAG>` | Tags de regroupement et de filtrage (répétables ou séparés par des virgules). |
+
+<Tabs syncKey="surface">
+  <TabItem label="Ligne de commande">
+    ```sh
+    bssh add web-prod web.example.com -u deploy -t prod,web
+    ```
+  </TabItem>
+  <TabItem label="Application de bureau">
+    Cliquez sur **New host** dans la barre d'outils ou appuyez sur <kbd>Ctrl</kbd>+<kbd>N</kbd> (<kbd>Cmd</kbd>+<kbd>N</kbd> sur macOS) pour ouvrir le formulaire de connexion.
+
+    ![Liste des hôtes dans l'application de bureau](../../../../assets/screenshots/app-hosts.png)
+  </TabItem>
+</Tabs>
+
+## Lister les connexions
+
+Exécutez `bssh list` pour afficher toutes les connexions enregistrées dans l'environnement actif. Les résultats sont classés selon le score bayésien, plaçant en tête les hôtes que vous utilisez le plus souvent et le plus récemment :
+
+```sh
+bssh list
+```
+
+```text
+🔗 Connections
+══════════════════════════════════════════════════════════════════════
+#   NAME                 HOST                      PORT     INFO
+──────────────────────────────────────────────────────────────────────
+1   web-prod             deploy@web.example.com    22       [prod,web]
+2   db01                 postgres@10.0.1.5         2222     [db,prod]
+──────────────────────────────────────────────────────────────────────
+Total: 2 connection(s)
+```
+
+Filtrez les connexions par tag ou par récence, ou affichez l'intégralité des détails de configuration :
+
+```sh
+# Afficher uniquement les connexions portant le tag prod
+bssh list -t prod
+
+# Afficher uniquement les connexions utilisées récemment
+bssh list --recent
+
+# Afficher les détails complets incluant l'identifiant, le bastion et les clés
+bssh list --detailed
+```
+
+## Afficher les détails d'une connexion
+
+Exécutez `bssh show` pour inspecter la configuration complète d'une connexion enregistrée. Indiquez le nom, l'alias ou l'identifiant de la connexion :
+
+```sh
+bssh show web-prod
+```
+
+```text
+🔗 Connection Details: web-prod
+
+  ID:       9a699d0b-7607-4ee2-8ebc-1f00596ed6d1
+  Host:     web.example.com:22
+  User:     deploy
+  Kerberos: Disabled
+  Created:  2026-10-23 08:39:36 UTC
+  Tags:     prod, web
+
+  SSH Command: ssh -p 22 deploy@web.example.com
+```
+
+La sortie affiche l'ensemble des champs enregistrés ainsi que la commande `ssh` exacte construite par `bssh` lors de l'établissement de la session.
+
+## Modifier une connexion
+
+Exécutez `bssh edit` pour mettre à jour les paramètres existants. Seuls les champs renseignés sont modifiés ; tous les autres restent inchangés :
+
+```sh
+# Mettre à jour l'utilisateur SSH et le port
+bssh edit web-prod --user deployer --port 2200
+
+# Changer d'hôte bastion
+bssh edit db01 --bastion jump.example.com
+
+# Supprimer un bastion et passer en connexion directe
+bssh edit db01 --no-bastion
+```
+
+Gérez les tags avec `--add-tags` et `--remove-tags` :
+
+```sh
+# Ajouter le tag canary et supprimer le tag legacy
+bssh edit staging --add-tags canary,api --remove-tags legacy
+```
+
+| Option | Description |
+| --- | --- |
+| `--name <NAME>` | Renommer la connexion. |
+| `--host <HOST>` | Modifier le nom d'hôte ou l'adresse IP. |
+| `--user <USER>` | Modifier le nom d'utilisateur SSH. |
+| `--port <PORT>` | Modifier le port SSH. |
+| `--key <FILE>` | Définir ou modifier le chemin vers la clé privée SSH. |
+| `--bastion <HOST>` | Définir ou modifier l'hôte bastion. |
+| `--bastion-user <USER>` | Modifier le nom d'utilisateur du bastion. |
+| `--no-bastion` | Supprimer le bastion et router directement. |
+| `--kerberos <BOOL>` | Activer ou désactiver Kerberos (`true` ou `false`). |
+| `--add-tags <TAG>` | Ajouter des tags (répétables ou séparés par des virgules). |
+| `--remove-tags <TAG>` | Supprimer des tags (répétables ou séparés par des virgules). |
+
+## Dupliquer une connexion
+
+Exécutez `bssh duplicate` pour créer une copie d'une connexion existante sous un nouveau nom. Tous les attributs (port, utilisateur, clés, bastions et tags) sont conservés :
+
+```sh
+bssh duplicate web-prod web-staging
+```
+
+Après duplication, utilisez `bssh edit` pour ajuster le nom d'hôte ou les tags d'environnement :
+
+```sh
+bssh edit web-staging --host staging.example.com --add-tags staging --remove-tags prod
+```
+
+## Tester l'accessibilité
+
+Exécutez `bssh ping` pour vérifier la connectivité SSH sans ouvrir de session interactive. `bssh` établit une connexion TCP et exécute un échange SSH en mode non interactif :
+
+```sh
+# Tester un seul hôte
+bssh ping web-prod
+
+# Tester toutes les connexions enregistrées en parallèle
+bssh ping --all
+
+# Tester les hôtes correspondant à un tag donné
+bssh ping -g prod -t 10
+```
+
+`bssh ping` prend en compte les hôtes de rebond et les bastions interactifs configurés pour chaque hôte. L'option `-t` ou `--timeout` définit le délai d'expiration en secondes (par défaut : `5`).
+
+## Regrouper les connexions avec des tags
+
+Les tags vous permettent d'organiser vos hôtes par rôle, région ou environnement. Exécutez `bssh groups` pour afficher tous les groupes de tags existants ainsi que le nombre de connexions associées :
+
+```sh
+bssh groups
+```
+
+```text
+Available groups:
+  - prod (5 connections)
+  - staging (2 connections)
+  - web (3 connections)
+
+Use `bssh groups <name>` to see connections in a group.
+```
+
+Pour lister les connexions appartenant à un groupe précis, indiquez le nom du tag :
+
+```sh
+bssh groups prod
+```
+
+```text
+Connections in group 'prod':
+  - web-prod (deploy@web.example.com)
+  - db-prod (postgres@db.example.com)
+```
+
+## Supprimer des connexions
+
+Exécutez `bssh remove` pour supprimer une connexion enregistrée. Indiquez le nom, l'alias ou l'identifiant de la connexion :
+
+```sh
+bssh remove web-prod
+```
+
+`bssh` affiche les détails de l'hôte et demande confirmation. Passez `-f` ou `--force` pour ignorer l'invite :
+
+```sh
+bssh remove web-prod -f
+```
+
+Vous pouvez supprimer plusieurs connexions à la fois en filtrant par tag :
+
+```sh
+# Supprimer toutes les connexions portant le tag staging
+bssh remove -t staging
+```
+
+`bssh` liste les connexions ciblées et leur nombre avant de solliciter votre confirmation. Pour supprimer immédiatement sans confirmation, ajoutez `-f` :
+
+```sh
+bssh remove -t staging -f
+```
+
+:::caution
+La suppression d'une connexion efface définitivement l'historique des sessions qui lui est associé dans l'environnement actif.
+:::
+
+## Prochaines étapes
+
+<CardGrid>
+  <LinkCard title="Recherche et classement" description="Découvrez comment la recherche approximative et le score bayésien classent vos hôtes." href="/fr/guides/search-and-ranking/" />
+  <LinkCard title="Alias" description="Créez des raccourcis pour vos connexions fréquentes." href="/fr/guides/aliases/" />
+</CardGrid>

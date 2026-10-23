@@ -1,0 +1,152 @@
+---
+title: 成员与设备
+description: 邀请成员、交换指纹、授予团队密钥、撤销邀请并移除成员。
+---
+
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+团队由成员和设备组成。每台设备有自己的密钥和指纹，管理员只有在收到设备所有者发来的指纹后，才会把团队密钥授予该设备。这样同步服务器就无法自行加入设备。
+
+只有管理员可以邀请成员、授予密钥、撤销邀请和移除成员。
+
+## 邀请成员
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+<Steps>
+
+1. **管理员：** 邀请成员。
+
+   ```sh
+   bssh teams invite platform ana@example.com
+   ```
+
+   bssh 会为 Ana 打印两条命令，其中包含一次性令牌和你设备的指纹。请通过你确认为 Ana 本人的渠道发送。
+
+2. **Ana：** 使用邀请创建账号，然后用管理员指纹加入。
+
+   ```sh
+   bssh teams init --server https://teams.example.com --email ana@example.com --invite <TOKEN>
+   bssh teams join <TOKEN> --fingerprint <ADMIN FINGERPRINT>
+   ```
+
+   如果团队中没有任何管理员设备的指纹与之匹配，bssh 会拒绝信任该团队。加入后会打印 Ana 设备的指纹。
+
+3. **管理员：** 把密钥授予 Ana 的设备。
+
+   ```sh
+   bssh teams grant platform
+   ```
+
+   这会列出等待密钥的设备。只有收到 Ana 发来的指纹后才授予：
+
+   ```sh
+   bssh teams grant platform --fingerprint <ANA'S FINGERPRINT>
+   ```
+
+4. **Ana：** 同步。
+
+   ```sh
+   bssh teams sync
+   ```
+
+   团队的连接会出现在 `bssh list` 中。
+
+</Steps>
+
+</TabItem>
+<TabItem label="桌面应用">
+
+<Steps>
+
+1. **管理员：** 打开团队，选择 **Members & devices**，然后选择 **Invite**。输入邮箱地址并选择 **Create invite**。应用会显示要发送的消息，包含桌面应用和命令行步骤、一次性令牌、你的指纹和有效期。选择 **Copy message**。
+
+2. **Ana：** 全新安装时，在入门流程中选择 **I was invited to a team**。否则打开 **Teams**，选择 **Join with invite** 并粘贴整条消息；应用会从中读取令牌和管理员指纹。如果尚未配置 Teams，请先在配置界面粘贴邀请。
+
+3. **管理员：** 该设备会出现在 **Devices waiting for the key** 下。选择 **Verify and grant…**，粘贴 Ana 发给你的指纹并勾选确认。在这个对话框中，应用不会显示服务器为该等待设备报告的指纹。粘贴的指纹匹配后，会按每四个字符一组显示，方便你向 Ana 复读。选择 **Grant key to …**。
+
+4. **Ana：** 在密钥到达之前，页面会显示 **Waiting for an admin to grant this device the key.**，旁边是她的指纹和 **Copy** 按钮。页面打开期间每 30 秒检查一次，密钥一到就同步团队。
+
+</Steps>
+
+</TabItem>
+</Tabs>
+
+## 为什么通过其他渠道交换指纹
+
+邀请中包含管理员的指纹，成员在加入时将其固定。如果该指纹不属于团队的任何管理员设备，就什么都不信任：服务器无法冒充团队管理员。同样，管理员只把密钥授予成员直接发来的指纹，这样服务器就无法自行加入设备。
+
+请通过你已经在用的聊天工具、电话或当面发送指纹。不要通过同步服务器，也不要从管理员界面读取：在粘贴的指纹匹配之前，桌面应用不会显示服务器报告的指纹。
+
+![授予团队密钥：粘贴的指纹与服务器上等待授予的设备匹配](../../../../assets/screenshots/teams-grant.png)
+
+## 指纹不匹配时
+
+此时没有信任任何内容，邀请令牌也已用完。请用正确的指纹按团队 ID 完成加入：
+
+```sh
+bssh teams join --team <TEAM ID> --fingerprint <FINGERPRINT>
+```
+
+错误消息会打印确切的命令，其中包含团队 ID。请先与管理员核对指纹：不匹配也可能意味着服务器并不是你以为的那一台。
+
+在桌面应用中，加入对话框会说明不匹配，并提供 **Try again**，以同样的方式完成加入。
+
+## 待处理的邀请
+
+待处理的邀请会占用一个席位，直到被接受或在创建 7 天后过期。
+
+管理员可以用 `bssh teams members platform` 查看待处理的邀请，也可以在桌面应用团队 **Members & devices** 标签页的 **Pending invites** 下查看。
+
+```sh
+bssh teams uninvite platform ana@example.com
+```
+
+这会撤销邀请：令牌不再有效，席位也重新空闲。在桌面应用中，选择邀请旁的 **Revoke**。如果令牌丢失，请撤销邀请并重新发送。
+
+## 将成员设为管理员
+
+```sh
+bssh teams invite platform sam@example.com --admin
+```
+
+管理员可以邀请成员、授予密钥、撤销邀请、移除成员并读取审计日志。在桌面应用中，在 **Create invite** 前勾选 **Make them an admin**。
+
+## 移除成员
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+```sh
+bssh teams remove platform ana@example.com
+```
+
+bssh 会要求确认，移除 Ana 并轮换团队密钥。
+
+</TabItem>
+<TabItem label="桌面应用">
+
+在该成员旁选择 **Remove…**。对话框会说明将要发生的变化：下一个密钥版本、她的哪些设备会失去访问权限、她已经同步了多少台主机，以及哪些设备会收到新密钥。输入她的邮箱以确认，然后选择 **Remove and rotate key**。
+
+</TabItem>
+</Tabs>
+
+轮换后，Ana 的设备无法再同步，此后写入的任何内容对她都不可读。她可能仍保留已同步内容的副本，因此请轮换重要的凭据。
+
+轮换只会把新密钥封装给这台管理员设备通过 `bssh teams grant` 批准过的设备。如果服务器列出了你从未批准过的设备，轮换会停止并指出该设备。在命令行中，这条消息出现时该成员已经被移除；在轮换成功之前，团队仍使用当前的密钥。请与其所有者核对该设备的指纹后授予，然后再次同步以完成轮换。桌面应用的 **Remove…** 对话框会列出这些设备，在全部授予之前不允许移除该成员；若轮换因其他原因停止，原因会留在对话框中。
+
+目前还不能逐个撤销设备。要移除单台设备，请先移除该成员，然后重新邀请。
+
+## 成员与设备
+
+```sh
+bssh teams members platform
+```
+
+这会列出每位成员及其角色、每台设备的指纹，如果你是管理员，还会列出待处理的邀请。在桌面应用中，团队的 **Members & devices** 标签页显示相同内容，并带有席位计量、等待密钥的设备和除你之外每位成员的 **Remove…** 按钮。
+
+## 下一步
+
+- 授予后[同步](/zh-cn/teams/sync/)，并收取待处理的更改。
+- 在[审计日志](/zh-cn/teams/audit-log/)中查看成员在团队主机上发起的会话。

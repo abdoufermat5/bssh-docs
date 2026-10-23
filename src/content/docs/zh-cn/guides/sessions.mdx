@@ -1,0 +1,192 @@
+---
+title: 会话历史与活动会话
+description: 查看历史 SSH 连接，分析使用统计数据，并终止活动或陈旧的连接会话。
+---
+
+import { CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Bayesian SSH 会将你的每次连接记录在本地数据库中，保存开始时间、持续时间及退出状态。你可以通过命令行或桌面应用查看历史会话、分析使用习惯，并管理正在运行的连接。
+
+## 查看会话历史
+
+运行 `bssh history` 查看近期的 SSH 会话。
+
+```sh
+bssh history
+```
+
+输出首先显示统计摘要，随后列出近期的会话记录（按时间倒序排列）：
+
+```text
+📋 Session History
+
+────────────────────────────────────────────────────────────────────────────────────────
+📊 Summary: 4 sessions | ✅ 3 successful (75.0%) | ❌ 1 failed | ⏱️  Avg duration: 12m 45s
+────────────────────────────────────────────────────────────────────────────────────────
+
+SESSION    CONNECTION           STARTED              DURATION     STATUS          EXIT CODE
+────────────────────────────────────────────────────────────────────────────────────────
+3f2a91c0 ● web-prod             2026-10-23 09:14:22  18m 10s      Success         0
+8c4e12a9   db-primary           2026-10-23 08:30:05  42m 02s      Success         0
+1b7d55f0   bastion-ext          2026-10-23 07:15:40  2m 11s       Error           255
+f4a10e82 ● staging-api          2026-10-22 17:05:12  5m 28s       Success         0
+```
+
+各列含义如下：
+
+- **SESSION**：会话 UUID 的前 8 位字符。若 ID 旁带有 `●` 标记，表示该会话存在可供回放的输出录制。
+- **CONNECTION**：已保存连接的名称。
+- **STARTED**：连接建立的时间戳。
+- **DURATION**：连接的总耗时；当前处于活动状态的会话显示为 `ongoing`。
+- **STATUS**：会话状态（`Success`、`Error`、`Terminated` 或 `Active`）。
+- **EXIT CODE**：远程 SSH 命令退出码；若异常终止则显示为 `-`。
+
+执行 `bssh history` 时，`bssh` 会自动检测本地进程已不复存在的会话，并在数据库中更新其状态。
+
+### 过滤历史记录
+
+使用命令行选项筛选历史记录：
+
+```sh
+# 仅显示指定连接名称的会话
+bssh history -c web-prod
+
+# 仅显示最近 7 天内的会话
+bssh history --days 7
+
+# 仅显示以错误退出的会话
+bssh history --failed
+
+# 修改显示的条目数量（默认：20）
+bssh history -n 50
+```
+
+如需搜索已录制会话中输出的文本内容，请使用 `-g` 或 `--grep` 选项：
+
+```sh
+bssh history --grep "Out of memory"
+```
+
+有关会话录制和回放的详细内容，请参阅[会话录制](/zh-cn/guides/recording/)。
+
+## 管理活动会话
+
+使用 `bssh close` 命令可列出并终止由 `bssh` 发起的活动 SSH 会话。
+
+### 列出正在运行的会话
+
+不带参数运行 `bssh close`，即可查看当前处于活动状态的所有会话：
+
+```sh
+bssh close
+```
+
+```text
+📋 Active Sessions
+
+CONNECTION           PID        STARTED              DURATION
+──────────────────────────────────────────────────────────────────────
+web-prod             41208      2026-10-23 09:14:22  18m 10s 🟢
+db-primary           41355      2026-10-23 08:30:05  42m 02s 🟢
+
+💡 Use 'bssh close <connection>' to close a session
+   Use 'bssh close --cleanup' to remove stale sessions
+```
+
+### 终止单个会话
+
+指定连接名称以关闭其对应的活动会话：
+
+```sh
+bssh close web-prod
+```
+
+在向目标进程发送 `SIGTERM` 信号之前，`bssh` 会要求确认：
+
+```text
+Close session for 'web-prod' (PID 41208)? [y/N] y
+✅ Sent SIGTERM to session 'web-prod' (PID 41208)
+```
+
+如需跳过交互式提示，请添加 `-f` 或 `--force`：
+
+```sh
+bssh close web-prod -f
+```
+
+### 终止所有会话
+
+若要一次性关闭所有活动会话，请使用 `-a` 或 `--all`：
+
+```sh
+bssh close --all -f
+```
+
+:::note
+`bssh kill` 是 `bssh close` 的别名。诸如 `bssh kill --all -f` 等命令执行完全相同的操作。
+:::
+
+### 清理陈旧会话
+
+若终端窗口被强行关闭或系统发生重启，部分会话记录可能仍被标记为活动状态，即使其后台进程已不存在。
+
+运行 `bssh close --cleanup` 整理会话数据表：
+
+```sh
+bssh close --cleanup
+```
+
+```text
+🧹 Cleaned stale session: web-prod (PID 41208)
+
+✅ Cleaned 1 stale session(s)
+```
+
+如果你配置了录制保留周期，`bssh close --cleanup` 还会一并清除已过期的 `.cast` 录制文件及其全文搜索索引条目。
+
+## 使用统计数据
+
+运行 `bssh stats` 查看总连接数、近期活动及按标签统计的分布情况：
+
+```sh
+bssh stats
+```
+
+```text
+📊 Bayesian SSH Statistics
+
+Total Connections: 28
+Most Used: web-prod (last: 2026-10-23 09:14:22)
+
+Recently Used:
+  1. web-prod - 10-23 09:14
+  2. db-primary - 10-23 08:30
+  3. bastion-ext - 10-23 07:15
+  4. staging-api - 10-22 17:05
+  5. monitoring - 10-22 14:10
+
+Connections by Tag:
+  prod: 12 connection(s)
+  aws: 8 connection(s)
+  database: 5 connection(s)
+  staging: 3 connection(s)
+```
+
+除了展示数据之外，会话历史还会持续训练排序引擎：每次完成的连接都会更新贝叶斯概率，从而在你执行 `bssh connect` 时让最可能需要的主机排在最前面。详情请参阅[搜索与排序](/zh-cn/guides/search-and-ranking/)。
+
+## 桌面应用
+
+桌面应用在界面中深度整合了会话追踪功能：
+
+![桌面应用 History 视图展示历史会话、状态徽标与筛选器](../../../../assets/screenshots/app-history.png)
+
+- **History 视图**：点击侧边栏的 **History** 标签页即可回顾历史会话。你可以按连接名称或状态进行筛选、检查会话时间戳，并点击带有录制标记的会话直接调出内置终端回放播放器。
+- **活动终端**：正在运行的终端标签页会显示在顶部标签栏中。关闭标签页将同步终止对应的 SSH 进程。
+- **孤立会话**：若桌面应用检测到正在后台运行的会话，可在命令面板（<kbd>Ctrl</kbd>+<kbd>K</kbd>）中搜索 **Detached sessions** 进行管理。
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="会话录制" description="将终端输出保存为 asciicast 格式并随时进行回放。" href="/zh-cn/guides/recording/" />
+	<LinkCard title="搜索与排序" description="了解会话历史如何影响贝叶斯主机排序算法。" href="/zh-cn/guides/search-and-ranking/" />
+</CardGrid>

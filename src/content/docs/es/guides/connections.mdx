@@ -1,0 +1,249 @@
+---
+title: Conexiones
+description: Guarda, lista, edita, duplica, prueba y organiza tus conexiones SSH.
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Una conexión almacena el nombre de host, puerto, nombre de usuario, configuración de autenticación, ruta de bastión y etiquetas de un servidor remoto. Puedes administrar tus conexiones desde la línea de comandos o utilizando la aplicación de escritorio.
+
+## Guardar una conexión
+
+Ejecuta `bssh add` con un nombre descriptivo y el nombre de host o dirección IP de destino:
+
+```sh
+bssh add web-prod web.example.com -u deploy
+```
+
+Especifica puertos personalizados, claves privadas o autenticación Kerberos al añadir el host:
+
+```sh
+# Puerto personalizado y archivo de identidad
+bssh add db01 10.0.1.5 -p 2222 -i ~/.ssh/id_ed25519
+
+# Enrutar a través de un host bastión con Kerberos
+bssh add internal-api api.internal -b bastion.example.com -B jumpuser -k true
+```
+
+Asigna etiquetas mediante `-t` o `--tags`. Pasa múltiples opciones o separa los valores con comas:
+
+```sh
+# Opciones repetibles
+bssh add staging-app 10.0.2.10 -t staging -t backend
+
+# Etiquetas separadas por comas
+bssh add staging-app 10.0.2.10 -t staging,backend
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `-u, --user <USER>` | Usuario SSH (usa por defecto la configuración o `$USER`). |
+| `-p, --port <PORT>` | Puerto SSH (puerto predeterminado configurado, normalmente `22`). |
+| `-i, --key <FILE>` | Ruta a una clave privada SSH. |
+| `-b, --bastion <HOST>` | Bastión o host de salto a través del cual enrutar. |
+| `-B, --bastion-user <USER>` | Nombre de usuario para el host bastión. |
+| `--no-bastion` | Marcar como conexión directa (ignora el bastión predeterminado). |
+| `-k, --kerberos <BOOL>` | Habilitar Kerberos (`true` o `false`). |
+| `-t, --tags <TAG>` | Etiquetas para agrupar y filtrar (repetibles o separadas por comas). |
+
+<Tabs syncKey="surface">
+  <TabItem label="Línea de comandos">
+    ```sh
+    bssh add web-prod web.example.com -u deploy -t prod,web
+    ```
+  </TabItem>
+  <TabItem label="Aplicación de escritorio">
+    Haz clic en **New host** en la barra de herramientas o presiona <kbd>Ctrl</kbd>+<kbd>N</kbd> (<kbd>Cmd</kbd>+<kbd>N</kbd> en macOS) para abrir el formulario de conexión.
+
+    ![Lista de hosts en la aplicación de escritorio](../../../../assets/screenshots/app-hosts.png)
+  </TabItem>
+</Tabs>
+
+## Listar conexiones
+
+Ejecuta `bssh list` para mostrar todas las conexiones guardadas en el entorno activo. Los resultados se ordenan según la puntuación bayesiana, situando en los primeros lugares los hosts que utilizas con mayor frecuencia y más recientemente:
+
+```sh
+bssh list
+```
+
+```text
+🔗 Connections
+══════════════════════════════════════════════════════════════════════
+#   NAME                 HOST                      PORT     INFO
+──────────────────────────────────────────────────────────────────────
+1   web-prod             deploy@web.example.com    22       [prod,web]
+2   db01                 postgres@10.0.1.5         2222     [db,prod]
+──────────────────────────────────────────────────────────────────────
+Total: 2 connection(s)
+```
+
+Filtra las conexiones por etiqueta o uso reciente, o muestra los detalles completos de configuración:
+
+```sh
+# Mostrar solo conexiones con la etiqueta prod
+bssh list -t prod
+
+# Mostrar solo conexiones usadas recientemente
+bssh list --recent
+
+# Mostrar los detalles completos incluyendo identificador, bastión y claves
+bssh list --detailed
+```
+
+## Ver detalles de una conexión
+
+Ejecuta `bssh show` para inspeccionar la configuración completa de una conexión guardada. Indica el nombre, alias o ID de la conexión:
+
+```sh
+bssh show web-prod
+```
+
+```text
+🔗 Connection Details: web-prod
+
+  ID:       9a699d0b-7607-4ee2-8ebc-1f00596ed6d1
+  Host:     web.example.com:22
+  User:     deploy
+  Kerberos: Disabled
+  Created:  2026-10-23 08:39:36 UTC
+  Tags:     prod, web
+
+  SSH Command: ssh -p 22 deploy@web.example.com
+```
+
+La salida muestra todos los campos almacenados y el comando `ssh` exacto que `bssh` genera al establecer la sesión.
+
+## Editar una conexión
+
+Ejecuta `bssh edit` para modificar la configuración existente. Solo se actualizan las opciones que proporciones; el resto de campos no se modifican:
+
+```sh
+# Actualizar el usuario SSH y el puerto
+bssh edit web-prod --user deployer --port 2200
+
+# Cambiar el host bastión
+bssh edit db01 --bastion jump.example.com
+
+# Eliminar un bastión y pasar a conexión directa
+bssh edit db01 --no-bastion
+```
+
+Gestiona etiquetas utilizando `--add-tags` y `--remove-tags`:
+
+```sh
+# Añadir la etiqueta canary y eliminar la etiqueta legacy
+bssh edit staging --add-tags canary,api --remove-tags legacy
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `--name <NAME>` | Renombrar la conexión. |
+| `--host <HOST>` | Cambiar el nombre de host o dirección IP. |
+| `--user <USER>` | Cambiar el usuario SSH. |
+| `--port <PORT>` | Cambiar el puerto SSH. |
+| `--key <FILE>` | Establecer o cambiar la ruta a la clave privada SSH. |
+| `--bastion <HOST>` | Establecer o cambiar el host bastión. |
+| `--bastion-user <USER>` | Cambiar el usuario del bastión. |
+| `--no-bastion` | Eliminar el bastión y enrutar directamente. |
+| `--kerberos <BOOL>` | Habilitar o deshabilitar Kerberos (`true` o `false`). |
+| `--add-tags <TAG>` | Añadir etiquetas (repetibles o separadas por comas). |
+| `--remove-tags <TAG>` | Eliminar etiquetas (repetibles o separadas por comas). |
+
+## Duplicar una conexión
+
+Ejecuta `bssh duplicate` para crear una copia de una conexión existente con un nuevo nombre. Se conservan todos los atributos (puerto, usuario, claves, bastiones y etiquetas):
+
+```sh
+bssh duplicate web-prod web-staging
+```
+
+Tras duplicar, usa `bssh edit` para ajustar el nombre de host o las etiquetas de entorno:
+
+```sh
+bssh edit web-staging --host staging.example.com --add-tags staging --remove-tags prod
+```
+
+## Probar conectividad
+
+Ejecuta `bssh ping` para comprobar la conectividad SSH sin abrir una sesión interactiva. `bssh` se conecta por TCP y realiza la negociación SSH en modo no interactivo:
+
+```sh
+# Probar un único host
+bssh ping web-prod
+
+# Probar todas las conexiones guardadas en paralelo
+bssh ping --all
+
+# Probar los hosts que coincidan con una etiqueta específica
+bssh ping -g prod -t 10
+```
+
+`bssh ping` respeta los hosts de salto y bastiones interactivos configurados en cada host. La opción `-t` o `--timeout` define el tiempo de espera en segundos (por defecto: `5`).
+
+## Agrupar conexiones con etiquetas
+
+Las etiquetas te permiten organizar los hosts por función, región o entorno. Ejecuta `bssh groups` para listar todos los grupos de etiquetas existentes y la cantidad de conexiones en cada uno:
+
+```sh
+bssh groups
+```
+
+```text
+Available groups:
+  - prod (5 connections)
+  - staging (2 connections)
+  - web (3 connections)
+
+Use `bssh groups <name>` to see connections in a group.
+```
+
+Para listar las conexiones que pertenecen a un grupo específico, proporciona el nombre de la etiqueta:
+
+```sh
+bssh groups prod
+```
+
+```text
+Connections in group 'prod':
+  - web-prod (deploy@web.example.com)
+  - db-prod (postgres@db.example.com)
+```
+
+## Eliminar conexiones
+
+Ejecuta `bssh remove` para borrar una conexión guardada. Indica el nombre, alias o ID de la conexión:
+
+```sh
+bssh remove web-prod
+```
+
+`bssh` muestra los detalles del host y solicita confirmación. Pasa `-f` o `--force` para omitir la confirmación:
+
+```sh
+bssh remove web-prod -f
+```
+
+Puedes eliminar múltiples conexiones a la vez filtrando por etiqueta:
+
+```sh
+# Eliminar todas las conexiones con la etiqueta staging
+bssh remove -t staging
+```
+
+`bssh` enumera las conexiones coincidentes y el total antes de solicitar confirmación. Para eliminarlas inmediatamente sin confirmación, añade `-f`:
+
+```sh
+bssh remove -t staging -f
+```
+
+:::caution
+Eliminar una conexión borra de forma permanente el historial de sesiones asociado a ella en el entorno activo.
+:::
+
+## Siguientes pasos
+
+<CardGrid>
+  <LinkCard title="Búsqueda y clasificación" description="Descubre cómo la búsqueda aproximada y el cálculo bayesiano clasifican tus hosts." href="/es/guides/search-and-ranking/" />
+  <LinkCard title="Alias" description="Crea nombres cortos para tus conexiones frecuentes." href="/es/guides/aliases/" />
+</CardGrid>

@@ -1,0 +1,130 @@
+---
+title: 隧道
+description: 通过 SSH 进行本地端口转发与开启 SOCKS5 动态代理。
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH 提供了用于开启本地端口转发隧道和 SOCKS5 动态代理的内置命令，无需繁琐记忆 OpenSSH 参数。隧道在前台运行，并在中断时优雅关闭。
+
+## 本地端口转发
+
+`bssh forward` 命令用于创建 SSH 本地端口转发隧道（即 `-L` 模式）。发送到本地监听端口的流量会通过远程 SSH 主机被转发至指定的目标地址。
+
+```sh
+bssh forward db01 -L 5432:localhost:5432
+```
+
+### 规格格式
+
+`-L` 参数格式遵循标准 OpenSSH 规范：
+
+```text
+[bind_addr:]bind_port:remote_host:remote_port
+```
+
+- `bind_addr`：本地绑定的 IP 地址。省略时默认使用 `127.0.0.1`。
+- `bind_port`：`bssh` 监听传入连接的本地端口。
+- `remote_host`：从远程 SSH 主机访问的目标主机地址。
+- `remote_port`：`remote_host` 上的目标端口。
+
+IPv6 地址可以使用方括号包裹：
+
+```sh
+bssh forward web-prod -L [::1]:8080:[fe80::1]:80
+```
+
+### 常见使用示例
+
+**将远程数据库映射到本地机器：**
+
+```sh
+bssh forward db01 -L 5432:localhost:5432
+```
+
+此时即可在本地将客户端工具（如 `psql` 或数据库可视化软件）直接连接至 `localhost:5432`。
+
+**通过跳板机访问内网服务：**
+
+```sh
+bssh forward bastion -L 8080:internal-api.corp:80
+```
+
+发往本地 `http://localhost:8080` 的请求将由 `bastion` 转发到 `internal-api.corp` 的 80 端口。
+
+**监听所有本地网络接口：**
+
+```sh
+bssh forward web-prod -L 0.0.0.0:8080:localhost:80
+```
+
+指定 `0.0.0.0` 可以允许局域网内的其他设备访问该映射端口。
+
+## SOCKS5 动态代理
+
+`bssh proxy` 命令启动一个 SSH 动态端口转发（即 `-D` 模式），充当本地 SOCKS5 代理。任何支持 SOCKS5 代理的应用程序都可以经由远程 SSH 主机路由流量。
+
+```sh
+bssh proxy web-prod -D 1080
+```
+
+### 选项说明
+
+- `-D <PORT>`：SOCKS5 代理监听的本地端口（必填）。
+- `--bind <ADDR>`：本地监听地址（可选，默认：`127.0.0.1`）。
+
+如需将 SOCKS5 代理开放给局域网其他设备使用：
+
+```sh
+bssh proxy bastion -D 9050 --bind 0.0.0.0
+```
+
+### 配置客户端连接
+
+配置应用程序通过 `socks5://127.0.0.1:1080` 访问网络。
+
+例如使用 `curl` 测试代理通道：
+
+```sh
+curl --socks5-hostname 127.0.0.1:1080 https://api.ipify.org
+```
+
+返回的 IP 地址将是远程 SSH 主机的公网 IP，而不是你本地的真实网络地址。
+
+## 隧道的执行与路由过程
+
+启动 `bssh forward` 或 `bssh proxy` 时：
+
+1. `bssh` 会利用模糊匹配和贝叶斯排序解析目标连接。
+2. 终端打印连接状态与监听详情：
+   ```text
+   →  SOCKS5 proxy on 127.0.0.1:1080 via web-prod (native)
+      Configure your client: socks5://127.0.0.1:1080
+      Press Ctrl+C to stop.
+   ```
+3. 未启用 Kerberos 且无跳板机的直接连接将使用 Rust 原生 SSH 传输层（`russh`）。
+4. 途经跳板机或需要 Kerberos 的连接会自动降级为 OpenSSH 子进程（`ssh -L` 或 `ssh -D`），以确保跳板机路由与凭据处理完全兼容。
+
+## 停止隧道或代理
+
+`bssh forward` 和 `bssh proxy` 均以前台进程形式运行。
+
+如需停止隧道：
+
+1. 在运行该命令的终端中按下 <kbd>Ctrl</kbd>+<kbd>C</kbd>。
+2. `bssh` 捕获中断信号，安全释放本地端口监听，关闭远程 SSH 通道并退出：
+   ```text
+   Shutting down proxy…
+   Done.
+   ```
+
+## 桌面应用
+
+隧道与代理目前均在命令行界面中管理。桌面应用当前专注于交互式终端会话、SFTP 文件传输、已存主机管理、会话历史以及团队协作共享，暂未设立单独的隧道视图。
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="跳板机" description="通过跳板机和交互式堡垒机路由连接。" href="/zh-cn/guides/bastions/" />
+	<LinkCard title="远程命令" description="跨多台主机执行命令与传输文件。" href="/zh-cn/guides/remote-commands/" />
+</CardGrid>

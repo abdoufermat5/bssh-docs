@@ -1,0 +1,148 @@
+---
+title: 跳板机
+description: 通过跳板机和交互式堡垒机路由 SSH 连接。
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+跳板机（堡垒机）可帮助你访问防火墙或隔离私有网络背后的服务器。Bayesian SSH 既支持使用 TCP 端口转发的标准跳板机，也支持需要专用跳转 shell 协议的交互式堡垒机。
+
+## 配置默认跳板机
+
+如果你的大部分服务器都位于同一个网关之后，可以在全局设置中配置默认跳板机：
+
+```sh
+bssh config --default-bastion bastion.example.com --default-bastion-user jump
+```
+
+新添加的连接将自动继承这些配置：
+
+- `--default-bastion <HOST>`：应用于新连接的网关主机。
+- `--default-bastion-user <USER>`：网关主机的用户名。
+
+不带任何参数运行 `bssh config` 即可查看当前配置：
+
+```sh
+bssh config
+```
+
+```text
+Current settings:
+  Default user: ana
+  Default bastion: bastion.example.com
+  Default bastion user: jump
+  Default port: 22
+  Use Kerberos by default: No
+```
+
+如果需要清除默认跳板机以便让后续连接默认直连，请运行：
+
+```sh
+bssh config --clear-bastion
+```
+
+## 为单条连接配置跳板机
+
+在添加或编辑连接时，你可以为特定主机配置跳板机。
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+保存主机时传入 `-b`（或 `--bastion`）以及可选的 `-B`（或 `--bastion-user`）：
+
+```sh
+bssh add db-prod 10.0.4.12 -b bastion.example.com -B jump
+```
+
+如果省略 `-B`，跳板机用户名默认与该连接的目标用户名一致。
+
+修改已有连接的跳板机设置：
+
+```sh
+bssh edit db-prod --bastion bastion.example.com --bastion-user jump
+```
+
+</TabItem>
+<TabItem label="桌面应用">
+
+在桌面应用中，点击 **New host** 或编辑已有主机打开连接弹窗。
+
+在 **Jump host** 字段中填入跳板机地址（如 `bastion.example.com`），若跳板机用户名与主机用户名不同，再填入 **Jump user**。经由跳板机路由的主机将在主机列表中显示 **Jump** 徽标。
+
+</TabItem>
+</Tabs>
+
+## 不通过跳板机直连
+
+如需绕过任何已配置的跳板机：
+
+- **添加主机时**：传入 `--no-bastion`，防止应用全局默认跳板机：
+  ```sh
+  bssh add direct-srv 192.168.1.50 --no-bastion
+  ```
+- **编辑主机时**：移除已保存的跳板机配置：
+  ```sh
+  bssh edit db-prod --no-bastion
+  ```
+- **发起连接时**：在单次会话中绕过已保存的跳板机：
+  ```sh
+  bssh connect db-prod --no-bastion
+  ```
+- **导入配置时**：把每台导入的主机标记为直连，使它们都不使用默认跳板机：
+  ```sh
+  bssh import --no-bastion
+  ```
+
+你还可以在单次连接会话中临时覆盖跳板机地址：
+
+```sh
+bssh connect db-prod -b temp-bastion.example.com -B jump
+```
+
+## 路由的选择机制
+
+发起连接时，`bssh` 会按照以下优先级解析路由路径：
+
+1. **会话标志**：在命令行传入 `bssh connect` 的标志（`-b`、`-B`、`--no-bastion`）拥有最高优先级。
+2. **连接保存的设置**：连接记录中保存的参数（`bastion` 与 `bastion_user`）。
+3. **全局默认值**：通过 `bssh config` 设置的 `default_bastion` 和 `default_bastion_user` 会在新建连接时自动填充，除非指定了 `--no-bastion` 或显式跳板机。
+
+解析好路由后，`bssh` 会决定底层的传输通道：
+
+- **直接连接**：未配置跳板机且停用 Kerberos 时，`bssh` 使用其纯 Rust 开发的 SSH 原生传输库（`russh`）直连目标。
+- **经典跳板机**：配置了跳板机且未启用 Kerberos（`use_kerberos: false`）时，`bssh` 会将流量委托给 OpenSSH 子进程并使用 `ProxyCommand`（`ssh -W %h:%p`）。这会在跳板机之间建立 TCP 隧道，并在两跳连接中均强制执行主机密钥校验策略。
+- **交互式堡垒机**：当跳板机与 Kerberos 同时启用（`use_kerberos: true`）时，`bssh` 将启用交互式堡垒机专用协议。
+
+## 交互式堡垒机
+
+部分安全网关禁止 TCP 端口转发（禁用 `-W` 与 `-J`）。相反，它们以应用层网关的形式工作（例如运行 `--osh` 的 OVH “The Bastion”）。用户先使用 Kerberos 向堡垒机完成认证，堡垒机启动交互式 shell 并接收 `target_user@target_host` 作为参数。
+
+当连接同时配置了跳板机并启用了 Kerberos 时，Bayesian SSH 会自动识别其为交互式堡垒机：
+
+```sh
+bssh add secure-db 10.0.8.20 -b bastion.example.com -B jump -k true
+```
+
+### 交互式 shell 会话
+
+在交互式连接时，`bssh` 先连接堡垒机的 22 端口，并将目标主机地址作为远程命令参数传入：
+
+```sh
+ssh -p 22 -- jump@bastion.example.com ana@10.0.8.20
+```
+
+网关验证你的 Kerberos 票据后，便会将你直接接入目标主机的会话。
+
+### 远程命令与文件传输
+
+由于交互式堡垒机拒绝常规 OpenSSH 参数转发和子系统转发：
+
+- **命令执行**：在经由交互式堡垒机运行非交互式命令或列出目录时，`bssh` 通过 PTY 发送命令并借助输出标记隔离网关的登录横幅与实际输出。
+- **文件传输**：交互式堡垒机禁用了标准 SFTP 子系统。在上传或下载文件时，`bssh` 会自动感知并降级至 SCP 协议。对于 OVH 风格的网关，`bssh` 会在 `~/.local/share/bayesian-ssh/scp-wrapper.sh` 中自动生成包装脚本，将 SCP 请求转换为网关的 `--osh scp` 协议。
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="认证" description="SSH 密钥、agent 转发、Kerberos 和主机密钥验证。" href="/zh-cn/guides/authentication/" />
+	<LinkCard title="隧道" description="端口转发与 SOCKS5 动态代理。" href="/zh-cn/guides/tunnels/" />
+</CardGrid>

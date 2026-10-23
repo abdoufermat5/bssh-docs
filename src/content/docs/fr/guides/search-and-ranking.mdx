@@ -1,0 +1,155 @@
+---
+title: Recherche et classement
+description: Comment Bayesian SSH trouve vos hôtes, apprend de vos habitudes et classe vos connexions.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Lorsque vous exécutez `bssh connect <requête>` ou effectuez une recherche dans l'application de bureau, `bssh` fait correspondre vos termes avec les noms, noms d'hôte et tags, puis classe les résultats grâce à un modèle bayésien. Vous n'avez pas besoin de mémoriser les noms d'hôte exacts : `bssh` place en tête l'hôte souhaité en fonction de vos habitudes et de votre contexte de travail.
+
+## Fonctionnement de la recherche
+
+`bssh` applique simultanément plusieurs stratégies de correspondance :
+
+- **Recherche par sous-chaîne** : Recherche dans les noms de connexion et les noms d'hôte sans distinction de casse. Par exemple, `prod` correspond à `web-prod` et à `db.prod.example.com`.
+- **Séparateurs ignorés** : Les tirets (`-`), tirets bas (`_`) et points (`.`) sont retirés de la requête et du nom de connexion. Saisir `webprod` trouve `web-prod` et `web_prod`.
+- **Requêtes multi-mots** : Les mots séparés par des espaces correspondent si chaque mot figure dans le nom de la connexion. Saisir `web prod` trouve `web-backend-prod`.
+- **Recherche par acronyme** : Dès que la requête comporte au moins deux lettres, `bssh` analyse les initiales des mots séparés par des tirets, tirets bas ou espaces. Saisir `wp` trouve `web-prod` ou `web-prod-server`.
+- **Préfixes alphanumériques** : La recherche vérifie si les caractères alphanumériques du nom de l'hôte débutent par votre requête.
+
+### Requêtes par tag
+
+Pour restreindre la recherche exclusivement aux tags, préfixez votre terme par `tag:` ou `@` :
+
+```sh
+# Cibler uniquement les connexions portant le tag prod
+bssh connect tag:prod
+
+# Variante avec le préfixe @
+bssh connect @staging
+```
+
+Les recherches courantes analysent également les tags, mais une requête explicite limite le filtrage à la table des tags en ignorant les noms d'hôte et les noms de connexion.
+
+## Classement bayésien
+
+Les connexions enregistrées sont classées selon une approche probabiliste et non par de simples pondérations arbitraires :
+
+```text
+score = prior × likelihood × recency × success × context_factor
+```
+
+Chaque facteur évalue un aspect spécifique de votre historique d'utilisation :
+
+- **A priori de fréquence (prior)** : Mesure la fréquence d'utilisation de cet hôte par rapport à l'ensemble des hôtes enregistrés. Ce calcul intègre un lissage de Laplace pour que les nouvelles connexions restent accessibles :
+  ```text
+  prior = (sessions + 1) / (total_connections + 10)
+  ```
+- **Qualité de correspondance (likelihood)** : Évalue la précision de la requête. Les correspondances exactes obtiennent `1.0`, les préfixes de nom `0.9`, les mots complets `0.85`, les préfixes de mots `0.75`, les sous-chaînes `0.6`, les correspondances sans séparateur `0.5`, les correspondances de tag `0.45`, les noms d'hôte `0.4`, les acronymes `0.35` et les correspondances de repli `0.1`.
+- **Récence (recency)** : Applique une décroissance exponentielle selon les heures écoulées depuis la dernière connexion :
+  ```text
+  recency = max(0.1, exp(-0.005 × hours_since_used))
+  ```
+  Les hôtes jamais utilisés reçoivent une valeur de récence par défaut de `0.3`.
+- **Taux de succès (success)** : Varie entre `0.5` et `1.0` selon la proportion de sessions terminées sans erreur (code de sortie `0` ou `NULL`) :
+  ```text
+  success = 0.5 + 0.5 × (successes / total_sessions)
+  ```
+
+## Connexion prédictive et contexte
+
+Lorsque vous démarrez une session SSH, `bssh` capture le contexte local sans aucun démon en arrière-plan :
+
+- **Dépôt Git et répertoire courant** (`git_root`) : Détecté en remontant les dossiers parents depuis votre terminal.
+- **Heure locale** (`hour`) : L'heure locale (`0–23`), évaluée avec ses voisines circulaires (`±1` heure, ainsi `23`, `0` et `1` sont adjacentes).
+- **Connexion précédente** (`prev_connection_id`) : L'hôte auquel vous vous êtes connecté au cours des 30 dernières minutes.
+
+Sur une fenêtre glissante de 180 jours (`window_days`), `bssh` calcule le rapport de vraisemblance lissé de chaque indicateur contextuel actif :
+
+```text
+lr = ((feature_hits + 1) / (connection_window_sessions + 2)) / ((global_feature_hits + 1) / (global_window_sessions + 2))
+```
+
+Un indicateur n'est appliqué que s'il a été observé au moins 3 fois sur l'ensemble des sessions (`N ≥ 3`). Le facteur résultant `context_factor` est borné entre `0.25` et `8.0`.
+
+## Connexion rapide
+
+Exécuter `bssh` sans argument lance la connexion prédictive rapide. La commande analyse votre contexte courant et affiche les 3 connexions les plus probables en expliquant la raison principale de chaque suggestion :
+
+```sh
+bssh
+```
+
+```text
+Suggested connections
+ 1. web-prod      deploy@web1.example.com   · 12/15 of your sessions from ~/work/billing
+ 2. db-prod       postgres@db1              · usually opened right after web-prod
+ 3. bastion-eu    admin@bastion             · used often around 09:00
+Enter = 1 · number · text to search · q to quit:
+```
+
+- Appuyez sur <kbd>Entrée</kbd> pour vous connecter immédiatement au choix `#1`.
+- Saisissez <kbd>1</kbd>, <kbd>2</kbd> ou <kbd>3</kbd> pour sélectionner une suggestion.
+- Saisissez du texte pour lancer une recherche interactive parmi vos connexions.
+- Appuyez sur <kbd>q</kbd> ou <kbd>Ctrl</kbd>+<kbd>D</kbd> pour quitter.
+
+## Analyser les scores avec bssh why
+
+Exécutez `bssh why` pour consulter la décomposition détaillée du score et le rang d'une connexion dans votre contexte actuel :
+
+```sh
+bssh why web-prod
+```
+
+```text
+web-prod — score 3.42 (rank 1 of 37 in the current context)
+  frequency prior      0.73   (15 sessions)
+  recency              0.91   (last used 4h ago)
+  success rate         0.97
+  repo ~/work/billing  ×4.10  (12 of 15 sessions)
+  hour 09:00 ±1        ×1.30  (6 of 15)
+  after db-prod        —      (no previous session in the last 30 min)
+  context factor       ×5.33
+```
+
+Chaque ligne détaille la contribution au score final :
+
+- **frequency prior** : Score de base fondé sur l'historique global d'utilisation.
+- **recency** : Décroissance temporelle depuis la dernière session.
+- **success rate** : Multiplicateur reflétant les codes de sortie des sessions.
+- **repo**, **hour**, **after previous** : Multiplicateurs issus des rapports de vraisemblance de chaque indicateur contextuel.
+- **context factor** : Produit borné de l'ensemble des indicateurs de contexte actifs.
+
+## Configuration de la recherche
+
+Vous pouvez ajuster le comportement de recherche et la confidentialité avec `bssh config` :
+
+```sh
+# Basculer entre le classement bayésien et la recherche approximative par sous-chaîne
+bssh config --search-mode bayesian
+bssh config --search-mode fuzzy
+
+# Activer ou désactiver le classement prédictif basé sur le contexte
+bssh config --prediction on
+bssh config --prediction off
+
+# Activer ou désactiver la capture du répertoire de travail et du dépôt Git
+bssh config --capture-cwd on
+bssh config --capture-cwd off
+```
+
+Ces réglages sont enregistrés dans `config.json` au sein du dossier de l'environnement actif :
+
+| Paramètre | Option CLI | Valeur par défaut | Description |
+| --- | --- | --- | --- |
+| `search_mode` | `--search-mode` | `bayesian` | Algorithme employé pour le classement des résultats (`bayesian` ou `fuzzy`). |
+| `prediction.enabled` | `--prediction` | `true` | Intègre l'heure, le répertoire et les transitions de session au classement. |
+| `prediction.capture_cwd` | `--capture-cwd` | `true` | Enregistre le répertoire de travail et la racine Git lors du lancement de session. |
+| `prediction.window_days` | — | `180` | Nombre de jours d'historique de session pris en compte pour le calcul du contexte. |
+
+## Prochaines étapes
+
+<CardGrid>
+  <LinkCard title="Connexions" description="Enregistrez et gérez vos entrées d'hôtes SSH." href="/fr/guides/connections/" />
+  <LinkCard title="Alias" description="Créez des raccourcis pour vos hôtes les plus utilisés." href="/fr/guides/aliases/" />
+</CardGrid>

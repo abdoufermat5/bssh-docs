@@ -1,0 +1,176 @@
+---
+title: 认证
+description: 管理 SSH 密钥、ssh-agent 套接字、Kerberos 票据及主机密钥验证。
+---
+
+import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Bayesian SSH 支持公钥认证、自动发现 ssh-agent 套接字、Kerberos 单点登录以及严格的主机密钥验证。认证可以按全局配置、按单条连接设置，也可以在运行时动态覆盖。
+
+## 管理 SSH 密钥
+
+`bssh key` 子命令用于管理 `~/.ssh/` 中的本地 SSH 密钥，并将公钥分发至远程服务器。
+
+### 查看本地密钥
+
+查看本地密钥列表及其文件权限：
+
+```sh
+bssh key list
+```
+
+```text
+SSH Key Inventory (~/.ssh/)
+--------------------------------------------------
+Key: id_ed25519
+  Type:        ssh-ed25519
+  Fingerprint: SHA256:7v8Wk9...
+  Comment:     ana@example.com
+  Private Key: /home/ana/.ssh/id_ed25519
+  Permission:  0600 (SECURE)
+```
+
+`bssh` 会检查私钥是否具备安全的文件权限（`0600`）。若私钥可被本地其他用户读取，`bssh` 会发出警告。
+
+### 生成密钥对
+
+直接在 `~/.ssh/` 中生成新的密钥对：
+
+```sh
+bssh key generate --name id_ed25519_prod
+```
+
+默认情况下，`bssh` 会生成 Ed25519 密钥对。如需生成 4096 位的 RSA 密钥，请传入 `-t rsa`：
+
+```sh
+bssh key generate --name id_rsa_legacy -t rsa
+```
+
+生成密钥时，`bssh` 会自动确保 `~/.ssh/` 目录权限为 `0700`，且私钥文件权限为 `0600`。
+
+### 将公钥复制到远程服务器
+
+将公钥写入远程主机的 `~/.ssh/authorized_keys` 中：
+
+```sh
+bssh key copy web-prod
+```
+
+`bssh key copy` 会自动查找 `~/.ssh/id_ed25519.pub`，其次查找 `~/.ssh/id_rsa.pub`，或直接使用该连接配置的密钥。你也可以指定明确的公钥文件路径：
+
+```sh
+bssh key copy web-prod -k ~/.ssh/id_ed25519_prod.pub
+```
+
+该命令会连接到目标主机（支持通过已配置的跳板机路由），对密钥内容转义以防止 shell 注入，在必要时以 `0700` 权限创建 `~/.ssh` 目录，并将公钥追加到 `~/.ssh/authorized_keys`，同时将其权限设置为 `0600`。
+
+<Tabs syncKey="surface">
+<TabItem label="命令行">
+
+在终端中使用 `bssh key list`、`bssh key generate` 和 `bssh key copy`。
+
+</TabItem>
+<TabItem label="桌面应用">
+
+在桌面应用中，切换到侧边栏的 **Keys** 视图。该视图列出了检测到的所有密钥、指纹、算法类型以及权限安全状态。
+
+- 点击 **Generate key** 生成 Ed25519 或 RSA 密钥对。
+- 点击任意密钥上的 **Deploy** 选择目标服务器并复制公钥。
+- 如果存在权限不安全的私钥，界面会弹出提示横幅，并附带一键修复命令。
+
+</TabItem>
+</Tabs>
+
+## 为单条连接配置私钥
+
+你可以为任意保存的主机指定专用的私钥文件。
+
+- **添加连接时**：
+  ```sh
+  bssh add db-prod 10.0.4.12 -i ~/.ssh/id_ed25519_db
+  ```
+- **编辑连接时**：
+  ```sh
+  bssh edit db-prod --key ~/.ssh/id_ed25519_db
+  ```
+- **发起连接时**：在单次会话中临时覆盖私钥：
+  ```sh
+  bssh connect db-prod -i ~/.ssh/id_ed25519_temp
+  ```
+
+如果连接未显式指定私钥，`bssh` 会依赖系统当前运行的 SSH agent 或 OpenSSH 默认的身份文件。
+
+## 使用 ssh-agent
+
+`bssh` 会自动探测系统上活跃的 SSH agent 套接字，无需手动指定环境变量。
+
+为防御套接字劫持攻击（恶意本地用户在 `/tmp` 下创建未授权套接字以拦截签名请求），`bssh` 在连接前会严格验证套接字文件的 UID 归属。
+
+探测顺序如下：
+
+1. **标准 OpenSSH 临时目录**：`/tmp/ssh-*/agent.*`
+2. **用户运行目录及桌面 agent**：
+   - `/run/user/<uid>/ssh-agent.socket`（systemd 用户服务）
+   - `/run/user/<uid>/gcr/ssh`（GNOME Keyring）
+   - `/run/user/<uid>/keyring/ssh`
+   - `/run/user/<uid>/openssh_agent`
+   - `/run/user/<uid>/1password/t/agent.sock` 与 `~/.1password/agent.sock`（1Password SSH agent）
+3. **进程环境变量**：扫描 `/proc/*/environ` 中归属于当前用户 UID 的 `SSH_AUTH_SOCK` 值。
+4. **GPG agent SSH 桥接套接字**：`/run/user/<uid>/gnupg/S.gpg-agent.ssh` 与 `~/.gnupg/S.gpg-agent.ssh`。
+
+## Kerberos 认证
+
+Bayesian SSH 原生支持 Kerberos（GSSAPI）认证。
+
+### 启用 Kerberos
+
+- **全局默认启用**：
+  ```sh
+  bssh config --use-kerberos true
+  ```
+- **按单条连接设置**：
+  ```sh
+  bssh add krb-srv krb.example.com -k true
+  bssh edit krb-srv --kerberos true
+  ```
+- **单次会话覆盖**：
+  ```sh
+  bssh connect krb-srv -k true
+  bssh connect krb-srv -k false
+  ```
+
+### 票据检查机制
+
+在连接支持 Kerberos 的主机之前，`bssh` 会检查本地凭据缓存（解析 `KRB5CCNAME` 或 `/etc/krb5.conf` 中的默认缓存）。它会验证你是否持有有效的票据授予票据（TGT）、核对主体名称，并在票据过期时给出告警。
+
+在桌面应用中，侧边栏会显示 Kerberos 状态指示器。点击可以查看票据到期详情，或打开票据获取弹窗执行 `kinit`。
+
+## 主机密钥验证
+
+主机密钥用于防止中间人攻击。`bssh` 对照 `~/.ssh/known_hosts` 验证远程主机密钥，支持标准明文条目与 OpenSSH 哈希条目（`|1|salt|hash`）。
+
+### 验证结果分类
+
+在核对远程主机密钥时，`bssh` 会得出四种可能的状态：
+
+- **KnownGood**：主机与公钥匹配 `known_hosts` 中的记录，正常建立连接。
+- **Unknown**：该主机尚未记录在 `known_hosts` 中。
+- **Mismatch**：`known_hosts` 存在该主机的记录，但提供的密钥不匹配。这表明主机更换了密钥或存在潜在的中间人攻击。
+- **Revoked**：该密钥在 `known_hosts` 中被标记为 `@revoked`，`bssh` 会立即拒绝连接。
+
+### 校验策略
+
+主机密钥验证由传输配置参数 `strict_host_key_checking` 控制：
+
+- `accept-new`（默认）：首次连接未知主机时自动信任并将公钥追加到 `~/.ssh/known_hosts`（首次使用时信任，TOFU）。拒绝不匹配或已被吊销的密钥。
+- `strict`：拒绝连接未在 `known_hosts` 中预先登记的任何主机。
+- `off`：忽略主机密钥不匹配的情况。
+
+运行 `bssh audit` 可以检查安全配置隐患。若 `strict_host_key_checking` 设置为 `off`，审计命令将输出严重风险警报。
+
+## 下一步
+
+<CardGrid>
+	<LinkCard title="跳板机" description="通过跳板机和交互式堡垒机路由连接。" href="/zh-cn/guides/bastions/" />
+	<LinkCard title="安全参考" description="安全架构、权限模型及凭据存储机制。" href="/zh-cn/reference/security/" />
+</CardGrid>

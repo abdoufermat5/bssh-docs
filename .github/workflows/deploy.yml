@@ -56,6 +56,35 @@ jobs:
           fi
           bash -n "$tmp/install.sh"
           cp "$tmp/install.sh" dist/install.sh
+      # The apt and dnf repository (/apt, /rpm, /bssh.asc, /bssh.gpg), built and signed
+      # by a bayesian-ssh release as bssh-repo.tar.gz. Each deploy replaces the whole
+      # site, so it comes from the newest release that has one: a release built without
+      # the signing key must not take the repository down for everyone.
+      - name: Package repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: abdoufermat5/bayesian-ssh
+        run: |
+          tmp=$(mktemp -d)
+          found=""
+          for tag in $(gh release list -R "$REPO" --exclude-drafts --exclude-pre-releases --limit 10 --json tagName -q '.[].tagName'); do
+            if gh release download "$tag" -R "$REPO" -D "$tmp/$tag" -p bssh-repo.tar.gz -p SHA256SUMS -p SHA256SUMS.sigstore.json 2>/dev/null \
+               && [ -f "$tmp/$tag/bssh-repo.tar.gz" ]; then
+              found="$tag"
+              break
+            fi
+          done
+          if [ -z "$found" ]; then
+            echo "::notice::no recent release has bssh-repo.tar.gz: no apt/dnf repository published"
+            exit 0
+          fi
+          cosign verify-blob --bundle "$tmp/$found/SHA256SUMS.sigstore.json" \
+            --certificate-identity-regexp '^https://github\.com/abdoufermat5/bayesian-ssh/\.github/workflows/release\.yml@refs/(tags/v.+|heads/main)$' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com "$tmp/$found/SHA256SUMS"
+          (cd "$tmp/$found" && grep '  bssh-repo.tar.gz$' SHA256SUMS | sha256sum -c -)
+          tar -xzf "$tmp/$found/bssh-repo.tar.gz" -C dist --no-same-owner
+          test -f dist/apt/dists/stable/InRelease && test -f dist/rpm/repodata/repomd.xml.asc
+          echo "apt/dnf repository from $found, signature and checksum verified"
       - name: Custom domain
         if: vars.DOCS_SITE != ''
         run: echo "${{ vars.DOCS_SITE }}" | sed -E 's#^https?://##; s#/.*$##' > dist/CNAME

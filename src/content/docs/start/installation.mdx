@@ -47,9 +47,45 @@ The desktop app requires WebKitGTK 4.1. If you run the GUI on a minimal desktop 
 	</TabItem>
 </Tabs>
 
+## Package repositories
+
+Add the signed Bayesian SSH repository once, then install and update with your package manager. It carries the latest release.
+
+| Package | Contents | Architectures |
+| --- | --- | --- |
+| `bayesian-ssh` | CLI and desktop app | `x86_64` |
+| `bayesian-ssh-cli` | CLI only, for servers and headless machines | `x86_64`, `aarch64` |
+
+<Tabs syncKey="os">
+	<TabItem label="Debian / Ubuntu">
+		```sh
+		sudo install -d -m 0755 /etc/apt/keyrings
+		curl -fsSL https://bssh.abdoufermat.dev/bssh.gpg | sudo tee /etc/apt/keyrings/bssh.gpg > /dev/null
+		echo "deb [signed-by=/etc/apt/keyrings/bssh.gpg] https://bssh.abdoufermat.dev/apt stable main" \
+		  | sudo tee /etc/apt/sources.list.d/bssh.list
+		sudo apt update
+		sudo apt install bayesian-ssh   # or bayesian-ssh-cli
+		```
+	</TabItem>
+	<TabItem label="Fedora / RHEL">
+		```sh
+		sudo curl -fsSL -o /etc/yum.repos.d/bssh.repo https://bssh.abdoufermat.dev/rpm/bssh.repo
+		sudo dnf install bayesian-ssh   # or bayesian-ssh-cli
+		```
+	</TabItem>
+	<TabItem label="openSUSE">
+		```sh
+		sudo zypper addrepo https://bssh.abdoufermat.dev/rpm/bssh.repo
+		sudo zypper install bayesian-ssh   # or bayesian-ssh-cli
+		```
+	</TabItem>
+</Tabs>
+
+Updates then come with `sudo apt upgrade`, `sudo dnf upgrade` or `sudo zypper update`. The two packages replace each other, so switching is a plain install.
+
 ## Linux packages
 
-Unified `.deb` and `.rpm` packages containing both the CLI and the desktop app are published with each [GitHub release](https://github.com/abdoufermat5/bayesian-ssh/releases) for `x86_64` and `aarch64`.
+Unified `.deb` and `.rpm` packages containing both the CLI and the desktop app are published with each [GitHub release](https://github.com/abdoufermat5/bayesian-ssh/releases) for `x86_64` (the CLI-only `bayesian-ssh-cli` is also built for `aarch64`).
 
 <Tabs syncKey="os">
 	<TabItem label="Debian / Ubuntu">
@@ -153,6 +189,7 @@ Supported shells: `bash`, `elvish`, `fish`, `powershell`, and `zsh`. Restart you
 
 How you update depends on how you installed:
 
+- **Package repositories**: `sudo apt upgrade`, `sudo dnf upgrade` or `sudo zypper update`, like the rest of the system.
 - **Desktop in-app updates**: The standalone `.AppImage` and `bayesian-ssh-desktop` `.deb`/`.rpm` packages check for updates automatically under **Settings** → **Updates** and install them in place. Open sessions close when applying an update.
 - **Snap**: Updates are delivered automatically by snapd, or manually by running `sudo snap refresh bayesian-ssh`.
 - **Installer script and packages**: Re-run the one-line installer, install the new `.deb`/`.rpm` package, or pull the latest repository changes and re-run `make release && make install`.

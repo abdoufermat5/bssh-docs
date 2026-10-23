@@ -12,7 +12,7 @@ Bayesian SSH provides pre-built Linux packages and binaries for `x86_64` (amd64)
 The installer script downloads the latest pre-built release for your architecture, verifies its checksum, and installs `bayesian-ssh` and the `bssh` alias into `/usr/local/bin`.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash
+curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash
 ```
 
 By default, the installer sets up both the CLI and the desktop app, creating an application menu entry and installing the desktop icon.
@@ -23,11 +23,11 @@ Pass arguments to the script using `bash -s -- <flags>`:
 
 - **CLI only** (servers and headless systems):
   ```sh
-  curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash -s -- --no-gui
+  curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash -s -- --no-gui
   ```
 - **Interactive mode** (prompts to choose between pre-built packages and source builds, with or without the desktop app):
   ```sh
-  curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash -s -- --interactive
+  curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash -s -- --interactive
   ```
 
 ### Desktop runtime dependencies

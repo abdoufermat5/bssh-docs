@@ -12,7 +12,7 @@ Bayesian SSH fournit des paquets et des binaires Linux précompilés pour `x86_6
 Le script d'installation télécharge la dernière version précompilée pour votre architecture, vérifie sa somme de contrôle et installe `bayesian-ssh` ainsi que l'alias `bssh` dans `/usr/local/bin`.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash
+curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash
 ```
 
 Par défaut, l'installateur configure à la fois l'interface en ligne de commande et l'application de bureau, en créant une entrée dans le menu des applications et en installant l'icône correspondante.
@@ -23,11 +23,11 @@ Transmettez des arguments au script en utilisant `bash -s -- <options>` :
 
 - **Ligne de commande uniquement** (serveurs et systèmes sans interface graphique) :
   ```sh
-  curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash -s -- --no-gui
+  curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash -s -- --no-gui
   ```
 - **Mode interactif** (demande de choisir entre paquets précompilés et compilation source, avec ou sans application de bureau) :
   ```sh
-  curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash -s -- --interactive
+  curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash -s -- --interactive
   ```
 
 ### Dépendances d'exécution du bureau

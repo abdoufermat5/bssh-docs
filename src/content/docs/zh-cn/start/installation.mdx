@@ -12,7 +12,7 @@ Bayesian SSH 提供了适用于 `x86_64` (amd64) 与 `aarch64` (arm64) 的预编
 安装脚本会自动检测系统架构并下载对应的最新预编译发布版本，校验校验和后将 `bayesian-ssh` 及 `bssh` 别名安装至 `/usr/local/bin`。
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash
+curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash
 ```
 
 默认情况下，该脚本会同时安装命令行工具与桌面应用，并配置应用程序菜单入口与桌面图标。
@@ -23,11 +23,11 @@ curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/inst
 
 - **仅安装命令行工具**（适用于服务器与无图形界面环境）：
   ```sh
-  curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash -s -- --no-gui
+  curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash -s -- --no-gui
   ```
 - **交互式安装模式**（提示选择预编译版本或源码编译，并可选择是否包含桌面应用）：
   ```sh
-  curl -fsSL https://raw.githubusercontent.com/abdoufermat5/bayesian-ssh/main/install.sh | bash -s -- --interactive
+  curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash -s -- --interactive
   ```
 
 ### 桌面应用运行时依赖

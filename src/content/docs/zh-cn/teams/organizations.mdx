@@ -128,5 +128,5 @@ bssh org billing --manage
 - `only a member of one of the organization's teams can become an owner`：先邀请该用户加入其某个团队，再运行 `bssh org owners add`。
 - `the organization must keep at least one owner`：先添加另一位所有者，再移除这一位。
 - `you see 2 organizations; name one by an id prefix or a team name`：传入 `<org>` 参数。错误消息会列出每个组织及其短 id。
-- ``the team has no free seat; a team admin can add seats (`bssh teams billing <team>` shows how) or remove a member``：组织席位已满。所有者用 `bssh org billing --manage` 增加席位，或用 `--checkout` 订阅。你也可以移除成员或撤销待处理的邀请。
+- ``the organization has no free seat; an owner can add seats (`bssh org billing` shows how) or a member or pending invite can be removed``：组织席位已满。所有者用 `bssh org billing --manage` 增加席位，或用 `--checkout` 订阅。你也可以移除成员或撤销待处理的邀请。
 - `read-only: the organization has more members than the free plan and no active subscription; an owner can subscribe (bssh org billing --checkout) or remove members`：参见[只读模式](/zh-cn/teams/plans-and-billing/#只读模式)。

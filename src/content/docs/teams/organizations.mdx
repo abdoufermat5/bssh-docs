@@ -126,5 +126,5 @@ A server without billing gives each organization a fixed seat limit: `DEFAULT_SE
 - `only a member of one of the organization's teams can become an owner`: Invite the person to one of its teams first, then run `bssh org owners add`.
 - `the organization must keep at least one owner`: Add another owner before removing this one.
 - `you see 2 organizations; name one by an id prefix or a team name`: Pass the `<org>` argument. The error lists each organization with its short id.
-- ``the team has no free seat; a team admin can add seats (`bssh teams billing <team>` shows how) or remove a member``: The organization is full. An owner adds seats with `bssh org billing --manage`, or subscribes with `--checkout`. You can also remove a member or revoke a pending invite.
+- ``the organization has no free seat; an owner can add seats (`bssh org billing` shows how) or a member or pending invite can be removed``: The organization is full. An owner adds seats with `bssh org billing --manage`, or subscribes with `--checkout`. You can also remove a member or revoke a pending invite.
 - `read-only: the organization has more members than the free plan and no active subscription; an owner can subscribe (bssh org billing --checkout) or remove members`: See [read-only mode](/teams/plans-and-billing/#read-only-mode).

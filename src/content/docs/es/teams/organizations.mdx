@@ -128,5 +128,5 @@ Los mensajes del servidor se quedan en inglés.
 - `only a member of one of the organization's teams can become an owner`: invita primero a la persona a uno de sus equipos y luego ejecuta `bssh org owners add`.
 - `the organization must keep at least one owner`: añade otro propietario antes de quitar a este.
 - `you see 2 organizations; name one by an id prefix or a team name`: pasa el argumento `<org>`. El error lista cada organización con su identificador corto.
-- ``the team has no free seat; a team admin can add seats (`bssh teams billing <team>` shows how) or remove a member``: la organización está llena. Un propietario añade puestos con `bssh org billing --manage`, o se suscribe con `--checkout`. También puedes quitar un miembro o revocar una invitación pendiente.
+- ``the organization has no free seat; an owner can add seats (`bssh org billing` shows how) or a member or pending invite can be removed``: la organización está llena. Un propietario añade puestos con `bssh org billing --manage`, o se suscribe con `--checkout`. También puedes quitar un miembro o revocar una invitación pendiente.
 - `read-only: the organization has more members than the free plan and no active subscription; an owner can subscribe (bssh org billing --checkout) or remove members`: consulta [el modo de solo lectura](/es/teams/plans-and-billing/#modo-de-solo-lectura).

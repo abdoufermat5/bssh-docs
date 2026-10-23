@@ -1,0 +1,32 @@
+---
+// The homepage demo: real bssh sessions against throwaway servers, then the desktop app.
+// Plays muted in a loop; with reduced motion it stays on the poster and shows controls.
+interface Props {
+	/** What the video shows, for screen readers (in the page's language). */
+	label: string;
+}
+const { label } = Astro.props;
+---
+
+<video
+	class="landing-shot landing-demo"
+	autoplay
+	muted
+	loop
+	playsinline
+	preload="metadata"
+	poster="/demo/bssh-demo.jpg"
+	aria-label={label}
+>
+	<source src="/demo/bssh-demo.mp4" type="video/mp4" />
+</video>
+
+<script>
+	if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+		for (const video of document.querySelectorAll<HTMLVideoElement>('video.landing-demo')) {
+			video.removeAttribute('autoplay');
+			video.pause();
+			video.controls = true;
+		}
+	}
+</script>

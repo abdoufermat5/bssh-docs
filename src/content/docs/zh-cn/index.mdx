@@ -15,8 +15,9 @@ hero:
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
-import { Image } from 'astro:assets';
-import hosts from '../../../assets/screenshots/app-hosts.png';
+import DemoVideo from '../../../components/DemoVideo.astro';
+
+<DemoVideo label="演示：从 ~/.ssh/config 导入主机，模糊匹配连接，经堡垒机连接，在多台服务器上同时执行命令和上传文件，查看会话历史，然后在桌面应用中打开两个实时终端并使用命令面板。" />
 
 ```sh frame="terminal"
 curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash
@@ -39,7 +40,6 @@ bssh connect prod
 	</Card>
 </CardGrid>
 
-<Image src={hosts} alt="Bayesian SSH 桌面应用列出已保存的主机及其标签和最近使用时间" class="landing-shot" />
 
 ## 下一步
 

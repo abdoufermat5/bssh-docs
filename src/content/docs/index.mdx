@@ -15,8 +15,9 @@ hero:
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
-import { Image } from 'astro:assets';
-import hosts from '../../assets/screenshots/app-hosts.png';
+import DemoVideo from '../../components/DemoVideo.astro';
+
+<DemoVideo label="Demo: importing hosts from ~/.ssh/config, a fuzzy connect, a connection through a bastion, one command and one upload on several servers at once, the session history, then the desktop app with two live terminals and the command palette." />
 
 ```sh frame="terminal"
 curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash
@@ -39,7 +40,6 @@ bssh connect prod
 	</Card>
 </CardGrid>
 
-<Image src={hosts} alt="The Bayesian SSH desktop app listing saved hosts with their tags and last use" class="landing-shot" />
 
 ## Where to go next
 

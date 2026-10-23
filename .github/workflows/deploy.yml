@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Daily, so https://bssh.abdoufermat.dev/install.sh follows new bayesian-ssh releases.
+  schedule:
+    - cron: '17 4 * * *'
   workflow_dispatch:
 
 permissions:
@@ -28,6 +31,31 @@ jobs:
       - run: npm run build # fails on broken internal links (starlight-links-validator)
         env:
           DOCS_SITE: ${{ vars.DOCS_SITE }}
+      # The installer of the latest bayesian-ssh release, served at /install.sh.
+      # Releases attach it and list it in the cosign-signed SHA256SUMS: both are
+      # checked before publishing. Releases older than that have no asset; the
+      # script is then taken at the release tag.
+      - uses: sigstore/cosign-installer@v3
+      - name: Installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: abdoufermat5/bayesian-ssh
+        run: |
+          tag=$(gh release view -R "$REPO" --json tagName -q .tagName)
+          tmp=$(mktemp -d)
+          if gh release download "$tag" -R "$REPO" -D "$tmp" -p install.sh -p SHA256SUMS -p SHA256SUMS.sigstore.json 2>/dev/null \
+             && [ -f "$tmp/install.sh" ]; then
+            cosign verify-blob --bundle "$tmp/SHA256SUMS.sigstore.json" \
+              --certificate-identity-regexp '^https://github\.com/abdoufermat5/bayesian-ssh/\.github/workflows/release\.yml@refs/(tags/v.+|heads/main)$' \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com "$tmp/SHA256SUMS"
+            (cd "$tmp" && grep '  install.sh$' SHA256SUMS | sha256sum -c -)
+            echo "install.sh from the $tag release assets, signature and checksum verified"
+          else
+            curl -fsSL "https://raw.githubusercontent.com/$REPO/$tag/install.sh" -o "$tmp/install.sh"
+            echo "::notice::$tag has no install.sh asset; published the script at the $tag tag"
+          fi
+          bash -n "$tmp/install.sh"
+          cp "$tmp/install.sh" dist/install.sh
       - name: Custom domain
         if: vars.DOCS_SITE != ''
         run: echo "${{ vars.DOCS_SITE }}" | sed -E 's#^https?://##; s#/.*$##' > dist/CNAME

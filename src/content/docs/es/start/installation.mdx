@@ -47,9 +47,45 @@ La aplicación de escritorio requiere WebKitGTK 4.1. Si ejecutas la interfaz en 
 	</TabItem>
 </Tabs>
 
+## Repositorios de paquetes
+
+Añada una vez el repositorio firmado de Bayesian SSH y después instale y actualice con su gestor de paquetes. Contiene la última versión.
+
+| Paquete | Contenido | Arquitecturas |
+| --- | --- | --- |
+| `bayesian-ssh` | CLI y aplicación de escritorio | `x86_64` |
+| `bayesian-ssh-cli` | Solo la CLI, para servidores y equipos sin entorno gráfico | `x86_64`, `aarch64` |
+
+<Tabs syncKey="os">
+	<TabItem label="Debian / Ubuntu">
+		```sh
+		sudo install -d -m 0755 /etc/apt/keyrings
+		curl -fsSL https://bssh.abdoufermat.dev/bssh.gpg | sudo tee /etc/apt/keyrings/bssh.gpg > /dev/null
+		echo "deb [signed-by=/etc/apt/keyrings/bssh.gpg] https://bssh.abdoufermat.dev/apt stable main" \
+		  | sudo tee /etc/apt/sources.list.d/bssh.list
+		sudo apt update
+		sudo apt install bayesian-ssh   # o bayesian-ssh-cli
+		```
+	</TabItem>
+	<TabItem label="Fedora / RHEL">
+		```sh
+		sudo curl -fsSL -o /etc/yum.repos.d/bssh.repo https://bssh.abdoufermat.dev/rpm/bssh.repo
+		sudo dnf install bayesian-ssh   # o bayesian-ssh-cli
+		```
+	</TabItem>
+	<TabItem label="openSUSE">
+		```sh
+		sudo zypper addrepo https://bssh.abdoufermat.dev/rpm/bssh.repo
+		sudo zypper install bayesian-ssh   # o bayesian-ssh-cli
+		```
+	</TabItem>
+</Tabs>
+
+Las actualizaciones llegan después con `sudo apt upgrade`, `sudo dnf upgrade` o `sudo zypper update`. Los dos paquetes se sustituyen entre sí, así que cambiar de uno a otro es una instalación normal.
+
 ## Paquetes Linux
 
-Se publican paquetes unificados `.deb` y `.rpm` que contienen tanto la CLI como la aplicación de escritorio con cada [versión de GitHub](https://github.com/abdoufermat5/bayesian-ssh/releases) para `x86_64` y `aarch64`.
+Se publican paquetes unificados `.deb` y `.rpm` que contienen tanto la CLI como la aplicación de escritorio con cada [versión de GitHub](https://github.com/abdoufermat5/bayesian-ssh/releases) para `x86_64` (el paquete `bayesian-ssh-cli`, solo la CLI, también existe para `aarch64`).
 
 <Tabs syncKey="os">
 	<TabItem label="Debian / Ubuntu">
@@ -153,6 +189,7 @@ Shells compatibles: `bash`, `elvish`, `fish`, `powershell` y `zsh`. Reinicia tu 
 
 La forma de actualizar depende del método que hayas usado para instalar:
 
+- **Repositorios de paquetes**: `sudo apt upgrade`, `sudo dnf upgrade` o `sudo zypper update`, como el resto del sistema.
 - **Actualizaciones integradas en la aplicación de escritorio**: Los paquetes independientes `.AppImage` y `bayesian-ssh-desktop` en `.deb`/`.rpm` comprueban actualizaciones automáticamente en **Settings** → **Updates** y las instalan directamente. Las sesiones abiertas se cierran al aplicar la actualización.
 - **Snap**: Las actualizaciones se entregan automáticamente mediante snapd, o manualmente ejecutando `sudo snap refresh bayesian-ssh`.
 - **Script instalador y paquetes del sistema**: Vuelve a ejecutar el script de instalación en una línea, instala el nuevo paquete `.deb`/`.rpm`, o descarga los cambios más recientes del repositorio y vuelve a ejecutar `make release && make install`.

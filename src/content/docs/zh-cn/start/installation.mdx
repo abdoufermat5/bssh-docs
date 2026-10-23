@@ -47,9 +47,45 @@ curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash
 	</TabItem>
 </Tabs>
 
+## 软件源
+
+添加一次经过签名的 Bayesian SSH 软件源，之后即可用系统的包管理器安装和更新。软件源提供最新版本。
+
+| 软件包 | 内容 | 架构 |
+| --- | --- | --- |
+| `bayesian-ssh` | 命令行工具与桌面应用 | `x86_64` |
+| `bayesian-ssh-cli` | 仅命令行工具，适用于服务器和无图形界面的机器 | `x86_64`, `aarch64` |
+
+<Tabs syncKey="os">
+	<TabItem label="Debian / Ubuntu">
+		```sh
+		sudo install -d -m 0755 /etc/apt/keyrings
+		curl -fsSL https://bssh.abdoufermat.dev/bssh.gpg | sudo tee /etc/apt/keyrings/bssh.gpg > /dev/null
+		echo "deb [signed-by=/etc/apt/keyrings/bssh.gpg] https://bssh.abdoufermat.dev/apt stable main" \
+		  | sudo tee /etc/apt/sources.list.d/bssh.list
+		sudo apt update
+		sudo apt install bayesian-ssh   # 或 bayesian-ssh-cli
+		```
+	</TabItem>
+	<TabItem label="Fedora / RHEL">
+		```sh
+		sudo curl -fsSL -o /etc/yum.repos.d/bssh.repo https://bssh.abdoufermat.dev/rpm/bssh.repo
+		sudo dnf install bayesian-ssh   # 或 bayesian-ssh-cli
+		```
+	</TabItem>
+	<TabItem label="openSUSE">
+		```sh
+		sudo zypper addrepo https://bssh.abdoufermat.dev/rpm/bssh.repo
+		sudo zypper install bayesian-ssh   # 或 bayesian-ssh-cli
+		```
+	</TabItem>
+</Tabs>
+
+之后通过 `sudo apt upgrade`、`sudo dnf upgrade` 或 `sudo zypper update` 获取更新。两个软件包可以互相替换，切换时直接安装另一个即可。
+
 ## Linux 软件包
 
-每个 [GitHub Releases 发布版本](https://github.com/abdoufermat5/bayesian-ssh/releases) 都会提供集成了命令行工具与桌面应用的统一 `.deb` 与 `.rpm` 软件包，支持 `x86_64` 和 `aarch64` 架构。
+每个 [GitHub Releases 发布版本](https://github.com/abdoufermat5/bayesian-ssh/releases) 都会提供集成了命令行工具与桌面应用的统一 `.deb` 与 `.rpm` 软件包，支持 `x86_64` 架构（仅含命令行工具的 `bayesian-ssh-cli` 也提供 `aarch64` 版本）。
 
 <Tabs syncKey="os">
 	<TabItem label="Debian / Ubuntu">
@@ -153,6 +189,7 @@ sudo ln -sf /usr/local/bin/bayesian-ssh /usr/local/bin/bssh
 
 更新步骤取决于最初的安装方式：
 
+- **软件源**：与系统其他软件一样，使用 `sudo apt upgrade`、`sudo dnf upgrade` 或 `sudo zypper update` 更新。
 - **桌面应用内置更新**：GitHub Releases 提供的独立 `.AppImage` 以及 `bayesian-ssh-desktop` 的 `.deb`/`.rpm` 软件包支持在 **Settings** → **Updates** 中自动检查更新并在原地安装。应用更新时会关闭当前打开的会话。
 - **Snap**：更新由 snapd 自动推送，也可以执行 `sudo snap refresh bayesian-ssh` 手动更新。
 - **安装脚本与系统软件包**：重新运行单行安装脚本，或安装新版 `.deb`/`.rpm` 软件包，亦或拉取最新仓库源码后重新执行 `make release && make install`。

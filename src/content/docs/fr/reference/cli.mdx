@@ -675,7 +675,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | `share` | Partager une connexion enregistrée avec une équipe (ou pousser vos modifications vers une connexion d'équipe). |
 | `unshare` | Supprimer une connexion d'équipe pour toute l'équipe. |
 | `members` | Lister les membres d'une équipe et leurs appareils. |
-| `billing` | Afficher l'offre et les sièges d'une équipe ; s'abonner ou gérer l'abonnement (administrateur). |
+| `billing` | Afficher l'offre et les sièges de l'organisation d'une équipe ; s'abonner ou gérer l'abonnement (propriétaire de l'organisation). |
 | `remove` | Retirer un membre et faire tourner la clé d'équipe (administrateur). |
 | `audit` | Afficher et vérifier le journal d'audit de l'équipe (administrateur). Sort avec un code non nul si une vérification échoue. |
 
@@ -828,7 +828,7 @@ Usage: bssh teams members [OPTIONS] <TEAM>
 
 ### bssh teams billing
 
-Afficher l'offre et les sièges d'une équipe ; s'abonner ou gérer l'abonnement (administrateur). Elle agit sur l'organisation de l'équipe, et le paiement et le portail demandent un propriétaire de l'organisation : voir [`bssh org billing`](#bssh-org-billing).
+Afficher l'offre et les sièges de l'organisation d'une équipe ; s'abonner ou gérer l'abonnement (propriétaire de l'organisation). Elle agit sur l'organisation de l'équipe, et le paiement et le portail demandent un propriétaire de l'organisation : voir [`bssh org billing`](#bssh-org-billing).
 
 ```text
 Usage: bssh teams billing [OPTIONS] <TEAM>
@@ -837,10 +837,10 @@ Usage: bssh teams billing [OPTIONS] <TEAM>
 | Option | Description |
 | --- | --- |
 | `<TEAM>` | Nom de l'équipe. |
-| `--checkout` | Ouvrir une page de paiement pour abonner l'équipe (administrateur). |
+| `--checkout` | Ouvrir une page de paiement pour abonner l'organisation de l'équipe (propriétaire). |
 | `--seats <SEATS>` | Nombre de sièges à souscrire (par défaut : les sièges utilisés, au moins un de plus que l'offre gratuite). |
 | `--yearly` | Payer à l'année plutôt qu'au mois. |
-| `--manage` | Ouvrir le portail de facturation : carte, factures, sièges, résiliation (administrateur). |
+| `--manage` | Ouvrir le portail de facturation : carte, factures, sièges, résiliation (propriétaire). |
 
 ### bssh teams remove
 

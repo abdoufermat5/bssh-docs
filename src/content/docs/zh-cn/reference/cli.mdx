@@ -675,7 +675,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | `share` | 把一条已保存连接共享给团队（或把对团队连接的修改推送上去）。 |
 | `unshare` | 为团队中的所有人删除一条团队连接。 |
 | `members` | 列出团队成员及其设备。 |
-| `billing` | 显示团队的方案和席位；订阅或管理订阅（管理员）。 |
+| `billing` | 显示团队所属组织的方案和席位；订阅或管理订阅（组织所有者）。 |
 | `remove` | 移除成员并轮换团队密钥（管理员）。 |
 | `audit` | 显示并验证团队的审计日志（管理员）。任何一项验证失败即以非零状态退出。 |
 
@@ -828,7 +828,7 @@ Usage: bssh teams members [OPTIONS] <TEAM>
 
 ### bssh teams billing
 
-显示团队的方案和席位；订阅或管理订阅（管理员）。它作用于团队所属的组织，结账和门户需要组织所有者：参见 [`bssh org billing`](#bssh-org-billing)。
+显示团队所属组织的方案和席位；订阅或管理订阅（组织所有者）。它作用于团队所属的组织，结账和门户需要组织所有者：参见 [`bssh org billing`](#bssh-org-billing)。
 
 ```text
 Usage: bssh teams billing [OPTIONS] <TEAM>
@@ -837,10 +837,10 @@ Usage: bssh teams billing [OPTIONS] <TEAM>
 | 选项 | 说明 |
 | --- | --- |
 | `<TEAM>` | 团队名称。 |
-| `--checkout` | 打开结账页面为团队订阅（管理员）。 |
+| `--checkout` | 打开结账页面为团队所属组织订阅（所有者）。 |
 | `--seats <SEATS>` | 要订阅的席位数（默认值：当前使用的席位数，且至少比免费方案多一个）。 |
 | `--yearly` | 按年付费而不是按月。 |
-| `--manage` | 打开账单门户：银行卡、发票、席位、取消（管理员）。 |
+| `--manage` | 打开账单门户：银行卡、发票、席位、取消（所有者）。 |
 
 ### bssh teams remove
 

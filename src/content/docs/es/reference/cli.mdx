@@ -675,7 +675,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | `share` | Compartir una conexión guardada con un equipo (o subir tus cambios a una conexión de equipo). |
 | `unshare` | Borrar una conexión de equipo para todo el equipo. |
 | `members` | Listar los miembros de un equipo y sus dispositivos. |
-| `billing` | Mostrar el plan y los puestos de un equipo; suscribirse o gestionar la suscripción (administrador). |
+| `billing` | Mostrar el plan y los puestos de la organización de un equipo; suscribirse o gestionar la suscripción (propietario de la organización). |
 | `remove` | Quitar a un miembro y rotar la clave del equipo (administrador). |
 | `audit` | Mostrar y verificar el registro de auditoría del equipo (administrador). Sale con código distinto de cero si algo no se verifica. |
 
@@ -828,7 +828,7 @@ Usage: bssh teams members [OPTIONS] <TEAM>
 
 ### bssh teams billing
 
-Muestra el plan y los puestos de un equipo; suscríbete o gestiona la suscripción (administrador). Actúa sobre la organización del equipo, y el pago y el portal requieren un propietario de la organización: consulta [`bssh org billing`](#bssh-org-billing).
+Muestra el plan y los puestos de la organización de un equipo; suscríbete o gestiona la suscripción (propietario de la organización). Actúa sobre la organización del equipo, y el pago y el portal requieren un propietario de la organización: consulta [`bssh org billing`](#bssh-org-billing).
 
 ```text
 Usage: bssh teams billing [OPTIONS] <TEAM>
@@ -837,10 +837,10 @@ Usage: bssh teams billing [OPTIONS] <TEAM>
 | Opción | Descripción |
 | --- | --- |
 | `<TEAM>` | Nombre del equipo. |
-| `--checkout` | Abrir una página de pago para suscribir el equipo (administrador). |
+| `--checkout` | Abrir una página de pago para suscribir la organización del equipo (propietario). |
 | `--seats <SEATS>` | Puestos que suscribir (por defecto: los puestos en uso, al menos uno por encima del plan gratuito). |
 | `--yearly` | Pagar al año en lugar de al mes. |
-| `--manage` | Abrir el portal de facturación: tarjeta, facturas, puestos, cancelación (administrador). |
+| `--manage` | Abrir el portal de facturación: tarjeta, facturas, puestos, cancelación (propietario). |
 
 ### bssh teams remove
 

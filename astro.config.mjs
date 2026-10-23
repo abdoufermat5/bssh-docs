@@ -4,7 +4,8 @@ import starlight from '@astrojs/starlight';
 import starlightLinksValidator from 'starlight-links-validator';
 
 // Public URL of the deployed site, e.g. https://docs.example.com (used for canonical URLs and the sitemap).
-const site = process.env.DOCS_SITE ?? 'http://localhost:4321';
+// `||`, not `??`: CI passes an empty string when the repository variable is unset.
+const site = process.env.DOCS_SITE || 'http://localhost:4321';
 
 const group = (label, translations, items) => ({ label, translations, items });
 

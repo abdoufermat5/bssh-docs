@@ -1,0 +1,52 @@
+---
+title: Security model
+description: What bssh AI enforces, where it is enforced, how it handles prompt injection and secrets, and the limits you should know before you rely on it.
+---
+
+bssh AI starts from one assumption: **an agent can be steered by anything it reads.** A log line, a file, a banner or a web page can carry instructions, and no model reliably ignores them. bssh doesn't try to make the model behave. It limits what any agent, steered or not, can do on your servers, and records all of it.
+
+## The rules that always hold
+
+- **The agent holds no credential.** Keys, passwords and certificates stay in bssh. The agent sends tool calls and receives results.
+- **Decisions are deterministic.** A shell parser and your policy decide allow, ask or deny. No model is consulted, so a persuasive request gets the same answer as a plain one.
+- **Out-of-scope hosts don't exist.** The agent can't list them, and naming one fails like a typo.
+- **Changes wait for a person,** who sees the exact command or diff. The agent's own explanation is shown, labelled as the agent's.
+- **Everything is recorded.** Every call, decision, approval and output digest goes to a signed, hash-chained log that can be verified offline.
+
+## Where each limit is enforced
+
+| Limit | Enforced by | Holds even if bssh on your machine is bypassed |
+| --- | --- | --- |
+| Scope, policy, approvals, budgets | bssh, on the machine that runs the agent's connection | No |
+| Reads can't write or reach the network | The kernel, on the host (Landlock or bubblewrap) | Yes, on hosts with a jail |
+| An approved command runs only that command | sshd, on the host, through the certificate's forced command | Yes, on hosts that trust your CA (file edits use your connection's credentials) |
+| Agent writes have no root | The `bssh-agent` user and your sudo rules | Yes, on hosts with the agent user |
+
+`bssh ai doctor` shows which rows apply to each host. A host with none of them is protected by bssh alone, which is still far more than an agent holding your key.
+
+## Prompt injection
+
+What bssh does about text that tries to steer the agent:
+
+- Output from servers is returned in fields marked as untrusted data, never mixed into bssh's own instructions to the agent.
+- Reads run in the jail, so injected "read" commands can't change anything or send data out.
+- Commands that fetch and run code, such as `curl … | sh`, are tagged unknown and always ask.
+- A burst of denials or attempts at hosts outside the scope ends the run.
+
+## Secrets
+
+Before output reaches the agent, bssh removes what looks like a secret: private key blocks, cloud and service tokens, JWTs, bearer headers, passwords in `key=value` lines and URLs. Each is replaced by a marker such as `«redacted:aws-key»` and counted in the log. Paths in `deny_paths` (private keys, `.env` files, `/etc/shadow` and others) can't be read at all.
+
+This keeps secrets out of the agent's context and out of the model provider's logs. It is pattern-based: it catches the common formats, not every secret your systems may print.
+
+## With bssh Teams
+
+The sync server relays approval requests and stores AI audit events, end-to-end encrypted. It sees which agent acted, when, and who approved. It never sees commands, hosts, output or policies. Policies are signed by an admin, and the gateway refuses one that isn't, or one older than it has already seen.
+
+## Limits to know
+
+- **In-client confirmation trusts the agent's client.** A client set to approve everything would also approve these requests. That's why the tier is opt-in, limited to low-risk changes and hosts you choose, and recorded as such.
+- **The client name is self-reported.** The log shows which agent an MCP client claims to be, marked as self-reported.
+- **Without a jail, "read-only" is the parser's judgement.** It is conservative, and it can only be as good as its rules. Install bubblewrap or use a recent util-linux to make reads safe by construction.
+- **bssh can't stop an agent from using another path.** An agent that has its own shell and your SSH key can still run `ssh`. Don't give agents keys, and install the [Claude Code guard](/ai/quick-start/#keep-agents-on-the-bssh-path) where it applies.
+- **A person still has to read the request.** Plans, diffs and grants keep requests few and clear, but an approval given without reading protects nothing.

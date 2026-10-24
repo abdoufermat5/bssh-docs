@@ -55,6 +55,15 @@ export default defineConfig({
 					'start/quick-start',
 					'start/configuration',
 				]),
+				group('bssh AI', { fr: 'bssh AI', es: 'bssh AI', 'zh-CN': 'bssh AI' }, [
+					'ai/overview',
+					'ai/quick-start',
+					'ai/policies',
+					'ai/approvals',
+					'ai/host-setup',
+					'ai/teams-agents',
+					'ai/security',
+				]),
 				group('Guides', { fr: 'Guides', es: 'Guías', 'zh-CN': '指南' }, [
 					'guides/connections',
 					'guides/search-and-ranking',

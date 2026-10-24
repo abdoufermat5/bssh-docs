@@ -1,0 +1,115 @@
+---
+title: Policies
+description: How a bssh AI policy decides allow, ask or deny for each agent call, its profiles and fields, and how to test it before an agent runs.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A policy decides, for each call, **allow**, **ask** or **deny**. It is read by a parser and a fixed set of rules, never by a model, so the same call always gets the same answer and you can test it in advance.
+
+Policies live under `ai.policies` in your configuration file, by name. An agent uses `default` unless its MCP entry passes `--policy <name>`.
+
+## Profiles
+
+Every policy starts from a profile:
+
+| Profile | Agents can | Budget |
+| --- | --- | --- |
+| `observe` | Read only. Every write is refused. | 30 calls per minute, no changes |
+| `operate` | Read, and propose changes that a person approves | 30 calls per minute, 10 changes per run, 2 h per run |
+| `oncall` | The same, for unattended Teams agents | 60 calls per minute, 20 changes per run, 4 h per run |
+
+With no `default` policy at all, bssh uses `observe` on every host you have saved. A policy you write yourself sees **no host** until you give it a scope.
+
+## A complete policy
+
+```json
+"ai": {
+  "policies": {
+    "default": {
+      "profile": "operate",
+      "scope": { "tags": ["staging", "prod"], "hosts": ["bastion-ops"] },
+      "approval": {
+        "default": "out-of-band",
+        "in_client": ["staging"],
+        "two_person": ["prod-db"]
+      },
+      "read_paths": ["/var/log/**", "/etc/**", "/srv/**"],
+      "deny_paths": ["/srv/app/secrets/**"],
+      "write_paths": ["/etc/nginx/**", "/etc/systemd/system/**"],
+      "deny": ["systemctl stop sshd", "docker system prune *"],
+      "budgets": { "calls_per_min": 30, "changes_per_run": 10, "run_ttl": "2h", "max_denials_per_min": 5 }
+    }
+  },
+  "approval_timeout_secs": 300
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `scope.tags`, `scope.hosts` | Hosts the agent can see. Anything else doesn't exist for it: `list_hosts` leaves it out and calls naming it fail like an unknown host. |
+| `approval.default` | Who approves a change: `out-of-band` (desktop app, `bssh ai approve`) unless a tag rule applies. |
+| `approval.in_client` | Tags where a low-risk change can be confirmed in the agent's own client. Off unless you list tags. |
+| `approval.two_person` | Tags where a change needs two different admins. Needs [bssh Teams](/ai/teams-agents/). |
+| `read_paths` | Where `read_file` may read without asking. Replaces the built-in list when set. |
+| `deny_paths` | Never read, never written, whatever the tool. |
+| `write_paths` | The only places `edit_file` may change. |
+| `deny` | Commands refused outright, without asking anyone. |
+| `budgets` | Calls per minute, changes per run, run lifetime, and how many denials in a minute end the run. |
+| `approval_timeout_secs` | A request nobody answers is refused after this many seconds. Default 300. |
+
+### What you can't switch off
+
+`deny_paths` and `deny` always include bssh's built-in entries; your lists add to them. The built-ins cover `/etc/shadow`, `/etc/sudoers.d`, private keys (`*.key`, `*.pem`, `id_rsa*`, `id_ed25519*`), `~/.ssh`, `.env` files and AWS credentials, and commands such as `rm -rf /`, `mkfs *`, `dd of=/dev/*`, `iptables -F`, `shutdown` and `reboot`.
+
+`bssh ai policy show <name>` prints a policy with all of this filled in.
+
+## How a command is judged
+
+bssh parses each shell command the way a shell would, then judges every command inside it:
+
+- `&&`, `||`, `;`, pipes, subshells, `$(…)`, redirections and here-documents are all taken apart;
+- wrappers are opened: `sudo`, `env`, `timeout`, `nice`, `xargs`, `find -exec`, `sh -c '…'` and `bash -lc '…'`;
+- each command is tagged from a rule table: `read`, `write`, `service-change`, `destructive`, `privilege`, `network`, `exfil-risk`;
+- anything bssh can't fully understand is tagged `unknown`: `eval`, a script piped into a shell, an unknown program, a command too long to parse.
+
+The strictest answer wins. One destructive command at the end of a long pipeline makes the whole call destructive. `unknown` is never treated as read-only.
+
+Deny rules match on the parsed command, not the text, so quoting, `/bin/rm`, `sudo` or a different flag order don't get around them:
+
+```text frame="terminal"
+$ bssh ai explain --host web-1 "sudo bash -c 'mkfs.ext4 /dev/sdb1'"
+...
+decision: deny - deny: the command matches 'mkfs *'
+```
+
+## Test a policy
+
+`bssh ai explain` judges one command. `bssh ai policy test` judges a whole file, with the expected answer in a comment, and exits with an error if any answer differs. Keep the file next to your infrastructure code and run it in CI:
+
+```text title="checks.txt"
+uptime                                   # expect: allow
+journalctl -u nginx -n 200               # expect: allow
+systemctl restart nginx                  # expect: ask
+cat /etc/shadow                          # expect: deny
+mkfs.ext4 /dev/sdb1                      # expect: deny
+```
+
+```text frame="terminal"
+$ bssh ai policy test checks.txt --host web-1
+#  EXPECT  GOT    COMMAND                     (reason)
+1  allow   allow  uptime                      (analyzer: every command is read-only)
+2  allow   allow  journalctl -u nginx -n 200  (analyzer: every command is read-only)
+3  ask     ask    systemctl restart nginx     (write: Run changes the host and needs approval)
+4  deny    deny   cat /etc/shadow             (deny_paths: '/etc/shadow' matches '/etc/shadow')
+5  deny    deny   mkfs.ext4 /dev/sdb1         (deny: the command matches 'mkfs *')
+5 commands, 0 mismatches
+```
+
+<Aside type="tip">
+Pass `--host` to `explain` and `policy test`. A decision depends on the host's tags and on how strongly it is protected, so without a host bssh can only say that the call names no host.
+</Aside>
+
+## Budgets and the circuit breaker
+
+Budgets bound a run even when every call is allowed. When an agent goes past its calls per minute, its changes per run or its run lifetime, further calls are refused with the reason. A burst of denials, or repeated attempts at hosts outside its scope, ends the run at once: that is what an agent being steered by injected text tends to look like.

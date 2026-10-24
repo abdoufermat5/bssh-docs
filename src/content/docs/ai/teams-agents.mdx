@@ -1,0 +1,79 @@
+---
+title: Teams agents
+description: Run unattended AI agents against your servers with bssh Teams, with their own identities, admin-signed policies, approvals relayed to admins and two-person approval.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+An agent on your laptop acts for you, and you approve its changes. An on-call agent at 3 a.m., a deployment bot in CI or a scheduled check has nobody at the keyboard. With [bssh Teams](/teams/overview/), such an agent gets its own identity in the team, runs a policy signed by an admin, and its changes are approved by the team's admins from their own machines.
+
+## How it fits together
+
+- **An agent identity** is a team member of kind `agent`, created by an admin. It has its own device key, takes a seat like any member, and can't write to the team's vault.
+- **A signed policy** goes with it. An admin signs it, and the gateway refuses a policy that isn't signed by an admin or is older than one it already saw, so the server can't change what an agent may do.
+- **The gateway**, `bssh ai serve`, runs on a machine you control: a bastion, an operations VM, the CI runner's host. Agents connect to it over MCP on HTTP. It holds no long-lived key for agents and checks every call against the signed policy.
+- **Approvals are relayed.** A request is encrypted to the admins' devices and signed by the agent's device. The server passes it on without being able to read it.
+
+## Set up an agent
+
+<Steps>
+
+1. On an admin's machine, write the policy the agent will run, under `ai.policies` (see [Policies](/ai/policies/)), then create the agent:
+
+   ```sh
+   bssh teams agent add platform oncall --policy oncall
+   ```
+
+   The agent takes a seat. bssh signs the policy and writes the agent's credential to `~/.config/bayesian-ssh/environments/default/ai/agents/platform.oncall.json`, readable only by you.
+
+2. Copy that file to the same place on the gateway machine, with mode 0600, and save there the hosts the agent may use, as you would for yourself (`bssh add`, or an [inventory source](/guides/inventory-sources/)).
+
+3. Start the gateway:
+
+   ```sh
+   bssh ai serve --agent platform/oncall
+   ```
+
+   It listens on `127.0.0.1:8765` by default. To reach it from elsewhere, put it behind a TLS reverse proxy, or pass `--listen` with `--allow-remote`.
+
+4. Give the agent a token:
+
+   ```sh
+   bssh ai token platform/oncall --ttl 1h
+   ```
+
+   Tokens are signed, scoped to one agent and its policy, and last 24 hours at most. The agent connects to `http://127.0.0.1:8765/mcp` and sends `Authorization: Bearer <token>`.
+
+</Steps>
+
+## Approve from anywhere
+
+When the agent asks, every admin of the team can see the request from their own machine:
+
+```sh
+bssh teams agent pending platform
+bssh teams agent approve platform <request> --reason "checked the diff"
+bssh teams agent deny platform <request> --reason "wait for the release"
+```
+
+On hosts tagged in the policy's `approval.two_person`, a change runs only after **two different admins** approve it. The same admin approving twice still counts once. A request nobody answers is refused when it expires.
+
+## Change or remove an agent
+
+```sh
+bssh teams agent list platform
+bssh teams agent policy platform oncall --policy oncall   # sign an updated policy
+bssh teams agent remove platform oncall                   # frees the seat
+```
+
+The gateway checks the agent's membership every minute and refuses every call once it is removed. A new policy version applies when the gateway restarts.
+
+## What the team sees, and what the server sees
+
+The agent's calls, decisions, approvals and changes join the team's [signed audit log](/teams/audit-log/), next to the members' sessions, with the agent named as the actor. Admins see who approved what and verify the log on their own machine with `bssh teams audit`.
+
+The server sees that agent X made a call at time T, and who approved it. It never sees the command, the host, the output or the policy: those are encrypted to the team before they leave the gateway.
+
+<Aside type="note">
+Agents are billed as regular seats. A self-hosted server needs bssh-cloud 0.5.0 or later.
+</Aside>

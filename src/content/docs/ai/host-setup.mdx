@@ -1,0 +1,97 @@
+---
+title: Host setup
+description: Prepare servers for bssh AI agents with a low-privilege agent user, a read-only jail for reads, and a local CA so each approved step runs with a certificate for that one command.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+bssh AI works on any host you can already reach: the policy, the approvals and the log don't depend on the server. Three things on the host make the limits hold even if bssh on your machine were bypassed. None of them is required, and `bssh ai doctor` tells you which ones a host has.
+
+| On the host | What it gives you |
+| --- | --- |
+| A read-only jail (Landlock or bubblewrap) | Reads that can't write or open a network connection, so they run without asking |
+| The `bssh-agent` user | A separate, unprivileged account for agent writes, with no password and no sudo |
+| Trust in your local CA | Approved steps run with a two-minute certificate that only allows that exact command |
+
+## The read-only jail
+
+bssh looks for a jail the first time an agent uses a host, and uses the best one available:
+
+1. **Landlock**, through `setpriv` from util-linux 2.40 or later: no writes anywhere, reads limited to the policy's `read_paths`, and no TCP connections on kernels whose Landlock supports it.
+2. **bubblewrap** (`bwrap`): the whole file system mounted read-only, a private `/tmp`, and no network.
+
+On a host with a jail, `run_readonly` and `run_many` run whatever the agent sends inside it, and the policy allows them without asking. A command that turns out to write simply fails. On a host without one, bssh only allows commands its parser judges read-only, and anything else asks.
+
+Installing `bwrap` (`apt install bubblewrap`, `dnf install bubblewrap`) is usually the quickest way to get a jail on a host.
+
+## The agent user
+
+```sh
+bssh ai setup web-1          # one host
+bssh ai setup -t staging     # every host with a tag
+```
+
+`bssh ai setup` needs root once, through sudo, and shows the exact script before it runs anything:
+
+```text frame="terminal"
+$ bssh ai setup web-1 --dry-run
+bssh ai setup will run this script as root on 1 host(s): web-1
+    ...
+It creates the user `bssh-agent` (no password, no sudo) and its home with a backup directory.
+It does not change firewalls or sudoers.
+
+Dry run: nothing was changed.
+```
+
+The user is in the `systemd-journal` and `adm` groups when they exist, so it can read logs. bssh doesn't install sudo rules or firewall rules: those are yours to decide. `bssh ai doctor` suggests the narrowest sudo lines the policy needs, for example:
+
+```text
+bssh-agent ALL=(root) NOPASSWD: /usr/bin/systemctl reload nginx
+```
+
+and reminds you to restrict the agent user's outbound traffic on your firewall if you can.
+
+## Approval-bound certificates
+
+With a local certificate authority, an approved command doesn't run with a long-lived key. For each one, from `run`, `service` or a change plan, bssh signs a new certificate, valid for that command only:
+
+- principal `bssh-agent`, so it logs in as the agent user only;
+- the step's command as a forced command, so the certificate can run nothing else;
+- no terminal, no port or agent forwarding;
+- valid for two minutes.
+
+File edits are written over SFTP with your connection's own credentials, after approval and once the original is backed up.
+
+<Steps>
+
+1. Create the CA on your machine:
+
+   ```sh
+   bssh ai ca init
+   ```
+
+   The key stays on your machine, in a 0600 file. To protect it with a passphrase, set `BSSH_AI_CA_PASSPHRASE` when you run `ca init`.
+
+2. Make hosts trust it:
+
+   ```sh
+   bssh ai ca trust web-1
+   bssh ai ca trust -t staging
+   ```
+
+   This adds the CA to `TrustedUserCAKeys` (next to any CA the host already trusts), maps the `bssh-agent` principal to the `bssh-agent` user only, and checks the new configuration with `sshd -t` before it reloads `sshd`. If the check fails, the previous configuration is put back. Like `setup`, it shows the script first and `--dry-run` stops there.
+
+</Steps>
+
+<Aside type="caution">
+Once a local CA exists, approved commands use certificates on every host. Run `bssh ai setup` and `bssh ai ca trust` on the hosts agents may change, or those commands fail. They fail closed: bssh never falls back to your own key for them.
+</Aside>
+
+## Check a host
+
+```sh
+bssh ai doctor web-1
+bssh ai doctor -t staging
+```
+
+For each host: whether it is reachable, whether `bssh-agent` exists, which jail it has, whether it trusts your CA, and the sudo rules your policy would need. It also lists the agent clients bssh found on your machine and whether they are set up with `bssh ai install`.

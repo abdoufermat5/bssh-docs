@@ -1,6 +1,6 @@
 ---
 title: Qu'est-ce que Bayesian SSH ?
-description: Un gestionnaire SSH pensé pour le clavier, en ligne de commande et sur le bureau, avec un partage d'équipe chiffré de bout en bout en option.
+description: Un gestionnaire SSH pensé pour le clavier, en ligne de commande et sur le bureau, qui laisse des agents IA travailler sur vos serveurs selon votre politique et sous votre approbation, avec un partage d'équipe chiffré de bout en bout en option.
 ---
 
 import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
@@ -15,6 +15,7 @@ Vous n'avez pas besoin du nom exact. `bssh` recherche dans les noms, alias, tags
 
 ## Ce qu'il fait
 
+- **Laisse des agents IA travailler sur vos serveurs** sans vos clés : les lectures s'exécutent dans un bac à sable en lecture seule, les modifications attendent votre approbation et chaque appel est consigné.
 - **Enregistre des connexions** avec leur utilisateur, port, clé, bastion, paramètre Kerberos et tags.
 - **Trouve les hôtes rapidement** grâce à une recherche approximative et un classement qui apprend de votre historique.
 - **Gère le routage** : bastions par défaut ou par hôte, bastions interactifs et tickets Kerberos.
@@ -25,6 +26,10 @@ Vous n'avez pas besoin du nom exact. `bssh` recherche dans les noms, alias, tags
 ## En local avant tout
 
 Tout est stocké sur votre machine. Bayesian SSH ne s'interpose jamais entre vous et vos serveurs : les connexions vont directement de votre ordinateur à l'hôte, exactement comme avec `ssh`.
+
+## bssh AI
+
+bssh AI relie des agents de code comme Claude Code, Codex ou Cursor à vos hôtes via un serveur MCP local. L'agent n'a jamais de clé et n'ouvre jamais de shell. Un analyseur de shell et votre politique décident de ce qu'il peut exécuter, tout ce qui modifie un hôte attend une personne, et chaque appel va dans un journal signé et chaîné. bssh AI fait partie du produit gratuit. Voir [bssh AI](/fr/ai/overview/) et son [modèle de sécurité](/fr/ai/security/).
 
 ## bssh Teams
 
@@ -39,4 +44,5 @@ bssh Teams est le forfait payant pour partager des connexions avec vos collègue
 <CardGrid>
 	<LinkCard title="Installer" description="Installateur en une ligne, paquets Linux, Snap ou compilation depuis les sources." href="/fr/start/installation/" />
 	<LinkCard title="Démarrage rapide" description="Enregistrez un hôte et connectez-vous." href="/fr/start/quick-start/" />
+	<LinkCard title="Connecter un agent IA" description="Claude Code, Codex, Cursor ou VS Code en deux minutes." href="/fr/ai/quick-start/" />
 </CardGrid>

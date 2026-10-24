@@ -62,7 +62,11 @@ export default defineConfig({
 					'ai/approvals',
 					'ai/host-setup',
 					'ai/teams-agents',
+				]),
+				group('Security', { fr: 'Sécurité', es: 'Seguridad', 'zh-CN': '安全' }, [
+					'reference/security',
 					'ai/security',
+					'teams/security',
 				]),
 				group('Guides', { fr: 'Guides', es: 'Guías', 'zh-CN': '指南' }, [
 					'guides/connections',
@@ -87,14 +91,12 @@ export default defineConfig({
 					'teams/sync',
 					'teams/audit-log',
 					'teams/plans-and-billing',
-					'teams/security',
 					'teams/self-hosting',
 				]),
 				group('Reference', { fr: 'Référence', es: 'Referencia', 'zh-CN': '参考' }, [
 					'reference/cli',
 					'reference/configuration',
 					'reference/troubleshooting',
-					'reference/security',
 					{
 						label: 'Changelog',
 						translations: { fr: 'Journal des modifications', es: 'Registro de cambios', 'zh-CN': '更新日志' },

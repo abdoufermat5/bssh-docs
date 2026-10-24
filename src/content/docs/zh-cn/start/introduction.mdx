@@ -1,6 +1,6 @@
 ---
 title: 什么是 Bayesian SSH？
-description: 一款以键盘为先的 SSH 管理器，支持命令行与桌面应用，并提供可选的端到端加密团队共享。
+description: 一款以键盘为先的 SSH 管理器，支持命令行与桌面应用，让 AI 智能体在你的策略和审批下操作服务器，并提供可选的端到端加密团队共享。
 ---
 
 import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
@@ -15,6 +15,7 @@ bssh connect prod
 
 ## 核心功能
 
+- **让 AI 智能体操作服务器**：无需交出密钥，读取在只读隔离环境中执行，变更等待你的审批，每次调用都有记录。
 - **保存连接**：记录用户名、端口、密钥、跳板机、Kerberos 设置和标签。
 - **快速查找主机**：通过模糊匹配和根据历史记录不断学习的排序算法快速定位。
 - **路由处理**：支持默认或针对单台主机的跳板机、交互式堡垒机以及 Kerberos 票据。
@@ -25,6 +26,10 @@ bssh connect prod
 ## 本地优先
 
 所有数据均保存在你的本地计算机上。Bayesian SSH 绝不会作为中间人介入你与服务器之间：连接直接从你的计算机发往目标主机，与原生 `ssh` 完全一致。
+
+## bssh AI
+
+bssh AI 通过本地 MCP 服务器把 Claude Code、Codex、Cursor 等编程智能体连接到你的主机。智能体从不持有密钥，也不会打开 shell。由 shell 解析器和你的策略决定它能执行什么，任何会改动主机的操作都要等人审批，每次调用都写入签名的哈希链日志。它包含在免费产品中。参见 [bssh AI](/zh-cn/ai/overview/) 及其[安全模型](/zh-cn/ai/security/)。
 
 ## bssh Teams
 
@@ -39,4 +44,5 @@ bssh Teams 是面向团队共享连接的付费方案。共享的连接在设备
 <CardGrid>
 	<LinkCard title="安装" description="单行安装脚本、Linux 软件包、Snap 或源码编译。" href="/zh-cn/start/installation/" />
 	<LinkCard title="快速开始" description="保存一台主机并连接。" href="/zh-cn/start/quick-start/" />
+	<LinkCard title="连接 AI 智能体" description="两分钟内接入 Claude Code、Codex、Cursor 或 VS Code。" href="/zh-cn/ai/quick-start/" />
 </CardGrid>

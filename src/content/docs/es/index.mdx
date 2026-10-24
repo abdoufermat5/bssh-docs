@@ -1,21 +1,76 @@
 ---
 title: Bayesian SSH
-description: Un gestor SSH pensado para el teclado que aprende a qué host quieres conectarte. Línea de comandos y aplicación de escritorio, con uso compartido en equipo cifrado de extremo a extremo.
+description: Un gestor SSH para personas y agentes de IA. Los agentes trabajan en tus servidores según una política legible, los cambios esperan tu aprobación y cada llamada queda en un registro firmado. Línea de comandos y aplicación de escritorio, con uso compartido en equipo cifrado de extremo a extremo.
 template: splash
 hero:
-  title: Cada host, a una tecla.
-  tagline: Bayesian SSH es un gestor SSH pensado para el teclado, en la línea de comandos y en el escritorio. Aprende a qué host quieres conectarte y comparte conexiones con tu equipo mediante una bóveda cifrada de extremo a extremo.
+  title: SSH para personas y agentes de IA.
+  tagline: Un gestor SSH pensado para el teclado que deja que agentes de IA trabajen en tus servidores sin tus claves. Las lecturas se ejecutan al instante, los cambios esperan tu aprobación y cada llamada queda en un registro firmado.
   actions:
+    - text: Conectar un agente de IA
+      link: /es/ai/quick-start/
+      icon: right-arrow
     - text: Empezar
       link: /es/start/quick-start/
-      icon: right-arrow
-    - text: Instalar
-      link: /es/start/installation/
       variant: minimal
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 import DemoVideo from '../../../components/DemoVideo.astro';
+
+<DemoVideo
+	loop
+	src="/demo/ai-desktop-approval.mp4"
+	poster="/demo/ai-desktop-approval.jpg"
+	label="Demo: la aplicación de escritorio sigue las llamadas de solo lectura de un agente de IA en un servidor y luego muestra su plan de limpieza en el diálogo de aprobación, que se revisa y se aprueba."
+/>
+
+## Agentes de IA que preguntan antes de actuar
+
+bssh AI conecta Claude Code, Codex, Cursor y otros agentes a tus hosts mediante un servidor MCP local. El agente nunca tiene una clave ni abre un shell. Las lecturas se ejecutan al instante, en un entorno aislado de solo lectura. Todo lo que cambia un host te espera y se ejecuta exactamente como lo aprobaste.
+
+```text frame="terminal"
+$ bssh ai install claude-code
+$ bssh ai explain --host web-1 "journalctl -u nginx -n 50" | tail -1
+decision: allow - analyzer: every command is read-only
+$ bssh ai explain --host web-1 "systemctl reload nginx" | tail -1
+decision: deny - profile.observe: the observe profile cannot change anything
+```
+
+De entrada, los agentes solo pueden leer. Una entrada de política les permite proponer cambios, y tú apruebas cada uno.
+
+<CardGrid>
+	<LinkCard title="bssh AI" description="Cómo funciona, qué se aplica y una sesión real con opencode." href="/es/ai/overview/" />
+	<LinkCard title="Conectar un agente" description="Claude Code, Codex, Cursor o VS Code en dos minutos." href="/es/ai/quick-start/" />
+</CardGrid>
+
+## Seguro desde el diseño
+
+Cada uno de estos puntos lo aplica bssh, no depende de buenas prácticas.
+
+<CardGrid>
+	<Card title="Tus claves siguen siendo tuyas" icon="padlock">
+		bssh usa tus claves y tu agente SSH donde están. Los agentes de IA nunca tienen una clave y ningún intermediario se interpone entre tú y tus servidores.
+	</Card>
+	<Card title="Decisiones legibles" icon="list-format">
+		Un analizador de shell y tu política deciden qué puede ejecutar un agente. Ningún modelo interviene, y `bssh ai explain` muestra el resultado de antemano.
+	</Card>
+	<Card title="Una persona aprueba los cambios" icon="approve-check">
+		Los cambios esperan una aprobación, con el comando y el diff exactos. Con la autoridad de certificación local, un comando aprobado se ejecuta con un certificado válido solo para él.
+	</Card>
+	<Card title="Un registro verificable" icon="document">
+		Las llamadas de los agentes y las sesiones del equipo van a registros firmados y encadenados que puedes verificar en tu propia máquina.
+	</Card>
+	<Card title="Uso compartido cifrado de extremo a extremo" icon="link-alt">
+		bssh Teams cifra las conexiones compartidas en tus dispositivos. El servidor de sincronización nunca ve hosts, usuarios ni claves.
+	</Card>
+	<Card title="Versiones firmadas" icon="approve-check-circle">
+		Cada versión está firmada e incluye la procedencia de su compilación. El instalador verifica las sumas de comprobación, y la firma cuando cosign está instalado.
+	</Card>
+</CardGrid>
+
+<LinkCard title="Seguridad" description="Dónde viven tus datos, los modelos de seguridad de bssh AI y de Teams, y cómo informar de una vulnerabilidad." href="/es/reference/security/" />
+
+## El SSH de cada día, a una tecla
 
 <DemoVideo label="Demostración: importación de hosts desde ~/.ssh/config, conexión por búsqueda aproximada, conexión a través de un bastión, un comando y una subida de archivos en varios servidores a la vez, el historial de sesiones y, después, la aplicación de escritorio con dos terminales en vivo y la paleta de comandos." />
 
@@ -35,28 +90,10 @@ bssh connect prod
 	<Card title="Terminal y escritorio" icon="laptop">
 		Los mismos hosts en `bssh` y en la aplicación de escritorio, con terminales, transferencia de archivos e historial de sesiones.
 	</Card>
-	<Card title="Compartido con tu equipo" icon="padlock">
-		bssh Teams sincroniza las conexiones mediante una bóveda cifrada en tus dispositivos, con un registro de auditoría firmado.
+	<Card title="Sesiones registradas" icon="notes">
+		Cada sesión queda en tu historial, con su duración y su código de salida. Activa la grabación para reproducir y buscar lo que pasó.
 	</Card>
 </CardGrid>
-
-
-
-## Deja que agentes de IA trabajen en tus servidores, con seguridad
-
-bssh AI conecta Claude Code, Codex, Cursor y otros agentes con tus hosts sin darles tus claves. Las lecturas se ejecutan al momento, en un entorno aislado de solo lectura. Todo lo que cambia un host te espera y se ejecuta exactamente como lo apruebas. Cada llamada queda en un registro firmado.
-
-```text frame="terminal"
-$ bssh ai install claude-code
-$ bssh ai explain --host web-1 "journalctl -u nginx -n 50" | tail -1
-decision: allow - analyzer: every command is read-only
-$ bssh ai explain --host web-1 "systemctl reload nginx" | tail -1
-decision: deny - profile.observe: the observe profile cannot change anything
-```
-
-De entrada, los agentes solo pueden leer. Una entrada de política les deja proponer cambios, y tú apruebas cada uno.
-
-<LinkCard title="bssh AI" description="Cómo funciona, qué aplica y cómo conectar tu primer agente." href="/es/ai/overview/" />
 
 ## Siguientes pasos
 

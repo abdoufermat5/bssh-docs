@@ -1,11 +1,22 @@
 ---
 title: Security
+sidebar:
+  label: Overview
 description: Where bssh keeps your data, how releases are signed and verified, and how to report a vulnerability.
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 bssh keeps its data on your machine, and it never sits between you and your servers. This page lists the files, what protects them, and how to check that a download is genuine.
+
+## At a glance
+
+- **Your keys stay yours.** bssh uses your SSH keys and agent where they are and never copies them into its own files. AI agents never hold a key at all.
+- **No relay.** Connections go straight from your machine to the host, as they do with `ssh`.
+- **Agents act under your rules.** A parser and your policy decide what an agent may run, not a model. Changes wait for a person, and an approved command runs with a certificate valid for that command only. See [bssh AI security](/ai/security/).
+- **Shared connections are end-to-end encrypted.** The Teams sync server stores ciphertext and never sees hosts, users or keys. See [bssh Teams security](/teams/security/).
+- **Everything that matters is on record.** Agent calls and team sessions go to signed, hash-chained logs that you can verify on your own machine.
+- **Releases are signed.** You can check that a download comes from the project before you install it. See [Verify a release](#verify-a-release).
 
 ## Where your data lives
 
@@ -84,11 +95,12 @@ Report it privately through GitHub: [report a vulnerability](https://github.com/
 
 You get an acknowledgement within 3 working days. Once a fix is released, the advisory is published with credit to you, unless you prefer to stay anonymous.
 
-## Teams
+## bssh AI and bssh Teams
 
-If you use bssh Teams, read [Teams security](/teams/security/): it describes the trust model of the sync server, the cryptography, and what recovery is and is not possible.
+If you let AI agents work on your servers, read [bssh AI security](/ai/security/): what is enforced where, how prompt injection and secrets are handled, and the limits to know. If you use bssh Teams, read [bssh Teams security](/teams/security/): the trust model of the sync server, the cryptography, and what recovery is and is not possible.
 
 <CardGrid>
-	<LinkCard title="Teams security" description="What the sync server sees and how the team key works." href="/teams/security/" />
+	<LinkCard title="bssh AI security" description="What an agent can and cannot do, and where each limit is enforced." href="/ai/security/" />
+	<LinkCard title="bssh Teams security" description="What the sync server sees and how the team key works." href="/teams/security/" />
 	<LinkCard title="Configuration reference" description="Every setting, file and environment variable." href="/reference/configuration/" />
 </CardGrid>

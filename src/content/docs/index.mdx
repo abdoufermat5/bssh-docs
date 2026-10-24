@@ -1,21 +1,76 @@
 ---
 title: Bayesian SSH
-description: A keyboard-first SSH manager that learns which host you want. Command line and desktop app, with end-to-end encrypted team sharing.
+description: An SSH manager for people and AI agents. Agents work on your servers under a policy you can read, changes wait for your approval, and every call is on a signed record. Command line and desktop app, with end-to-end encrypted team sharing.
 template: splash
 hero:
-  title: Every host, one keystroke away.
-  tagline: Bayesian SSH is a keyboard-first SSH manager for the command line and the desktop. It learns which host you want, and shares connections with your team through an end-to-end encrypted vault.
+  title: SSH for people and AI agents.
+  tagline: A keyboard-first SSH manager that lets AI agents work on your servers without your keys. Reads run straight away, changes wait for your approval, and every call is on a signed record.
   actions:
+    - text: Connect an AI agent
+      link: /ai/quick-start/
+      icon: right-arrow
     - text: Get started
       link: /start/quick-start/
-      icon: right-arrow
-    - text: Install
-      link: /start/installation/
       variant: minimal
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 import DemoVideo from '../../components/DemoVideo.astro';
+
+<DemoVideo
+	loop
+	src="/demo/ai-desktop-approval.mp4"
+	poster="/demo/ai-desktop-approval.jpg"
+	label="Demo: the desktop app follows an AI agent's read-only calls on a server, then shows its cleanup plan in the approval dialog, which is reviewed and approved."
+/>
+
+## AI agents that ask before they act
+
+bssh AI connects Claude Code, Codex, Cursor and other agents to your hosts through a local MCP server. The agent never holds a key or opens a shell. Reads run straight away, in a read-only jail. Anything that changes a host waits for you, and runs exactly as approved.
+
+```text frame="terminal"
+$ bssh ai install claude-code
+$ bssh ai explain --host web-1 "journalctl -u nginx -n 50" | tail -1
+decision: allow - analyzer: every command is read-only
+$ bssh ai explain --host web-1 "systemctl reload nginx" | tail -1
+decision: deny - profile.observe: the observe profile cannot change anything
+```
+
+Out of the box, agents can only read. One policy entry lets them propose changes, and you approve each one.
+
+<CardGrid>
+	<LinkCard title="bssh AI" description="How it works, what it enforces, and a real run with opencode." href="/ai/overview/" />
+	<LinkCard title="Connect an agent" description="Claude Code, Codex, Cursor or VS Code in two minutes." href="/ai/quick-start/" />
+</CardGrid>
+
+## Secure by design
+
+Each of these is enforced by bssh itself, not left to good practice.
+
+<CardGrid>
+	<Card title="Your keys stay yours" icon="padlock">
+		bssh uses your SSH keys and agent where they are. AI agents never hold a key, and no relay sits between you and your servers.
+	</Card>
+	<Card title="Decisions you can read" icon="list-format">
+		A shell parser and your policy decide what an agent may run. No model takes part, and `bssh ai explain` shows the outcome in advance.
+	</Card>
+	<Card title="A person approves changes" icon="approve-check">
+		Changes wait for approval, with the exact command and diff. With the local CA, an approved command runs with a certificate valid for that command only.
+	</Card>
+	<Card title="A record you can verify" icon="document">
+		Agent calls and team sessions go to signed, hash-chained logs, which you can check on your own machine.
+	</Card>
+	<Card title="End-to-end encrypted sharing" icon="link-alt">
+		bssh Teams encrypts shared connections on your devices. The sync server never sees hosts, users or keys.
+	</Card>
+	<Card title="Signed releases" icon="approve-check-circle">
+		Every release is signed and carries build provenance. The installer verifies the checksums, and the signature when cosign is installed.
+	</Card>
+</CardGrid>
+
+<LinkCard title="Security" description="Where your data lives, the AI and Teams security models, and how to report a vulnerability." href="/reference/security/" />
+
+## Everyday SSH, one keystroke away
 
 <DemoVideo label="Demo: importing hosts from ~/.ssh/config, a fuzzy connect, a connection through a bastion, one command and one upload on several servers at once, the session history, then the desktop app with two live terminals and the command palette." />
 
@@ -35,27 +90,10 @@ bssh connect prod
 	<Card title="Command line and desktop" icon="laptop">
 		The same hosts in `bssh` and in the desktop app, with terminals, file transfer and session history.
 	</Card>
-	<Card title="Shared with your team" icon="padlock">
-		bssh Teams syncs connections through a vault encrypted on your devices, with a signed audit log.
+	<Card title="Sessions on record" icon="notes">
+		Every session is in your history, with its duration and exit code. Turn on recording to replay and search what happened.
 	</Card>
 </CardGrid>
-
-
-## Let AI agents work on your servers, safely
-
-bssh AI connects Claude Code, Codex, Cursor and other agents to your hosts without giving them your keys. Reads run straight away, in a read-only jail. Anything that changes a host waits for you, and runs exactly as approved. Every call is recorded in a signed log.
-
-```text frame="terminal"
-$ bssh ai install claude-code
-$ bssh ai explain --host web-1 "journalctl -u nginx -n 50" | tail -1
-decision: allow - analyzer: every command is read-only
-$ bssh ai explain --host web-1 "systemctl reload nginx" | tail -1
-decision: deny - profile.observe: the observe profile cannot change anything
-```
-
-Out of the box, agents can only read. One policy entry lets them propose changes, and you approve each one.
-
-<LinkCard title="bssh AI" description="How it works, what it enforces, and how to connect your first agent." href="/ai/overview/" />
 
 ## Where to go next
 

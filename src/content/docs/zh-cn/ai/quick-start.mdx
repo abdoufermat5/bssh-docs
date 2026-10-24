@@ -1,0 +1,123 @@
+---
+title: 快速开始
+description: 将 Claude Code、Codex、Cursor 或其他 MCP 智能体接入 bssh AI，在零询问的情况下排查一台主机，然后批准第一次修复。
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+你需要 Bayesian SSH 2.13 或更高版本、几台已保存在 `bssh` 中的主机，以及一个支持 MCP 的智能体。
+
+<Aside type="caution" title="智能体不会输入密码">
+智能体在没有终端的情况下运行 `bssh ai mcp`，因此在智能体会话期间 bssh 不会进行任何交互式询问。请为要交给智能体的主机使用密钥或 ssh-agent 认证。需要密码的主机会给出明确的错误，而不是卡住。
+</Aside>
+
+## 接入你的智能体
+
+<Steps>
+
+1. 把 bssh 加入智能体的 MCP 配置：
+
+   ```sh
+   bssh ai install claude-code
+   ```
+
+   同一条命令也支持 `codex`、`cursor`、`vscode` 和 `claude-desktop`。它会先备份配置文件，然后添加一个名为 `bssh` 的条目，不改动文件中的其他内容。`--dry-run` 只显示改动，不写入：
+
+   ```json title="~/.claude.json"
+   {
+     "mcpServers": {
+       "bssh": {
+         "type": "stdio",
+         "command": "/usr/bin/bssh",
+         "args": ["ai", "mcp", "--policy", "default"]
+       }
+     }
+   }
+   ```
+
+   其他 MCP 客户端同样可用：通过 stdio 指向 `bssh ai mcp` 即可。
+
+2. 重启智能体。它现在拥有 15 个 bssh 工具，从 `list_hosts` 开始。
+
+3. 问它一个关于主机的问题：
+
+   > 为什么 web-1 上的 nginx 返回 502？
+
+   典型的会话是：`list_hosts`，用 `observe` 查看失败的单元，用 `search_logs` 查 nginx 的日志，用 `read_file` 读站点配置。这一切都不会打扰你，因为它们都无法改变主机。
+
+</Steps>
+
+## 智能体一开始能做什么
+
+在你编写策略之前，bssh 会对你保存的所有主机使用内置的 **observe** 配置档：智能体可以读取，所有写入都会被拒绝。它代表你工作，因此只能看到你本来就能访问的主机，不会更多。
+
+随时检查一条命令会被如何处理：
+
+```text frame="terminal"
+$ bssh ai explain --host web-1 "journalctl -u nginx --since '10 min ago' | grep -i error"
+command: journalctl -u nginx --since '10 min ago' | grep -i error
+tags:    read
+commands:
+  1. journalctl -u nginx --since 10 min ago
+     tags:     read
+     rule:     journalctl read
+  2. grep -i error
+     tags:     read
+     rule:     grep
+policy:  default  host: web-1
+decision: allow - analyzer: every command is read-only
+```
+
+## 让它动手修复
+
+给 `default` 策略设置 **operate** 配置档和范围。策略位于配置文件 `~/.config/bayesian-ssh/environments/default/config.json` 的 `ai.policies` 下：
+
+```json
+"ai": {
+  "policies": {
+    "default": {
+      "profile": "operate",
+      "scope": { "tags": ["staging", "prod"] },
+      "approval": { "in_client": ["staging"], "two_person": ["prod"] },
+      "write_paths": ["/etc/nginx/**"]
+    }
+  }
+}
+```
+
+现在智能体可以对带 `staging` 或 `prod` 标签的主机提出变更，并修改 `/etc/nginx` 下的文件。每次变更都会先询问。在 `staging` 上，低风险的变更可以在智能体自己的客户端中确认；其余一律交给桌面应用或终端。所有字段的说明见[策略](/zh-cn/ai/policies/)。
+
+## 批准第一次变更
+
+让智能体修复它发现的问题。它会发送一个变更计划：步骤、diff、验证修复的方法以及撤销方法。桌面应用会在 AI 区域中显示它；在终端中：
+
+```sh
+bssh ai approve
+```
+
+`bssh ai approve` 会列出等待中的请求，完整显示请求内容并请你做出决定。`--deny --reason "…"` 会附带理由拒绝，智能体会收到这个理由。批准后，bssh 严格执行已批准的步骤，再执行计划中的验证步骤，然后由智能体汇报结果。
+
+## 查看发生了什么
+
+```sh
+bssh ai log                  # 最近的运行
+bssh ai log <run> --report   # 涉及的主机、带 diff 的变更、审批、回滚点
+bssh ai status               # 运行中的智能体、待审批请求、有效的临时授权
+bssh ai stop                 # 立即结束一次运行
+```
+
+以上内容同样记录在你电脑上的签名哈希链日志中。
+
+## 让智能体走 bssh 的路径
+
+如果智能体同时拥有 shell 工具，它仍可能尝试直接用 `ssh`。对于 Claude Code，bssh 可以安装一个钩子，拦截发往 bssh 已知主机的 `ssh`、`scp`、`sftp` 和 `rsync`，并引导智能体改用 bssh 工具：
+
+```sh
+bssh ai install claude-code --guard
+```
+
+## 后续步骤
+
+- [策略](/zh-cn/ai/policies/)：配置档、路径、拒绝规则、预算，以及在 CI 中测试策略。
+- [主机准备](/zh-cn/ai/host-setup/)：低权限的智能体用户、只读沙箱以及绑定审批的证书。
+- [审批](/zh-cn/ai/approvals/)：计划、临时授权与桌面应用。

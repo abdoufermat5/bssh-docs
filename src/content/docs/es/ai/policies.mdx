@@ -1,0 +1,115 @@
+---
+title: Políticas
+description: Cómo una política de bssh AI permite, pregunta o deniega cada llamada de un agente, sus perfiles y campos, y cómo probarla antes de que la use un agente.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Para cada llamada, una política decide **permitir**, **preguntar** o **denegar**. La leen un analizador y un conjunto fijo de reglas, nunca un modelo: la misma llamada recibe siempre la misma respuesta y puedes probarla de antemano.
+
+Las políticas están en `ai.policies` de tu archivo de configuración, por nombre. Un agente usa `default`, salvo que su entrada MCP pase `--policy <nombre>`.
+
+## Perfiles
+
+Cada política parte de un perfil:
+
+| Perfil | Los agentes pueden | Presupuesto |
+| --- | --- | --- |
+| `observe` | Solo leer. Toda escritura se deniega. | 30 llamadas por minuto, ningún cambio |
+| `operate` | Leer y proponer cambios que aprueba una persona | 30 llamadas por minuto, 10 cambios por sesión, 2 h por sesión |
+| `oncall` | Lo mismo, para agentes desatendidos de Teams | 60 llamadas por minuto, 20 cambios por sesión, 4 h por sesión |
+
+Sin ninguna política `default`, bssh aplica `observe` en todos los hosts que tienes guardados. Una política que escribes tú no ve **ningún host** hasta que le das un alcance.
+
+## Una política completa
+
+```json
+"ai": {
+  "policies": {
+    "default": {
+      "profile": "operate",
+      "scope": { "tags": ["staging", "prod"], "hosts": ["bastion-ops"] },
+      "approval": {
+        "default": "out-of-band",
+        "in_client": ["staging"],
+        "two_person": ["prod-db"]
+      },
+      "read_paths": ["/var/log/**", "/etc/**", "/srv/**"],
+      "deny_paths": ["/srv/app/secrets/**"],
+      "write_paths": ["/etc/nginx/**", "/etc/systemd/system/**"],
+      "deny": ["systemctl stop sshd", "docker system prune *"],
+      "budgets": { "calls_per_min": 30, "changes_per_run": 10, "run_ttl": "2h", "max_denials_per_min": 5 }
+    }
+  },
+  "approval_timeout_secs": 300
+}
+```
+
+| Campo | Significado |
+| --- | --- |
+| `scope.tags`, `scope.hosts` | Los hosts que ve el agente. Los demás no existen para él: `list_hosts` los omite y una llamada que nombra uno falla como con un host desconocido. |
+| `approval.default` | Quién aprueba un cambio: `out-of-band` (aplicación de escritorio, `bssh ai approve`) salvo que se aplique una regla por etiqueta. |
+| `approval.in_client` | Etiquetas donde un cambio de bajo riesgo puede confirmarse en el cliente del agente. Desactivado mientras no indiques etiquetas. |
+| `approval.two_person` | Etiquetas donde un cambio necesita dos administradores distintos. Requiere [bssh Teams](/es/ai/teams-agents/). |
+| `read_paths` | Dónde puede leer `read_file` sin preguntar. Sustituye a la lista integrada si se define. |
+| `deny_paths` | Nunca se leen ni se escriben, sea cual sea la herramienta. |
+| `write_paths` | Los únicos sitios que `edit_file` puede cambiar. |
+| `deny` | Comandos denegados de entrada, sin preguntar a nadie. |
+| `budgets` | Llamadas por minuto, cambios por sesión, duración de la sesión, y cuántas denegaciones en un minuto terminan la sesión. |
+| `approval_timeout_secs` | Una solicitud sin respuesta se deniega pasados estos segundos. 300 por defecto. |
+
+### Lo que no puedes desactivar
+
+`deny_paths` y `deny` incluyen siempre las entradas integradas de bssh; tus listas se suman a ellas. Cubren `/etc/shadow`, `/etc/sudoers.d`, las claves privadas (`*.key`, `*.pem`, `id_rsa*`, `id_ed25519*`), `~/.ssh`, los archivos `.env` y las credenciales de AWS, y comandos como `rm -rf /`, `mkfs *`, `dd of=/dev/*`, `iptables -F`, `shutdown` y `reboot`.
+
+`bssh ai policy show <nombre>` muestra una política con todo esto completado.
+
+## Cómo se juzga un comando
+
+bssh analiza cada comando de shell como lo haría una shell y luego juzga cada comando que contiene:
+
+- `&&`, `||`, `;`, tuberías, subshells, `$(…)`, redirecciones y here-documents se descomponen;
+- se abren los envoltorios: `sudo`, `env`, `timeout`, `nice`, `xargs`, `find -exec`, `sh -c '…'` y `bash -lc '…'`;
+- cada comando recibe etiquetas de una tabla de reglas: `read`, `write`, `service-change`, `destructive`, `privilege`, `network`, `exfil-risk`;
+- lo que bssh no entiende por completo se etiqueta `unknown`: `eval`, un script enviado a una shell, un programa desconocido, un comando demasiado largo para analizarlo.
+
+Gana la respuesta más estricta. Un solo comando destructivo al final de una tubería larga hace destructiva toda la llamada. `unknown` nunca se trata como lectura.
+
+Las reglas de denegación se aplican al comando analizado, no al texto, así que las comillas, `/bin/rm`, `sudo` o cambiar el orden de las opciones no las esquivan:
+
+```text frame="terminal"
+$ bssh ai explain --host web-1 "sudo bash -c 'mkfs.ext4 /dev/sdb1'"
+...
+decision: deny - deny: the command matches 'mkfs *'
+```
+
+## Probar una política
+
+`bssh ai explain` juzga un comando. `bssh ai policy test` juzga un archivo entero, con la respuesta esperada en un comentario, y termina con error si alguna difiere. Guarda el archivo junto a tu código de infraestructura y ejecútalo en CI:
+
+```text title="checks.txt"
+uptime                                   # expect: allow
+journalctl -u nginx -n 200               # expect: allow
+systemctl restart nginx                  # expect: ask
+cat /etc/shadow                          # expect: deny
+mkfs.ext4 /dev/sdb1                      # expect: deny
+```
+
+```text frame="terminal"
+$ bssh ai policy test checks.txt --host web-1
+#  EXPECT  GOT    COMMAND                     (reason)
+1  allow   allow  uptime                      (analyzer: every command is read-only)
+2  allow   allow  journalctl -u nginx -n 200  (analyzer: every command is read-only)
+3  ask     ask    systemctl restart nginx     (write: Run changes the host and needs approval)
+4  deny    deny   cat /etc/shadow             (deny_paths: '/etc/shadow' matches '/etc/shadow')
+5  deny    deny   mkfs.ext4 /dev/sdb1         (deny: the command matches 'mkfs *')
+5 commands, 0 mismatches
+```
+
+<Aside type="tip">
+Pasa `--host` a `explain` y a `policy test`. Una decisión depende de las etiquetas del host y de lo protegido que esté; sin host, bssh solo puede decir que la llamada no nombra ninguno.
+</Aside>
+
+## Presupuestos y cortacircuitos
+
+Los presupuestos acotan una sesión aunque se permita cada llamada. Cuando un agente supera sus llamadas por minuto, sus cambios por sesión o la duración de su sesión, las llamadas siguientes se deniegan con el motivo. Una ráfaga de denegaciones, o intentos repetidos sobre hosts fuera de su alcance, terminan la sesión al instante: así suele comportarse un agente dirigido por texto inyectado.

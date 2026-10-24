@@ -1,0 +1,79 @@
+---
+title: 团队智能体
+description: 借助 bssh Teams 让无人值守的 AI 智能体操作你的服务器：独立身份、由管理员签名的策略、转发给管理员的审批以及双人审批。
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+你笔记本上的智能体代表你工作，由你审批它的变更。凌晨 3 点的值班智能体、CI 中的部署机器人或定时检查任务，键盘前都没有人。借助 [bssh Teams](/zh-cn/teams/overview/)，这样的智能体在团队中拥有自己的身份，执行由管理员签名的策略，其变更由团队管理员在各自的电脑上审批。
+
+## 整体如何协作
+
+- **智能体身份**是团队中类型为 `agent` 的成员，由管理员创建。它有自己的设备密钥，像其他成员一样占用一个席位，并且不能写入团队保险库。
+- **签名策略**随之一起。策略由管理员签名，网关会拒绝没有管理员签名、或比已见版本更旧的策略，因此服务器无法改变智能体的权限。
+- **网关** `bssh ai serve` 运行在你掌控的机器上：堡垒机、运维虚拟机、CI 运行器所在的主机。智能体通过 HTTP 上的 MCP 连接它。网关不为智能体保存长期密钥，并按签名策略检查每一次调用。
+- **审批会被转发。** 请求加密发送给各管理员的设备，并由智能体的设备签名。服务器负责转发，但无法读取内容。
+
+## 创建智能体
+
+<Steps>
+
+1. 在一名管理员的电脑上，在 `ai.policies` 下编写智能体要执行的策略（参见[策略](/zh-cn/ai/policies/)），然后创建智能体：
+
+   ```sh
+   bssh teams agent add platform oncall --policy oncall
+   ```
+
+   智能体会占用一个席位。bssh 对策略签名，并把智能体凭据写入 `~/.config/bayesian-ssh/environments/default/ai/agents/platform.oncall.json`，只有你可以读取。
+
+2. 将该文件复制到网关机器上的相同位置，权限设为 0600，并在那台机器上保存智能体可以使用的主机，方式和你自己使用时一样（`bssh add` 或[清单来源](/zh-cn/guides/inventory-sources/)）。
+
+3. 启动网关：
+
+   ```sh
+   bssh ai serve --agent platform/oncall
+   ```
+
+   它默认监听 `127.0.0.1:8765`。如需从其他地方访问，请放在 TLS 反向代理之后，或使用 `--listen` 加 `--allow-remote`。
+
+4. 为智能体签发令牌：
+
+   ```sh
+   bssh ai token platform/oncall --ttl 1h
+   ```
+
+   令牌经过签名，只对一个智能体及其策略有效，最长 24 小时。智能体连接 `http://127.0.0.1:8765/mcp`，并发送 `Authorization: Bearer <令牌>`。
+
+</Steps>
+
+## 随时随地审批
+
+当智能体发起询问时，团队的每位管理员都能在自己的电脑上看到请求：
+
+```sh
+bssh teams agent pending platform
+bssh teams agent approve platform <请求> --reason "已检查 diff"
+bssh teams agent deny platform <请求> --reason "发布之后再做"
+```
+
+在策略 `approval.two_person` 所列标签的主机上，变更只有在**两名不同的管理员**批准后才会执行。同一名管理员批准两次只算一次。请求在过期时若无人回应即被拒绝。
+
+## 修改或移除智能体
+
+```sh
+bssh teams agent list platform
+bssh teams agent policy platform oncall --policy oncall   # 为更新后的策略签名
+bssh teams agent remove platform oncall                   # 释放席位
+```
+
+网关每分钟检查一次智能体的成员资格，智能体被移除后会拒绝所有调用。新版本的策略在网关重启后生效。
+
+## 团队能看到什么，服务器能看到什么
+
+智能体的调用、判定、审批和变更会写入团队的[签名审计日志](/zh-cn/teams/audit-log/)，与成员的会话放在一起，并以该智能体为操作者。管理员能看到谁批准了什么，并可以在自己的电脑上用 `bssh teams audit` 验证日志。
+
+服务器能看到智能体 X 在时间 T 发起了一次调用，以及由谁批准。它永远看不到命令、主机、输出或策略：这些内容在离开网关之前就已为团队加密。
+
+<Aside type="note">
+智能体按普通席位计费。自托管服务器需要 bssh-cloud 0.5.0 或更高版本。
+</Aside>

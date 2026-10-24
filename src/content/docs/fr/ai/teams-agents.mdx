@@ -1,0 +1,79 @@
+---
+title: Agents d'équipe
+description: Faire travailler des agents IA autonomes sur vos serveurs avec bssh Teams, avec leur propre identité, des politiques signées par un administrateur, des approbations relayées aux administrateurs et l'approbation à deux personnes.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Un agent sur votre portable agit pour vous, et vous approuvez ses modifications. Un agent d'astreinte à 3 h du matin, un robot de déploiement en CI ou une vérification planifiée n'ont personne au clavier. Avec [bssh Teams](/fr/teams/overview/), un tel agent obtient sa propre identité dans l'équipe, applique une politique signée par un administrateur, et ses modifications sont approuvées par les administrateurs de l'équipe depuis leurs propres machines.
+
+## Comment cela s'articule
+
+- **Une identité d'agent** est un membre de l'équipe de type `agent`, créé par un administrateur. Elle a sa propre clé d'appareil, occupe un siège comme tout membre, et ne peut pas écrire dans le coffre de l'équipe.
+- **Une politique signée** l'accompagne. Un administrateur la signe, et la passerelle refuse une politique qui n'est pas signée par un administrateur ou qui est plus ancienne qu'une version déjà vue : le serveur ne peut pas changer ce qu'un agent a le droit de faire.
+- **La passerelle**, `bssh ai serve`, tourne sur une machine que vous contrôlez : un bastion, une VM d'exploitation, l'hôte de vos runners CI. Les agents s'y connectent en MCP sur HTTP. Elle ne détient aucune clé de longue durée pour eux et confronte chaque appel à la politique signée.
+- **Les approbations sont relayées.** Une requête est chiffrée pour les appareils des administrateurs et signée par l'appareil de l'agent. Le serveur la transmet sans pouvoir la lire.
+
+## Créer un agent
+
+<Steps>
+
+1. Sur la machine d'un administrateur, écrivez la politique que l'agent appliquera, sous `ai.policies` (voir [Politiques](/fr/ai/policies/)), puis créez l'agent :
+
+   ```sh
+   bssh teams agent add platform oncall --policy oncall
+   ```
+
+   L'agent occupe un siège. bssh signe la politique et écrit l'identifiant de l'agent dans `~/.config/bayesian-ssh/environments/default/ai/agents/platform.oncall.json`, lisible par vous seul.
+
+2. Copiez ce fichier au même endroit sur la machine de la passerelle, en mode 0600, et enregistrez-y les hôtes que l'agent peut utiliser, comme vous le feriez pour vous (`bssh add`, ou une [source d'inventaire](/fr/guides/inventory-sources/)).
+
+3. Lancez la passerelle :
+
+   ```sh
+   bssh ai serve --agent platform/oncall
+   ```
+
+   Elle écoute par défaut sur `127.0.0.1:8765`. Pour la joindre d'ailleurs, placez-la derrière un proxy inverse TLS, ou passez `--listen` avec `--allow-remote`.
+
+4. Donnez un jeton à l'agent :
+
+   ```sh
+   bssh ai token platform/oncall --ttl 1h
+   ```
+
+   Les jetons sont signés, limités à un agent et à sa politique, et durent 24 heures au plus. L'agent se connecte à `http://127.0.0.1:8765/mcp` et envoie `Authorization: Bearer <jeton>`.
+
+</Steps>
+
+## Approuver depuis n'importe où
+
+Quand l'agent demande, chaque administrateur de l'équipe voit la requête depuis sa propre machine :
+
+```sh
+bssh teams agent pending platform
+bssh teams agent approve platform <requête> --reason "diff vérifié"
+bssh teams agent deny platform <requête> --reason "après la mise en production"
+```
+
+Sur les hôtes listés dans `approval.two_person` de la politique, une modification ne s'exécute qu'après l'accord de **deux administrateurs différents**. Le même administrateur qui approuve deux fois ne compte qu'une fois. Une requête sans réponse est refusée à son expiration.
+
+## Modifier ou retirer un agent
+
+```sh
+bssh teams agent list platform
+bssh teams agent policy platform oncall --policy oncall   # signer une politique mise à jour
+bssh teams agent remove platform oncall                   # libère le siège
+```
+
+La passerelle vérifie l'appartenance de l'agent chaque minute et refuse tout appel dès qu'il est retiré. Une nouvelle version de la politique s'applique au redémarrage de la passerelle.
+
+## Ce que voit l'équipe, et ce que voit le serveur
+
+Les appels, décisions, approbations et modifications de l'agent rejoignent le [journal d'audit signé](/fr/teams/audit-log/) de l'équipe, à côté des sessions des membres, avec l'agent comme acteur. Les administrateurs voient qui a approuvé quoi et vérifient le journal sur leur propre machine avec `bssh teams audit`.
+
+Le serveur voit que l'agent X a fait un appel à l'instant T, et qui l'a approuvé. Il ne voit jamais la commande, l'hôte, la sortie ni la politique : tout cela est chiffré pour l'équipe avant de quitter la passerelle.
+
+<Aside type="note">
+Les agents sont facturés comme des sièges ordinaires. Un serveur auto-hébergé doit être en version bssh-cloud 0.5.0 ou plus récente.
+</Aside>

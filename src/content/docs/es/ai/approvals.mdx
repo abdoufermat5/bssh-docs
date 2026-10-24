@@ -1,0 +1,75 @@
+---
+title: Aprobaciones
+description: Cómo bssh AI pide permiso a una persona antes de que un agente cambie un host, los planes de cambios, los niveles de aprobación, los permisos temporales, y cómo seguir y detener una sesión.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Cuando la política dice **preguntar**, la llamada del agente espera a que una persona decida. Nada se ejecuta antes, y nada más se ejecuta después: bssh ejecuta exactamente lo aprobado.
+
+## A quién se pregunta
+
+| Nivel | Dónde se decide | Se usa para |
+| --- | --- | --- |
+| Automático | En ningún sitio: la política lo permite | Lecturas, y llamadas cubiertas por un permiso temporal |
+| En el cliente del agente | El diálogo de confirmación del propio agente | Cambios de bajo riesgo en hosts etiquetados en `approval.in_client` |
+| Fuera de banda | La aplicación de escritorio, o `bssh ai approve` en un terminal | Todos los demás cambios |
+| Dos personas | Dos administradores distintos del equipo | Hosts etiquetados en `approval.two_person` ([Teams](/es/ai/teams-agents/)) |
+
+El canal fuera de banda es el de confianza: el proceso del agente no puede alcanzarlo. La confirmación en el cliente es más rápida cuando estás siguiendo al agente, pero un cliente configurado para aprobarlo todo automáticamente también la aprobaría. Por eso está desactivada mientras no indiques etiquetas, nunca se aplica a cambios destructivos, privilegiados o de red, y queda registrada como confirmada en el cliente. Si el cliente no puede mostrar una confirmación, la solicitud va fuera de banda.
+
+## Planes de cambios
+
+Una corrección rara vez es un solo comando. El agente envía un **plan de cambios** con `propose_change`:
+
+- **los pasos**: comandos que ejecutar, ediciones de archivos como diffs unificados, acciones sobre servicios;
+- **la verificación**: cómo comprobar que funcionó, por ejemplo `curl -fsS localhost/health`;
+- **la vuelta atrás**: cómo deshacerlo.
+
+La política juzga cada paso antes de preguntar a nadie; si uno se deniega, se deniega todo el plan. Apruebas el plan una vez. La aprobación cubre ese plan exacto: `apply_change` rechaza un plan que haya cambiado después, ejecuta los pasos en orden, se detiene en el primer fallo y ejecuta la verificación. Un plan para varios hosts se ejecuta primero en uno y lo verifica antes de tocar los demás.
+
+Los archivos editados se copian antes de escribirlos, en el host y en tu equipo. `undo` los restaura y ejecuta los pasos de vuelta atrás; pide aprobación como cualquier cambio.
+
+La explicación del agente se muestra como suya. Lee los comandos y el diff: es lo que se ejecutará.
+
+## Aprobar desde el terminal
+
+```sh
+bssh ai approve            # elegir una solicitud pendiente, verla completa, decidir
+bssh ai approve --list     # solo listar lo que espera
+bssh ai approve <id> --deny --reason "no durante la congelación de versiones"
+```
+
+Basta con un prefijo del identificador. El agente recibe la decisión, y un rechazo llega con tu motivo, para que pueda intentar otra cosa.
+
+## Aprobar desde la aplicación de escritorio
+
+La aplicación de escritorio tiene una sección de IA con cada agente en curso, la cronología de sus llamadas y decisiones, y un botón **Detener**. Una solicitud nueva abre el diálogo de aprobación con una notificación: los comandos y los hosts, lo que encontró el análisis, en un plan cada paso con su diff, la verificación y la vuelta atrás, y la justificación del agente separada de los hechos.
+
+## Permisos temporales
+
+Aprobar una y otra vez el mismo tipo de llamada enseña a aprobar sin leer. Un permiso temporal deja pasar un tipo de llamada durante un tiempo limitado:
+
+```sh
+bssh ai approve <id> --grant 30
+```
+
+Esto aprueba la solicitud y deja pasar la misma herramienta en el mismo host y objetivo durante 30 minutos sin preguntar. `bssh ai status` lista los permisos activos. Se registran como las aprobaciones.
+
+## Solicitudes sin respuesta
+
+Una solicitud sin respuesta se deniega pasados `approval_timeout_secs`, 300 segundos por defecto. El agente recibe que ha caducado.
+
+## Seguir y detener una sesión
+
+```sh
+bssh ai status                # agentes en curso, aprobaciones pendientes, permisos
+bssh ai stop                  # terminar la única sesión en curso, o nombrar una, o --all
+bssh ai log                   # sesiones recientes
+bssh ai log <run> --report    # qué cambió, con diffs, aprobaciones y puntos de deshacer
+bssh ai replay <run>          # reproducir la salida grabada de sus comandos
+```
+
+<Aside type="note">
+El informe de la sesión se construye a partir del registro firmado, no lo escribe un modelo. Lista cada host tocado, cada decisión, quién aprobó qué y cómo, cada cambio con su diff y su punto de deshacer, y cuántos secretos se censuraron.
+</Aside>

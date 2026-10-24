@@ -1,0 +1,75 @@
+---
+title: Approbations
+description: Comment bssh AI demande l'accord d'une personne avant qu'un agent ne modifie un hôte, les plans de modification, les niveaux d'approbation, les autorisations temporaires, et comment suivre et arrêter une session.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Quand la politique dit **demander**, l'appel de l'agent attend qu'une personne décide. Rien ne s'exécute avant, et rien d'autre ne s'exécute après : bssh exécute exactement ce qui a été approuvé.
+
+## Qui est sollicité
+
+| Niveau | Où se prend la décision | Utilisé pour |
+| --- | --- | --- |
+| Automatique | Nulle part : la politique autorise | Les lectures, et les appels couverts par une autorisation temporaire |
+| Dans le client de l'agent | La fenêtre de confirmation de l'agent | Les modifications à faible risque sur les hôtes listés dans `approval.in_client` |
+| Hors bande | L'application de bureau, ou `bssh ai approve` dans un terminal | Toutes les autres modifications |
+| Deux personnes | Deux administrateurs différents de l'équipe | Les hôtes listés dans `approval.two_person` ([Teams](/fr/ai/teams-agents/)) |
+
+Le canal hors bande est celui auquel se fier : le processus de l'agent ne peut pas l'atteindre. La confirmation dans le client est plus rapide quand vous suivez l'agent, mais un client réglé pour tout accepter automatiquement l'accepterait aussi. Elle est donc désactivée tant que vous ne listez pas de tags, ne s'applique jamais aux modifications destructives, privilégiées ou réseau, et est enregistrée comme confirmée dans le client. Si le client ne sait pas afficher de confirmation, la requête passe hors bande.
+
+## Plans de modification
+
+Une correction tient rarement en une commande. L'agent envoie un **plan de modification** avec `propose_change` :
+
+- **les étapes** : commandes à exécuter, modifications de fichiers sous forme de diffs unifiés, actions sur des services ;
+- **la vérification** : comment s'assurer que la correction fonctionne, par exemple `curl -fsS localhost/health` ;
+- **le retour arrière** : comment l'annuler.
+
+Chaque étape est jugée par la politique avant que quiconque soit sollicité ; si l'une est refusée, tout le plan l'est. Vous approuvez le plan une fois. L'approbation couvre ce plan précis : `apply_change` refuse un plan modifié entre-temps, exécute les étapes dans l'ordre, s'arrête au premier échec et lance la vérification. Un plan sur plusieurs hôtes s'exécute d'abord sur le premier et le vérifie avant de toucher aux autres.
+
+Les fichiers modifiés sont sauvegardés avant d'être écrits, sur l'hôte et sur votre machine. `undo` les restaure et exécute les étapes de retour arrière ; il demande une approbation comme toute modification.
+
+La justification de l'agent est affichée et présentée comme la sienne. Lisez les commandes et le diff : c'est ce qui s'exécutera.
+
+## Approuver depuis le terminal
+
+```sh
+bssh ai approve            # choisir une requête en attente, la voir en entier, décider
+bssh ai approve --list     # seulement lister ce qui attend
+bssh ai approve <id> --deny --reason "pas pendant le gel des mises en production"
+```
+
+Un préfixe de l'identifiant suffit. L'agent reçoit la décision, et un refus arrive avec votre motif, pour qu'il puisse essayer autre chose.
+
+## Approuver depuis l'application de bureau
+
+L'application de bureau a une section IA avec chaque agent en cours, la chronologie de ses appels et de leurs décisions, et un bouton **Arrêter**. Une nouvelle requête ouvre la fenêtre d'approbation avec une notification : les commandes et les hôtes, ce que l'analyse a trouvé, pour un plan chaque étape avec son diff, la vérification et le retour arrière, et la justification de l'agent séparée des faits.
+
+## Autorisations temporaires
+
+Approuver sans cesse le même type d'appel apprend à approuver sans lire. Une autorisation temporaire laisse passer un type d'appel pendant une durée limitée :
+
+```sh
+bssh ai approve <id> --grant 30
+```
+
+Cela approuve la requête et laisse passer le même outil sur le même hôte et la même cible pendant 30 minutes, sans demander. `bssh ai status` liste les autorisations actives. Elles sont enregistrées comme les approbations.
+
+## Requêtes sans réponse
+
+Une requête sans réponse est refusée au bout de `approval_timeout_secs`, 300 secondes par défaut. L'agent est informé qu'elle a expiré.
+
+## Suivre et arrêter une session
+
+```sh
+bssh ai status                # agents en cours, approbations en attente, autorisations
+bssh ai stop                  # arrêter la seule session en cours, ou en nommer une, ou --all
+bssh ai log                   # sessions récentes
+bssh ai log <run> --report    # ce qui a changé, avec diffs, approbations et points de retour
+bssh ai replay <run>          # rejouer la sortie enregistrée de ses commandes
+```
+
+<Aside type="note">
+Le rapport de session est construit à partir du journal signé, pas rédigé par un modèle. Il liste chaque hôte touché, chaque décision, qui a approuvé quoi et comment, chaque modification avec son diff et son point de retour, et le nombre de secrets masqués.
+</Aside>

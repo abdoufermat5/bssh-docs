@@ -1,0 +1,97 @@
+---
+title: Preparar los hosts
+description: Prepara servidores para los agentes de bssh AI con un usuario sin privilegios, un entorno aislado de solo lectura para las lecturas y una autoridad de certificación local para que cada comando aprobado se ejecute con un certificado solo para él.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+bssh AI funciona en cualquier host al que ya llegas: la política, las aprobaciones y el registro no dependen del servidor. Tres cosas en el host hacen que los límites se mantengan aunque se esquivara bssh en tu equipo. Ninguna es obligatoria, y `bssh ai doctor` te dice cuáles tiene cada host.
+
+| En el host | Lo que obtienes |
+| --- | --- |
+| Un entorno aislado de solo lectura (Landlock o bubblewrap) | Lecturas que no pueden escribir ni abrir conexiones de red, así que se ejecutan sin preguntar |
+| El usuario `bssh-agent` | Una cuenta separada y sin privilegios para las escrituras de los agentes, sin contraseña ni sudo |
+| Confianza en tu autoridad de certificación local | Los comandos aprobados se ejecutan con un certificado de dos minutos que solo permite ese comando |
+
+## El entorno aislado de solo lectura
+
+bssh busca un entorno aislado la primera vez que un agente usa un host, y usa el mejor disponible:
+
+1. **Landlock**, mediante `setpriv` de util-linux 2.40 o posterior: ninguna escritura, lecturas limitadas a los `read_paths` de la política y sin conexiones TCP en los núcleos cuyo Landlock lo admite.
+2. **bubblewrap** (`bwrap`): todo el sistema de archivos montado en solo lectura, un `/tmp` privado y sin red.
+
+En un host con entorno aislado, `run_readonly` y `run_many` ejecutan ahí lo que envíe el agente, y la política lo permite sin preguntar. Un comando que resulte escribir simplemente falla. En un host sin él, bssh solo permite los comandos que su analizador considera de solo lectura y pregunta por el resto.
+
+Instalar `bwrap` (`apt install bubblewrap`, `dnf install bubblewrap`) suele ser la forma más rápida de tener un entorno aislado en un host.
+
+## El usuario del agente
+
+```sh
+bssh ai setup web-1          # un host
+bssh ai setup -t staging     # todos los hosts de una etiqueta
+```
+
+`bssh ai setup` necesita root una vez, mediante sudo, y muestra el script exacto antes de ejecutar nada:
+
+```text frame="terminal"
+$ bssh ai setup web-1 --dry-run
+bssh ai setup will run this script as root on 1 host(s): web-1
+    ...
+It creates the user `bssh-agent` (no password, no sudo) and its home with a backup directory.
+It does not change firewalls or sudoers.
+
+Dry run: nothing was changed.
+```
+
+El usuario entra en los grupos `systemd-journal` y `adm` cuando existen, para poder leer registros. bssh no instala reglas de sudo ni de cortafuegos: eso lo decides tú. `bssh ai doctor` sugiere las líneas de sudo más estrechas que necesita la política, por ejemplo:
+
+```text
+bssh-agent ALL=(root) NOPASSWD: /usr/bin/systemctl reload nginx
+```
+
+y te recuerda que limites el tráfico saliente del usuario del agente en tu cortafuegos si puedes.
+
+## Certificados ligados a la aprobación
+
+Con una autoridad de certificación local, un comando aprobado no se ejecuta con una clave de larga duración. Para cada uno, venga de `run`, de `service` o de un plan de cambios, bssh firma un certificado nuevo, válido solo para ese comando:
+
+- principal `bssh-agent`, así que solo inicia sesión como el usuario del agente;
+- el comando del paso como comando forzado, así que el certificado no puede ejecutar nada más;
+- sin terminal y sin reenvío de puertos ni de agente;
+- válido dos minutos.
+
+Las ediciones de archivos se escriben por SFTP con las credenciales de tu conexión, tras la aprobación y una vez copiado el original.
+
+<Steps>
+
+1. Crea la autoridad de certificación en tu equipo:
+
+   ```sh
+   bssh ai ca init
+   ```
+
+   La clave se queda en tu equipo, en un archivo 0600. Para protegerla con una frase de contraseña, define `BSSH_AI_CA_PASSPHRASE` al ejecutar `ca init`.
+
+2. Haz que los hosts confíen en ella:
+
+   ```sh
+   bssh ai ca trust web-1
+   bssh ai ca trust -t staging
+   ```
+
+   Esto añade la autoridad a `TrustedUserCAKeys` (junto a las que el host ya acepte), asocia el principal `bssh-agent` solo con el usuario `bssh-agent` y comprueba la configuración nueva con `sshd -t` antes de recargar `sshd`. Si la comprobación falla, se restaura la configuración anterior. Como `setup`, muestra primero el script, y `--dry-run` se detiene ahí.
+
+</Steps>
+
+<Aside type="caution">
+En cuanto existe una autoridad local, los comandos aprobados usan certificados en todos los hosts. Ejecuta `bssh ai setup` y `bssh ai ca trust` en los hosts que los agentes puedan cambiar, o esos comandos fallarán. Fallan de forma segura: bssh nunca recurre a tu propia clave para ellos.
+</Aside>
+
+## Comprobar un host
+
+```sh
+bssh ai doctor web-1
+bssh ai doctor -t staging
+```
+
+Para cada host: si es accesible, si existe `bssh-agent`, qué entorno aislado tiene, si confía en tu autoridad de certificación y las reglas de sudo que necesitaría tu política. También lista los clientes de agente que bssh encontró en tu equipo y si están configurados con `bssh ai install`.

@@ -41,6 +41,23 @@ bssh connect prod
 </CardGrid>
 
 
+
+## 让 AI 智能体安全地操作你的服务器
+
+bssh AI 把 Claude Code、Codex、Cursor 等智能体接入你的主机，却不必交出你的密钥。读取操作立即在只读沙箱中执行；任何会改变主机的操作都会等你确认，并严格按批准的内容执行。每次调用都会写入签名日志。
+
+```text frame="terminal"
+$ bssh ai install claude-code
+$ bssh ai explain --host web-1 "journalctl -u nginx -n 50" | tail -1
+decision: allow - analyzer: every command is read-only
+$ bssh ai explain --host web-1 "systemctl reload nginx" | tail -1
+decision: deny - profile.observe: the observe profile cannot change anything
+```
+
+默认情况下，智能体只能读取。加一条策略就能让它们提出变更，每一项都由你审批。
+
+<LinkCard title="bssh AI" description="工作原理、强制执行的内容，以及如何接入第一个智能体。" href="/zh-cn/ai/overview/" />
+
 ## 下一步
 
 <CardGrid>

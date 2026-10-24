@@ -871,6 +871,24 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--since <DATE>` | 只显示该日期之后收到的事件（`YYYY-MM-DD` 或 RFC 3339）。 |
 | `--limit <LIMIT>` | 最多显示的事件数（默认值和上限均为 1000）。 |
 
+### bssh teams agent
+
+用于无人值守 AI 智能体的智能体身份（管理员）。参见[团队智能体](/zh-cn/ai/teams-agents/)。
+
+```text
+Usage: bssh teams agent <COMMAND>
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `add <TEAM> <NAME> [--policy <NAME>]` | 创建智能体（占用一个席位），对 `ai.policies` 中的策略签名（默认：`default`），并写出其凭据文件。 |
+| `list <TEAM>` | 列出团队的智能体。 |
+| `policy <TEAM> <NAME> [--policy <NAME>]` | 为智能体签名更新后的策略。 |
+| `pending <TEAM>` | 列出等待你处理的审批请求。 |
+| `approve <TEAM> <REQUEST> [--reason <REASON>]` | 批准请求。 |
+| `deny <TEAM> <REQUEST> [--reason <REASON>]` | 拒绝请求。 |
+| `remove <TEAM> <NAME>` | 移除智能体并释放其席位。 |
+
 ## 组织
 
 组织拥有团队，并在启用计费的服务器上拥有它们的订阅和席位。席位按组织计算：同时在其多个团队中的人只占一个席位，待处理的邀请占一个席位。组织在服务器上没有名称，以所有者的邮箱显示。参见[组织](/zh-cn/teams/organizations/)。
@@ -945,6 +963,186 @@ Usage: bssh org billing [OPTIONS] [ORG]
 | `--seats <SEATS>` | 要订阅的席位数（默认值：当前使用的席位数，且至少比免费方案多一个）。 |
 | `--yearly` | 按年付费而不是按月。 |
 | `--manage` | 打开账单门户：银行卡、发票、席位、取消（所有者）。 |
+
+## bssh AI
+
+用于 AI 智能体的命令。参见 [bssh AI](/zh-cn/ai/overview/)。
+
+### bssh ai mcp
+
+以 stdio 方式为智能体运行 MCP 服务器。智能体会自行启动它；`bssh ai install` 负责配置。
+
+```text
+Usage: bssh ai mcp [OPTIONS]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `--policy <POLICY>` | `ai.policies` 中的策略名称（默认：`default`）。 |
+
+### bssh ai install
+
+把 bssh 加入智能体客户端的 MCP 配置。
+
+```text
+Usage: bssh ai install [OPTIONS] <CLIENT>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<CLIENT>` | `claude-code`、`codex`、`cursor`、`vscode` 或 `claude-desktop`。 |
+| `--policy <POLICY>` | 智能体执行的策略（默认：`default`）。 |
+| `--guard` | 同时安装一个钩子，把直接的 `ssh` 和 `scp` 引导到 bssh 工具（Claude Code）。 |
+| `--dry-run` | 只显示改动，不写入。 |
+| `--uninstall` | 从客户端配置中移除 bssh。 |
+
+### bssh ai explain
+
+显示命令如何被解析、打标签和判定。
+
+```text
+Usage: bssh ai explain [OPTIONS] <COMMAND>...
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<COMMAND>...` | 命令，加引号或放在 `--` 之后。 |
+| `--host <HOST>` | 判定所针对的主机：其标签和保护程度会影响结果。 |
+| `--policy <POLICY>` | 用于判定的策略（默认：`default`）。 |
+| `--json` | 以 JSON 输出分析结果。 |
+
+### bssh ai policy
+
+列出、显示或测试智能体策略。
+
+```text
+Usage: bssh ai policy <COMMAND>
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `list` | 列出策略。 |
+| `show [NAME]` | 显示应用了内置默认值的策略。 |
+| `test <FILE> [--policy <POLICY>] [--host <HOST>]` | 判定文件中的每条命令；行尾可以写 `# expect: allow\|ask\|deny`。只要有不符就以非零状态退出。 |
+
+### bssh ai approve
+
+批准或拒绝等待中的智能体请求。
+
+```text
+Usage: bssh ai approve [OPTIONS] [REQUEST_ID]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[REQUEST_ID]` | 请求 id 或其前缀。省略时从待处理列表中选择。 |
+| `--deny` | 拒绝而不是批准。 |
+| `--reason <REASON>` | 发送给智能体的理由。 |
+| `--list` | 只列出待处理的请求。 |
+| `--grant <MINUTES>` | 同时在这么多分钟内放行同类调用。 |
+
+### bssh ai status
+
+显示运行中的智能体、待审批请求和有效的临时授权。脚本可用 `--json`。
+
+### bssh ai stop
+
+停止正在运行的智能体会话。
+
+```text
+Usage: bssh ai stop [OPTIONS] [RUN]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[RUN]` | 运行 id。只有一个运行时可省略。 |
+| `--all` | 停止所有运行。 |
+
+### bssh ai log
+
+显示智能体做了什么：调用、判定、审批、变更。
+
+```text
+Usage: bssh ai log [OPTIONS] [RUN]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[RUN]` | 运行 id。省略时列出最近的运行。 |
+| `--report` | 输出运行报告：主机、带 diff 的变更、审批、回滚点。 |
+| `--limit <LIMIT>` | 列出的运行数量（默认：20）。 |
+| `--json` | 以 JSON 输出。 |
+
+### bssh ai replay
+
+回放智能体运行中录制的输出。用 `--call <CALL>` 只回放一次调用。
+
+### bssh ai setup
+
+在主机上创建低权限用户 `bssh-agent`（需要通过 sudo 获取一次 root 权限）。
+
+```text
+Usage: bssh ai setup [OPTIONS] [TARGET]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[TARGET]` | 连接名称。 |
+| `-t, --tag <TAG>` | 带有该标签的所有连接。 |
+| `--dry-run` | 只显示脚本，不执行。 |
+| `-y, --yes` | 不询问确认。 |
+
+### bssh ai doctor
+
+检查每台主机的保护情况：沙箱、智能体用户、对证书颁发机构的信任、智能体客户端配置，以及建议的 sudo 规则。
+
+```text
+Usage: bssh ai doctor [OPTIONS] [TARGET]
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `[TARGET]` | 连接名称。 |
+| `-t, --tag <TAG>` | 带有该标签的所有连接。 |
+| `--policy <POLICY>` | 其写入路径用于生成 sudo 建议的策略（默认：`default`）。 |
+| `--json` | 以 JSON 输出。 |
+
+### bssh ai ca
+
+用于绑定审批证书的本地证书颁发机构。
+
+| 命令 | 说明 |
+| --- | --- |
+| `init` | 在本机创建颁发机构密钥。 |
+| `show` | 显示颁发机构的公钥和指纹。 |
+| `trust [TARGET] [-t <TAG>] [--dry-run] [-y]` | 让主机为 `bssh-agent` 用户信任该颁发机构（需要一次 root 权限）。 |
+
+### bssh ai serve
+
+为 Teams 的无人值守智能体通过 HTTP 提供 MCP 服务。
+
+```text
+Usage: bssh ai serve [OPTIONS] --agent <TEAM/AGENT>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `--agent <TEAM/AGENT>` | 要运行的智能体身份（参见 `bssh teams agent add`）。 |
+| `--listen <ADDR>` | 监听地址（默认：`127.0.0.1:8765`）。明文 HTTP：请保持在 localhost 或放在 TLS 代理之后。 |
+| `--allow-remote` | 允许非回环的 `--listen` 地址。 |
+
+### bssh ai token
+
+为智能体身份签发短期网关令牌。
+
+```text
+Usage: bssh ai token [OPTIONS] <AGENT>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<AGENT>` | 智能体身份，`<团队>/<名称>`。 |
+| `--ttl <TTL>` | 有效期（默认：`1h`，最长 24 小时）。 |
 
 ## 桌面与 shell
 

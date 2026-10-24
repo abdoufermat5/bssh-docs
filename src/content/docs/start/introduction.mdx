@@ -1,6 +1,6 @@
 ---
 title: What is Bayesian SSH?
-description: A keyboard-first SSH manager for the command line and the desktop, with optional end-to-end encrypted team sharing.
+description: A keyboard-first SSH manager for the command line and the desktop that lets AI agents work on your servers under your policy and approval, with optional end-to-end encrypted team sharing.
 ---
 
 import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
@@ -15,6 +15,7 @@ You don't need the exact name. `bssh` matches names, aliases, tags and hostnames
 
 ## What it does
 
+- **Lets AI agents work on your servers** without your keys: reads run in a read-only jail, changes wait for your approval, and every call is recorded.
 - **Saves connections** with their user, port, key, bastion, Kerberos setting and tags.
 - **Finds hosts fast** with fuzzy matching and a ranking that learns from your history.
 - **Handles the route**: default or per-host bastions, interactive bastions, and Kerberos tickets.
@@ -25,6 +26,10 @@ You don't need the exact name. `bssh` matches names, aliases, tags and hostnames
 ## Local first
 
 Everything is stored on your machine. Bayesian SSH never sits between you and your servers: connections go straight from your computer to the host, as they would with `ssh`.
+
+## bssh AI
+
+bssh AI connects coding agents such as Claude Code, Codex and Cursor to your hosts through a local MCP server. The agent never holds a key or opens a shell. A shell parser and your policy decide what it may run, anything that changes a host waits for a person, and every call goes to a signed, hash-chained log. It is included in the free product. See [bssh AI](/ai/overview/) and its [security model](/ai/security/).
 
 ## bssh Teams
 
@@ -39,4 +44,5 @@ bssh Teams is the paid plan for sharing connections with colleagues. Shared conn
 <CardGrid>
 	<LinkCard title="Install" description="One-line installer, Linux packages, Snap or source." href="/start/installation/" />
 	<LinkCard title="Quick start" description="Save a host and connect." href="/start/quick-start/" />
+	<LinkCard title="Connect an AI agent" description="Claude Code, Codex, Cursor or VS Code in two minutes." href="/ai/quick-start/" />
 </CardGrid>

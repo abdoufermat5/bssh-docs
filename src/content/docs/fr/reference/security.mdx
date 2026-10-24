@@ -1,11 +1,22 @@
 ---
 title: Sécurité
+sidebar:
+  label: Vue d'ensemble
 description: Où bssh conserve vos données, comment vérifier une version publiée et comment signaler une vulnérabilité.
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 bssh garde ses données sur votre machine et ne s'interpose jamais entre vous et vos serveurs. Cette page liste les fichiers, ce qui les protège et comment vérifier qu'un téléchargement est authentique.
+
+## En bref
+
+- **Vos clés restent les vôtres.** bssh utilise vos clés et votre agent SSH là où ils sont, sans jamais les copier dans ses propres fichiers. Les agents IA n'ont jamais de clé.
+- **Aucun relais.** Les connexions vont directement de votre machine à l'hôte, comme avec `ssh`.
+- **Les agents suivent vos règles.** C'est un analyseur et votre politique qui décident de ce qu'un agent peut exécuter, pas un modèle. Les modifications attendent une personne, et une commande approuvée s'exécute avec un certificat valable pour cette seule commande. Voir [Sécurité de bssh AI](/fr/ai/security/).
+- **Les connexions partagées sont chiffrées de bout en bout.** Le serveur de synchronisation de Teams stocke du texte chiffré et ne voit jamais hôtes, utilisateurs ni clés. Voir [Sécurité de bssh Teams](/fr/teams/security/).
+- **Tout ce qui compte est enregistré.** Les appels des agents et les sessions d'équipe vont dans des journaux signés et chaînés, que vous pouvez vérifier sur votre propre machine.
+- **Les versions sont signées.** Vous pouvez vérifier qu'un téléchargement provient du projet avant de l'installer. Voir [Vérifier une version publiée](#vérifier-une-version-publiée).
 
 ## Où vivent vos données
 
@@ -84,11 +95,12 @@ Signalez-la en privé via GitHub : [signaler une vulnérabilité](https://github
 
 Vous recevez un accusé de réception sous 3 jours ouvrés. Une fois le correctif publié, l'avis est publié avec votre nom, sauf si vous préférez rester anonyme.
 
-## Teams
+## bssh AI et bssh Teams
 
-Si vous utilisez bssh Teams, lisez [Sécurité de Teams](/fr/teams/security/) : la page décrit le modèle de confiance du serveur de synchronisation, la cryptographie et ce que la récupération permet ou non.
+Si vous laissez des agents IA travailler sur vos serveurs, lisez [Sécurité de bssh AI](/fr/ai/security/) : ce qui est appliqué et où, comment sont traités l'injection de prompt et les secrets, et les limites à connaître. Si vous utilisez bssh Teams, lisez [Sécurité de bssh Teams](/fr/teams/security/) : le modèle de confiance du serveur de synchronisation, la cryptographie et ce que la récupération permet ou non.
 
 <CardGrid>
-	<LinkCard title="Sécurité de Teams" description="Ce que le serveur de synchronisation voit et comment fonctionne la clé d'équipe." href="/fr/teams/security/" />
+	<LinkCard title="Sécurité de bssh AI" description="Ce qu'un agent peut faire ou non, et où chaque limite est appliquée." href="/fr/ai/security/" />
+	<LinkCard title="Sécurité de bssh Teams" description="Ce que le serveur de synchronisation voit et comment fonctionne la clé d'équipe." href="/fr/teams/security/" />
 	<LinkCard title="Référence de configuration" description="Tous les réglages, fichiers et variables d'environnement." href="/fr/reference/configuration/" />
 </CardGrid>

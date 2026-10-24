@@ -1,21 +1,76 @@
 ---
 title: Bayesian SSH
-description: 以键盘为先的 SSH 管理器，能学会你想连接哪台主机。支持命令行与桌面应用，并提供端到端加密的团队共享。
+description: 面向人与 AI 智能体的 SSH 管理器。智能体按照你看得懂的策略操作服务器，变更需等待你的审批，每次调用都记录在签名日志中。支持命令行与桌面应用，并提供端到端加密的团队共享。
 template: splash
 hero:
-  title: 每台主机，一键直达。
-  tagline: Bayesian SSH 是一款以键盘为先的 SSH 管理器，同时提供命令行和桌面应用。它会学习你想连接哪台主机，并通过端到端加密的保险库与团队共享连接。
+  title: 为人与 AI 智能体打造的 SSH。
+  tagline: 一款以键盘为先的 SSH 管理器，让 AI 智能体无需你的密钥即可操作服务器。读取立即执行，变更等待你的审批，每次调用都写入签名记录。
   actions:
+    - text: 连接 AI 智能体
+      link: /zh-cn/ai/quick-start/
+      icon: right-arrow
     - text: 开始使用
       link: /zh-cn/start/quick-start/
-      icon: right-arrow
-    - text: 安装
-      link: /zh-cn/start/installation/
       variant: minimal
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 import DemoVideo from '../../../components/DemoVideo.astro';
+
+<DemoVideo
+	loop
+	src="/demo/ai-desktop-approval.mp4"
+	poster="/demo/ai-desktop-approval.jpg"
+	label="演示：桌面应用跟踪 AI 智能体在服务器上的只读调用，随后在审批对话框中显示其清理计划，经审阅后批准。"
+/>
+
+## 先询问、再行动的 AI 智能体
+
+bssh AI 通过本地 MCP 服务器把 Claude Code、Codex、Cursor 等智能体连接到你的主机。智能体从不持有密钥，也不会打开 shell。读取操作立即在只读隔离环境中执行。任何会改动主机的操作都要等你批准，并严格按批准的内容执行。
+
+```text frame="terminal"
+$ bssh ai install claude-code
+$ bssh ai explain --host web-1 "journalctl -u nginx -n 50" | tail -1
+decision: allow - analyzer: every command is read-only
+$ bssh ai explain --host web-1 "systemctl reload nginx" | tail -1
+decision: deny - profile.observe: the observe profile cannot change anything
+```
+
+默认情况下，智能体只能读取。添加一条策略即可允许它们提出变更，由你逐一批准。
+
+<CardGrid>
+	<LinkCard title="bssh AI" description="工作原理、强制执行的规则，以及一次使用 opencode 的真实运行。" href="/zh-cn/ai/overview/" />
+	<LinkCard title="连接智能体" description="两分钟内接入 Claude Code、Codex、Cursor 或 VS Code。" href="/zh-cn/ai/quick-start/" />
+</CardGrid>
+
+## 安全源于设计
+
+以下每一项都由 bssh 本身强制执行，而不是依赖良好习惯。
+
+<CardGrid>
+	<Card title="密钥始终属于你" icon="padlock">
+		bssh 直接使用你现有的 SSH 密钥和 agent。AI 智能体从不持有密钥，你和服务器之间也没有任何中转。
+	</Card>
+	<Card title="看得懂的判定" icon="list-format">
+		由 shell 解析器和你的策略决定智能体能执行什么，没有模型参与，`bssh ai explain` 可以提前显示结果。
+	</Card>
+	<Card title="变更由人审批" icon="approve-check">
+		变更需等待审批，并显示确切的命令和 diff。使用本地 CA 时，获批的命令以仅对该命令有效的证书执行。
+	</Card>
+	<Card title="可验证的记录" icon="document">
+		智能体的调用和团队会话都写入签名的哈希链日志，你可以在自己的机器上验证。
+	</Card>
+	<Card title="端到端加密共享" icon="link-alt">
+		bssh Teams 在你的设备上加密共享的连接。同步服务器永远看不到主机、用户名或密钥。
+	</Card>
+	<Card title="签名的发布版本" icon="approve-check-circle">
+		每个版本都经过签名并附带构建来源证明。安装脚本会校验校验和，安装了 cosign 时还会校验签名。
+	</Card>
+</CardGrid>
+
+<LinkCard title="安全" description="数据存放位置、bssh AI 与 Teams 的安全模型，以及如何报告漏洞。" href="/zh-cn/reference/security/" />
+
+## 日常 SSH，一键直达
 
 <DemoVideo label="演示：从 ~/.ssh/config 导入主机，模糊匹配连接，经堡垒机连接，在多台服务器上同时执行命令和上传文件，查看会话历史，然后在桌面应用中打开两个实时终端并使用命令面板。" />
 
@@ -35,28 +90,10 @@ bssh connect prod
 	<Card title="命令行与桌面" icon="laptop">
 		`bssh` 和桌面应用共用同一份主机列表，并提供终端、文件传输和会话历史。
 	</Card>
-	<Card title="与团队共享" icon="padlock">
-		bssh Teams 通过在你的设备上加密的保险库同步连接，并提供签名的审计日志。
+	<Card title="会话有据可查" icon="notes">
+		每次会话都会记入历史，包括时长和退出码。开启录制后，还能回放和搜索当时发生的一切。
 	</Card>
 </CardGrid>
-
-
-
-## 让 AI 智能体安全地操作你的服务器
-
-bssh AI 把 Claude Code、Codex、Cursor 等智能体接入你的主机，却不必交出你的密钥。读取操作立即在只读沙箱中执行；任何会改变主机的操作都会等你确认，并严格按批准的内容执行。每次调用都会写入签名日志。
-
-```text frame="terminal"
-$ bssh ai install claude-code
-$ bssh ai explain --host web-1 "journalctl -u nginx -n 50" | tail -1
-decision: allow - analyzer: every command is read-only
-$ bssh ai explain --host web-1 "systemctl reload nginx" | tail -1
-decision: deny - profile.observe: the observe profile cannot change anything
-```
-
-默认情况下，智能体只能读取。加一条策略就能让它们提出变更，每一项都由你审批。
-
-<LinkCard title="bssh AI" description="工作原理、强制执行的内容，以及如何接入第一个智能体。" href="/zh-cn/ai/overview/" />
 
 ## 下一步
 

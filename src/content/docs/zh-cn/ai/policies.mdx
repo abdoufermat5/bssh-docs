@@ -60,7 +60,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 ### 无法关闭的部分
 
-`deny_paths` 和 `deny` 始终包含 bssh 的内置条目，你的列表只会追加。内置条目涵盖 `/etc/shadow`、`/etc/sudoers.d`、私钥（`*.key`、`*.pem`、`id_rsa*`、`id_ed25519*`）、`~/.ssh`、`.env` 文件和 AWS 凭据，以及 `rm -rf /`、`mkfs *`、`dd of=/dev/*`、`iptables -F`、`shutdown`、`reboot` 等命令。
+`deny_paths` 和 `deny` 始终包含 bssh 的内置条目，你的列表只会追加。内置条目涵盖 `/etc/shadow`、`/etc/sudoers.d`、私钥（`*.key`、`*.pem`、`id_rsa*`、`id_ed25519*`）、`~/.ssh`、`.env` 文件和 AWS 凭据，以及 `rm -rf /`、`mkfs *`、`dd of=/dev/**`、`iptables -F`、`shutdown`、`reboot` 等命令。
 
 `bssh ai policy show <名称>` 会输出补全了这些内容的策略。
 
@@ -74,6 +74,8 @@ bssh 像 shell 一样解析每条 shell 命令，再逐一判定其中包含的�
 - bssh 无法完全理解的内容标记为 `unknown`：`eval`、通过管道交给 shell 的脚本、未知程序、过长而无法解析的命令。
 
 以最严格的结果为准。长管道末尾只要有一条破坏性命令，整个调用就是破坏性的。`unknown` 永远不会被当作只读。
+
+在拒绝规则中，`*` 和 `?` 只匹配同一目录内的内容，`**` 可以跨越目录，和 shell 路径的规则一致：`rm -rf /*` 会拒绝 `/` 以及 `/var` 这样的顶级目录，而 `rm -rf /var/www/cache` 会走正常判定流程并发起询问。单独的 `*` 匹配任意参数。
 
 拒绝规则匹配的是解析后的命令而不是文本，所以引号、`/bin/rm`、`sudo` 或改变选项顺序都绕不过去：
 

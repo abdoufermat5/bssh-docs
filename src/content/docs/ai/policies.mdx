@@ -60,7 +60,7 @@ With no `default` policy at all, bssh uses `observe` on every host you have save
 
 ### What you can't switch off
 
-`deny_paths` and `deny` always include bssh's built-in entries; your lists add to them. The built-ins cover `/etc/shadow`, `/etc/sudoers.d`, private keys (`*.key`, `*.pem`, `id_rsa*`, `id_ed25519*`), `~/.ssh`, `.env` files and AWS credentials, and commands such as `rm -rf /`, `mkfs *`, `dd of=/dev/*`, `iptables -F`, `shutdown` and `reboot`.
+`deny_paths` and `deny` always include bssh's built-in entries; your lists add to them. The built-ins cover `/etc/shadow`, `/etc/sudoers.d`, private keys (`*.key`, `*.pem`, `id_rsa*`, `id_ed25519*`), `~/.ssh`, `.env` files and AWS credentials, and commands such as `rm -rf /`, `mkfs *`, `dd of=/dev/**`, `iptables -F`, `shutdown` and `reboot`.
 
 `bssh ai policy show <name>` prints a policy with all of this filled in.
 
@@ -74,6 +74,8 @@ bssh parses each shell command the way a shell would, then judges every command 
 - anything bssh can't fully understand is tagged `unknown`: `eval`, a script piped into a shell, an unknown program, a command too long to parse.
 
 The strictest answer wins. One destructive command at the end of a long pipeline makes the whole call destructive. `unknown` is never treated as read-only.
+
+In a deny rule, `*` and `?` stay within one directory and `**` crosses directories, as in shell paths: `rm -rf /*` refuses `/` and top-level directories such as `/var`, while `rm -rf /var/www/cache` goes through the normal decision and asks. A lone `*` matches any argument.
 
 Deny rules match on the parsed command, not the text, so quoting, `/bin/rm`, `sudo` or a different flag order don't get around them:
 

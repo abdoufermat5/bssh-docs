@@ -4,6 +4,7 @@ description: How bssh AI asks a person before an agent changes a host, change pl
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import DemoVideo from '../../../components/DemoVideo.astro';
 
 When the policy says **ask**, the agent's call waits until a person decides. Nothing runs before that, and nothing else runs after it: bssh executes exactly what was approved.
 
@@ -45,6 +46,13 @@ An id prefix is enough. The agent receives the decision, and a refusal comes wit
 ## Approve from the desktop app
 
 The desktop app has an AI section with every running agent, a timeline of its calls and their decisions, and a **Stop** button. A new request brings up the approval dialog with a notification: the commands and hosts, what the analyzer found, for a plan each step with its diff, the verify and rollback steps, and the agent's reason set apart from the facts.
+
+<DemoVideo
+	label="Demo: the AI agents section of the desktop app. An agent's read-only calls are allowed one after another, then a change plan opens the approval dialog, which is scrolled and approved."
+	src="/demo/ai-desktop-approval.mp4"
+	poster="/demo/ai-desktop-approval.jpg"
+	caption="The calls of a real opencode run on web-1, shown in the desktop app: reads go through on their own, the cleanup plan waits for the dialog."
+/>
 
 ## Grants
 

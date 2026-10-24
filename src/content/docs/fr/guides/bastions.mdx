@@ -4,8 +4,16 @@ description: Acheminez vos connexions SSH via des hôtes de rebond et des bastio
 ---
 
 import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
 
 Les hôtes bastions (ou hôtes de rebond) vous permettent d'atteindre des serveurs situés derrière des pare-feux ou des réseaux privés isolés. Bayesian SSH prend en charge aussi bien les hôtes de rebond classiques utilisant la redirection de port TCP que les bastions interactifs nécessitant des protocoles de shell de rebond dédiés.
+
+<FlowDiagram
+	label="Une connexion via un bastion"
+	nodes={[{"title": "Votre machine", "detail": "bssh connect web-1"}, {"title": "Bastion", "detail": "Hôte de rebond, ou bastion interactif", "tone": "accent"}, {"title": "web-1", "detail": "Injoignable depuis l'extérieur"}]}
+	links={["SSH", "SSH"]}
+	group={{"from": 1, "to": 2, "label": "Réseau privé"}}
+/>
 
 ## Configurer un bastion par défaut
 

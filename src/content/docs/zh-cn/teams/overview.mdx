@@ -4,6 +4,8 @@ description: 通过端到端加密保险库与团队共享 SSH 连接，具备�
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
+import DemoVideo from '../../../../components/DemoVideo.astro';
 
 bssh Teams 可以与你的工作伙伴共享连接。每个人都可以在 `bssh` 和桌面应用中获取相同的主机列表，再也不需要在聊天工具或维基文档中互相传阅服务器列表。
 
@@ -11,11 +13,25 @@ bssh Teams 可以与你的工作伙伴共享连接。每个人都可以在 `bssh
 
 ## 工作原理
 
+<FlowDiagram
+	label="共享连接的流向"
+	nodes={[{"title": "你的设备", "detail": "用团队密钥加密每个条目。你的密钥绝不会离开设备。"}, {"title": "bssh Teams 服务器", "detail": "保存并转发密文。永远看不到主机、用户名、标签或密钥。", "tone": "accent"}, {"title": "队友的设备", "detail": "验证作者、解密，并加入主机列表。"}]}
+	links={["密文", "密文"]}
+	caption="SSH 直接从各自的设备连到你的服务器：同步服务器永远不在这条路径上。"
+/>
+
 1. **每台设备拥有独立的密钥。** 配置 Teams 会在你的机器上生成由口令保护的签名密钥与加密密钥。它们绝不会离开你的设备。
 2. **一个团队拥有一份团队密钥。** 管理员在核对新设备的指纹后将其授予该设备，从而杜绝服务器擅自混入其自有的设备。
 3. **条目在本地加密。** 共享某个连接时会使用团队密钥对其进行加密。服务器保存加密结果并分发给成员。
-4. **团队成员在本地解密。** 每次同步都会拉取新条目，验证其作者身份，并将其以 `name@team` 的格式添加到你的主机列表中。
+4. **团队成员在本地解密。** 每次同步都会拉取新条目，验证其作者身份，并将其加入你的主机列表，附带团队标签。如果你已有同名主机，团队的主机会显示为 `name@team`。
 5. **连接行为经过审计。** 连接到团队主机时会记录一条经过签名且哈希成链的事件。管理员可以在自己的设备上验证整条审计日志。
+
+<DemoVideo
+	label="演示：Alice 把 web-1 共享给 platform 团队，Bob 同步后连接 web-1 并再次同步，随后 Alice 查看成员和已验证的审计日志。"
+	src="/demo/teams-share.mp4"
+	poster="/demo/teams-share.jpg"
+	caption="Alice 共享一台主机，Bob 连接它，他的会话随即出现在团队的签名审计日志中。使用本地 bssh Teams 服务器录制。"
+/>
 
 ## 共享的内容
 

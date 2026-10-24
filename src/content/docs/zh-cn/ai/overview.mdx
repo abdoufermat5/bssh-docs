@@ -7,6 +7,7 @@ description: 让 AI 智能体操作你的服务器，而不必把 SSH 密钥交�
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 import AiFlow from '../../../../components/AiFlow.astro';
+import DemoVideo from '../../../../components/DemoVideo.astro';
 
 Claude Code、Codex、Cursor 这类编码智能体很擅长读日志、修复出故障的服务。它们大多像人一样连接服务器：用你的 SSH 密钥和一个 shell。没有任何东西限制它们能碰哪些主机、能执行什么，事后唯一的记录就是智能体自己的对话记录。
 
@@ -27,6 +28,13 @@ bssh AI 位于智能体和你的服务器之间。智能体与本地的 [MCP](ht
 />
 
 智能体拿到结果后继续工作。读取操作不用等任何人，所以排查很快；写入操作要等人确认，所以修复是经过深思熟虑的。
+
+<DemoVideo
+	label="演示：左侧是使用 DeepSeek 模型的 opencode，右侧是 bssh。智能体用只读工具排查 web-1 的磁盘占用，提出清理计划，计划通过 bssh ai approve 批准，随后智能体执行并验证。"
+	src="/demo/ai-agent-opencode.mp4"
+	poster="/demo/ai-agent-opencode.jpg"
+	caption="真实运行，而非脚本：opencode 使用 DeepSeek V4.1 Flash，连接 bssh ai mcp，面对一台一次性服务器。视频已加速，计划等待审批的部分除外。"
+/>
 
 ## 可预期的判定
 

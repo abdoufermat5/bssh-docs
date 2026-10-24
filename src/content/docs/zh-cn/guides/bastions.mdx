@@ -4,8 +4,16 @@ description: 通过跳板机和交互式堡垒机路由 SSH 连接。
 ---
 
 import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
 
 跳板机（堡垒机）可帮助你访问防火墙或隔离私有网络背后的服务器。Bayesian SSH 既支持使用 TCP 端口转发的标准跳板机，也支持需要专用跳转 shell 协议的交互式堡垒机。
+
+<FlowDiagram
+	label="经由跳板机的连接"
+	nodes={[{"title": "你的电脑", "detail": "bssh connect web-1"}, {"title": "跳板机", "detail": "跳转主机或交互式跳板机", "tone": "accent"}, {"title": "web-1", "detail": "无法从外部直接访问"}]}
+	links={["SSH", "SSH"]}
+	group={{"from": 1, "to": 2, "label": "私有网络"}}
+/>
 
 ## 配置默认跳板机
 

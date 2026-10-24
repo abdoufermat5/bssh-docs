@@ -4,10 +4,24 @@ description: 借助 bssh Teams 让无人值守的 AI 智能体操作你的服务
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
 
 你笔记本上的智能体代表你工作，由你审批它的变更。凌晨 3 点的值班智能体、CI 中的部署机器人或定时检查任务，键盘前都没有人。借助 [bssh Teams](/zh-cn/teams/overview/)，这样的智能体在团队中拥有自己的身份，执行由管理员签名的策略，其变更由团队管理员在各自的电脑上审批。
 
 ## 整体如何协作
+
+<FlowDiagram
+	label="无人值守智能体的运行位置"
+	nodes={[{"title": "智能体", "detail": "CI 任务、值班智能体、定时检查"}, {"title": "bssh ai serve", "detail": "按签名策略检查每一次调用", "tone": "accent"}, {"title": "你的服务器", "detail": "只执行已批准的命令"}]}
+	links={["HTTPS 上的 MCP + 令牌", "SSH，每条命令一张证书"]}
+	group={{"from": 1, "to": 2, "label": "你的基础设施"}}
+/>
+
+<FlowDiagram
+	label="审批请求的传递路径"
+	nodes={[{"title": "bssh ai serve", "detail": "策略要求询问时发起请求"}, {"title": "bssh Teams 服务器", "detail": "转发请求，但无法读取。"}, {"title": "管理员的设备", "detail": "批准或拒绝。关键主机需要两名管理员。", "tone": "accent"}]}
+	links={["加密并签名", "加密并签名"]}
+/>
 
 - **智能体身份**是团队中类型为 `agent` 的成员，由管理员创建。它有自己的设备密钥，像其他成员一样占用一个席位，并且不能写入团队保险库。
 - **签名策略**随之一起。策略由管理员签名，网关会拒绝没有管理员签名、或比已见版本更旧的策略，因此服务器无法改变智能体的权限。

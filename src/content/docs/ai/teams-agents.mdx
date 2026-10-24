@@ -4,10 +4,24 @@ description: Run unattended AI agents against your servers with bssh Teams, with
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
 
 An agent on your laptop acts for you, and you approve its changes. An on-call agent at 3 a.m., a deployment bot in CI or a scheduled check has nobody at the keyboard. With [bssh Teams](/teams/overview/), such an agent gets its own identity in the team, runs a policy signed by an admin, and its changes are approved by the team's admins from their own machines.
 
 ## How it fits together
+
+<FlowDiagram
+	label="Where an unattended agent runs"
+	nodes={[{"title": "Agent", "detail": "CI job, on-call agent, scheduled check"}, {"title": "bssh ai serve", "detail": "Checks every call against the signed policy", "tone": "accent"}, {"title": "Your servers", "detail": "Approved commands only"}]}
+	links={["MCP over HTTPS, token", "SSH, certificate per command"]}
+	group={{"from": 1, "to": 2, "label": "Your infrastructure"}}
+/>
+
+<FlowDiagram
+	label="How an approval travels"
+	nodes={[{"title": "bssh ai serve", "detail": "Asks when the policy says ask"}, {"title": "bssh Teams server", "detail": "Relays the request. Can't read it."}, {"title": "Admins' devices", "detail": "Approve or deny. Two admins for critical hosts.", "tone": "accent"}]}
+	links={["encrypted, signed", "encrypted, signed"]}
+/>
 
 - **An agent identity** is a team member of kind `agent`, created by an admin. It has its own device key, takes a seat like any member, and can't write to the team's vault.
 - **A signed policy** goes with it. An admin signs it, and the gateway refuses a policy that isn't signed by an admin or is older than one it already saw, so the server can't change what an agent may do.

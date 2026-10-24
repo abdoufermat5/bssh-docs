@@ -1,0 +1,75 @@
+---
+title: Approvals
+description: How bssh AI asks a person before an agent changes a host, change plans, approval tiers, grants, and how to follow and stop a run.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+When the policy says **ask**, the agent's call waits until a person decides. Nothing runs before that, and nothing else runs after it: bssh executes exactly what was approved.
+
+## Who is asked
+
+| Tier | Where the decision is made | Used for |
+| --- | --- | --- |
+| Automatic | Nowhere: the policy allows it | Reads, and calls covered by a grant |
+| In the agent's client | The agent's own confirmation dialog | Low-risk changes on hosts tagged in `approval.in_client` |
+| Out of band | The desktop app, or `bssh ai approve` in a terminal | Every other change |
+| Two people | Two different team admins | Hosts tagged in `approval.two_person` ([Teams](/ai/teams-agents/)) |
+
+The out-of-band channel is the one to trust: the agent's process can't reach it. In-client confirmation is faster when you are watching the agent, but a client set to approve everything automatically would approve it too, so it is off unless you list tags, never applies to destructive, privileged or network changes, and is recorded as confirmed in the client. If the client can't show a confirmation, the request goes out of band.
+
+## Change plans
+
+A fix rarely takes one command. The agent sends a **change plan** with `propose_change`:
+
+- **steps**: commands to run, file edits as unified diffs, service actions;
+- **verify**: how to check the fix worked, for example `curl -fsS localhost/health`;
+- **rollback**: how to undo it.
+
+Every step is judged by the policy before anyone is asked; if one is denied, the whole plan is refused. You approve the plan once. The approval covers that exact plan: `apply_change` refuses a plan that changed afterwards, runs the steps in order, stops at the first failure and runs the verify steps. A plan for several hosts runs on the first one and verifies it before it touches the others.
+
+File edits are backed up before they are written, on the host and on your machine. `undo` restores them and runs the rollback steps; it asks for approval like any change.
+
+The agent's explanation of why it wants a change is shown labelled as the agent's. Read the commands and the diff: they are what will run.
+
+## Approve from the terminal
+
+```sh
+bssh ai approve            # pick a pending request, see it in full, decide
+bssh ai approve --list     # only list what is waiting
+bssh ai approve <id> --deny --reason "not during the release freeze"
+```
+
+An id prefix is enough. The agent receives the decision, and a refusal comes with your reason, so it can try something else.
+
+## Approve from the desktop app
+
+The desktop app has an AI section with every running agent, a timeline of its calls and their decisions, and a **Stop** button. A new request brings up the approval dialog with a notification: the commands and hosts, what the analyzer found, for a plan each step with its diff, the verify and rollback steps, and the agent's reason set apart from the facts.
+
+## Grants
+
+Approving the same kind of call again and again teaches people to approve without reading. A grant allows one kind of call for a limited time:
+
+```sh
+bssh ai approve <id> --grant 30
+```
+
+This approves the request and lets the same tool on the same host and target through for 30 minutes without asking. `bssh ai status` lists active grants. Grants are recorded like approvals.
+
+## Unanswered requests
+
+A request nobody answers is refused after `approval_timeout_secs`, 300 seconds by default. The agent is told it expired.
+
+## Follow and stop a run
+
+```sh
+bssh ai status                # running agents, pending approvals, grants
+bssh ai stop                  # end the only running run, or name one, or --all
+bssh ai log                   # recent runs
+bssh ai log <run> --report    # what changed, with diffs, approvals and undo points
+bssh ai replay <run>          # replay the recorded output of its commands
+```
+
+<Aside type="note">
+The run report is built from the signed log, not written by a model. It lists every host touched, every decision, who approved what and how, each change with its diff and undo point, and how many secrets were redacted.
+</Aside>

@@ -1,0 +1,79 @@
+---
+title: Agentes de equipo
+description: Ejecuta agentes de IA desatendidos sobre tus servidores con bssh Teams, con identidad propia, políticas firmadas por un administrador, aprobaciones retransmitidas a los administradores y aprobación de dos personas.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Un agente en tu portátil actúa por ti, y tú apruebas sus cambios. Un agente de guardia a las 3 de la madrugada, un bot de despliegue en CI o una comprobación programada no tienen a nadie delante del teclado. Con [bssh Teams](/es/teams/overview/), un agente así tiene su propia identidad en el equipo, aplica una política firmada por un administrador, y sus cambios los aprueban los administradores del equipo desde sus propias máquinas.
+
+## Cómo encaja todo
+
+- **Una identidad de agente** es un miembro del equipo de tipo `agent`, creado por un administrador. Tiene su propia clave de dispositivo, ocupa un puesto como cualquier miembro y no puede escribir en la bóveda del equipo.
+- **Una política firmada** lo acompaña. La firma un administrador, y la pasarela rechaza una política que no esté firmada por un administrador o que sea más antigua que una ya vista, así que el servidor no puede cambiar lo que un agente puede hacer.
+- **La pasarela**, `bssh ai serve`, se ejecuta en una máquina que controlas: un bastión, una VM de operaciones, el host de tus runners de CI. Los agentes se conectan a ella por MCP sobre HTTP. No guarda claves de larga duración para ellos y contrasta cada llamada con la política firmada.
+- **Las aprobaciones se retransmiten.** Una solicitud se cifra para los dispositivos de los administradores y la firma el dispositivo del agente. El servidor la transmite sin poder leerla.
+
+## Crear un agente
+
+<Steps>
+
+1. En la máquina de un administrador, escribe la política que aplicará el agente, en `ai.policies` (consulta [Políticas](/es/ai/policies/)), y crea el agente:
+
+   ```sh
+   bssh teams agent add platform oncall --policy oncall
+   ```
+
+   El agente ocupa un puesto. bssh firma la política y escribe la credencial del agente en `~/.config/bayesian-ssh/environments/default/ai/agents/platform.oncall.json`, legible solo por ti.
+
+2. Copia ese archivo al mismo sitio en la máquina de la pasarela, con modo 0600, y guarda allí los hosts que puede usar el agente, como lo harías para ti (`bssh add`, o una [fuente de inventario](/es/guides/inventory-sources/)).
+
+3. Inicia la pasarela:
+
+   ```sh
+   bssh ai serve --agent platform/oncall
+   ```
+
+   Escucha en `127.0.0.1:8765` por defecto. Para llegar a ella desde otro sitio, ponla detrás de un proxy inverso con TLS, o pasa `--listen` con `--allow-remote`.
+
+4. Da un token al agente:
+
+   ```sh
+   bssh ai token platform/oncall --ttl 1h
+   ```
+
+   Los tokens van firmados, limitados a un agente y su política, y duran 24 horas como máximo. El agente se conecta a `http://127.0.0.1:8765/mcp` y envía `Authorization: Bearer <token>`.
+
+</Steps>
+
+## Aprobar desde cualquier sitio
+
+Cuando el agente pregunta, cada administrador del equipo ve la solicitud desde su propia máquina:
+
+```sh
+bssh teams agent pending platform
+bssh teams agent approve platform <solicitud> --reason "diff revisado"
+bssh teams agent deny platform <solicitud> --reason "después de la versión"
+```
+
+En los hosts etiquetados en `approval.two_person` de la política, un cambio solo se ejecuta después de que lo aprueben **dos administradores distintos**. El mismo administrador aprobando dos veces cuenta una sola vez. Una solicitud sin respuesta se deniega al caducar.
+
+## Cambiar o retirar un agente
+
+```sh
+bssh teams agent list platform
+bssh teams agent policy platform oncall --policy oncall   # firmar una política actualizada
+bssh teams agent remove platform oncall                   # libera el puesto
+```
+
+La pasarela comprueba cada minuto que el agente sigue en el equipo y rechaza toda llamada en cuanto se retira. Una versión nueva de la política se aplica al reiniciar la pasarela.
+
+## Lo que ve el equipo, y lo que ve el servidor
+
+Las llamadas, decisiones, aprobaciones y cambios del agente se suman al [registro de auditoría firmado](/es/teams/audit-log/) del equipo, junto a las sesiones de los miembros, con el agente como actor. Los administradores ven quién aprobó qué y verifican el registro en su propia máquina con `bssh teams audit`.
+
+El servidor ve que el agente X hizo una llamada en el momento T, y quién la aprobó. Nunca ve el comando, el host, la salida ni la política: todo eso se cifra para el equipo antes de salir de la pasarela.
+
+<Aside type="note">
+Los agentes se facturan como puestos normales. Un servidor autoalojado necesita bssh-cloud 0.5.0 o posterior.
+</Aside>

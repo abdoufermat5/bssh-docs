@@ -1,0 +1,97 @@
+---
+title: Préparer les hôtes
+description: Préparer des serveurs pour les agents bssh AI avec un utilisateur agent sans privilège, un bac à sable en lecture seule pour les lectures, et une autorité de certification locale pour que chaque commande approuvée s'exécute avec un certificat qui ne permet qu'elle.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+bssh AI fonctionne sur tout hôte que vous atteignez déjà : la politique, les approbations et le journal ne dépendent pas du serveur. Trois éléments sur l'hôte font tenir les limites même si bssh était contourné sur votre machine. Aucun n'est obligatoire, et `bssh ai doctor` indique lesquels un hôte possède.
+
+| Sur l'hôte | Ce que vous y gagnez |
+| --- | --- |
+| Un bac à sable en lecture seule (Landlock ou bubblewrap) | Des lectures qui ne peuvent ni écrire ni ouvrir de connexion réseau, donc exécutées sans demander |
+| L'utilisateur `bssh-agent` | Un compte séparé et sans privilège pour les écritures des agents, sans mot de passe ni sudo |
+| La confiance dans votre autorité de certification locale | Les commandes approuvées s'exécutent avec un certificat de deux minutes qui ne permet qu'elles |
+
+## Le bac à sable en lecture seule
+
+bssh cherche un bac à sable la première fois qu'un agent utilise un hôte, et prend le meilleur disponible :
+
+1. **Landlock**, via `setpriv` d'util-linux 2.40 ou plus récent : aucune écriture nulle part, des lectures limitées aux `read_paths` de la politique, et aucune connexion TCP sur les noyaux dont Landlock le permet.
+2. **bubblewrap** (`bwrap`) : tout le système de fichiers monté en lecture seule, un `/tmp` privé, et pas de réseau.
+
+Sur un hôte doté d'un bac à sable, `run_readonly` et `run_many` y exécutent tout ce que l'agent envoie, et la politique les autorise sans demander. Une commande qui se révèle écrire échoue, tout simplement. Sur un hôte sans bac à sable, bssh n'autorise que les commandes que son analyseur juge en lecture seule, et demande pour le reste.
+
+Installer `bwrap` (`apt install bubblewrap`, `dnf install bubblewrap`) est en général le moyen le plus rapide d'avoir un bac à sable sur un hôte.
+
+## L'utilisateur agent
+
+```sh
+bssh ai setup web-1          # un hôte
+bssh ai setup -t staging     # tous les hôtes d'un tag
+```
+
+`bssh ai setup` a besoin des droits root une fois, via sudo, et affiche le script exact avant d'exécuter quoi que ce soit :
+
+```text frame="terminal"
+$ bssh ai setup web-1 --dry-run
+bssh ai setup will run this script as root on 1 host(s): web-1
+    ...
+It creates the user `bssh-agent` (no password, no sudo) and its home with a backup directory.
+It does not change firewalls or sudoers.
+
+Dry run: nothing was changed.
+```
+
+L'utilisateur fait partie des groupes `systemd-journal` et `adm` quand ils existent, pour pouvoir lire les journaux. bssh n'installe ni règle sudo ni règle de pare-feu : c'est à vous d'en décider. `bssh ai doctor` propose les lignes sudo les plus restreintes dont la politique a besoin, par exemple :
+
+```text
+bssh-agent ALL=(root) NOPASSWD: /usr/bin/systemctl reload nginx
+```
+
+et vous rappelle de limiter le trafic sortant de l'utilisateur agent sur votre pare-feu si vous le pouvez.
+
+## Des certificats liés à l'approbation
+
+Avec une autorité de certification locale, une commande approuvée ne s'exécute pas avec une clé de longue durée. Pour chacune, issue de `run`, de `service` ou d'un plan de modification, bssh signe un nouveau certificat, valable pour cette commande uniquement :
+
+- principal `bssh-agent` : il ne permet de se connecter que comme l'utilisateur agent ;
+- la commande de l'étape comme commande forcée : le certificat ne peut rien exécuter d'autre ;
+- ni terminal, ni redirection de port ou d'agent ;
+- valable deux minutes.
+
+Les modifications de fichiers sont écrites en SFTP avec les identifiants de votre connexion, après approbation et une fois l'original sauvegardé.
+
+<Steps>
+
+1. Créez l'autorité de certification sur votre machine :
+
+   ```sh
+   bssh ai ca init
+   ```
+
+   La clé reste sur votre machine, dans un fichier 0600. Pour la protéger par une phrase secrète, définissez `BSSH_AI_CA_PASSPHRASE` en lançant `ca init`.
+
+2. Faites-la accepter par les hôtes :
+
+   ```sh
+   bssh ai ca trust web-1
+   bssh ai ca trust -t staging
+   ```
+
+   Cela ajoute l'autorité à `TrustedUserCAKeys` (à côté de celles que l'hôte accepte déjà), associe le principal `bssh-agent` à l'utilisateur `bssh-agent` seulement, et vérifie la nouvelle configuration avec `sshd -t` avant de recharger `sshd`. Si la vérification échoue, la configuration précédente est remise en place. Comme `setup`, la commande affiche d'abord le script, et `--dry-run` s'arrête là.
+
+</Steps>
+
+<Aside type="caution">
+Dès qu'une autorité locale existe, les commandes approuvées utilisent des certificats sur tous les hôtes. Lancez `bssh ai setup` et `bssh ai ca trust` sur les hôtes que les agents peuvent modifier, sinon ces commandes échouent. Elles échouent en sécurité : bssh ne se rabat jamais sur votre propre clé pour elles.
+</Aside>
+
+## Vérifier un hôte
+
+```sh
+bssh ai doctor web-1
+bssh ai doctor -t staging
+```
+
+Pour chaque hôte : s'il est joignable, si `bssh-agent` existe, quel bac à sable il propose, s'il accepte votre autorité de certification, et les règles sudo dont votre politique aurait besoin. La commande liste aussi les clients d'agent trouvés sur votre machine et s'ils sont configurés avec `bssh ai install`.

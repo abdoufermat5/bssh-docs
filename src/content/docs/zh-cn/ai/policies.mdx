@@ -1,0 +1,115 @@
+---
+title: 策略
+description: bssh AI 策略如何对智能体的每次调用做出允许、询问或拒绝的判定，它的配置档与字段，以及如何在智能体使用之前测试策略。
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+对每一次调用，策略都会判定为**允许**、**询问**或**拒绝**。读取策略的是解析器和一组固定规则，从来不是模型：同一调用总是得到同样的答案，你也可以事先测试。
+
+策略按名称保存在配置文件的 `ai.policies` 下。除非智能体的 MCP 条目传入 `--policy <名称>`，否则使用 `default`。
+
+## 配置档
+
+每个策略都从一个配置档开始：
+
+| 配置档 | 智能体可以 | 预算 |
+| --- | --- | --- |
+| `observe` | 只读。所有写入都被拒绝。 | 每分钟 30 次调用，不允许变更 |
+| `operate` | 读取，并提出由人审批的变更 | 每分钟 30 次调用，每次运行 10 次变更，每次运行 2 小时 |
+| `oncall` | 同上，用于 Teams 的无人值守智能体 | 每分钟 60 次调用，每次运行 20 次变更，每次运行 4 小时 |
+
+如果完全没有 `default` 策略，bssh 会对你保存的所有主机使用 `observe`。你自己编写的策略在设置范围之前**看不到任何主机**。
+
+## 完整的策略示例
+
+```json
+"ai": {
+  "policies": {
+    "default": {
+      "profile": "operate",
+      "scope": { "tags": ["staging", "prod"], "hosts": ["bastion-ops"] },
+      "approval": {
+        "default": "out-of-band",
+        "in_client": ["staging"],
+        "two_person": ["prod-db"]
+      },
+      "read_paths": ["/var/log/**", "/etc/**", "/srv/**"],
+      "deny_paths": ["/srv/app/secrets/**"],
+      "write_paths": ["/etc/nginx/**", "/etc/systemd/system/**"],
+      "deny": ["systemctl stop sshd", "docker system prune *"],
+      "budgets": { "calls_per_min": 30, "changes_per_run": 10, "run_ttl": "2h", "max_denials_per_min": 5 }
+    }
+  },
+  "approval_timeout_secs": 300
+}
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| `scope.tags`、`scope.hosts` | 智能体能看到的主机。其他主机对它来说不存在：`list_hosts` 不会列出，指名调用会像未知主机一样失败。 |
+| `approval.default` | 由谁审批变更：默认 `out-of-band`（桌面应用、`bssh ai approve`），除非有按标签的规则适用。 |
+| `approval.in_client` | 低风险变更可以在智能体客户端中确认的标签。不列出标签就不启用。 |
+| `approval.two_person` | 变更需要两名不同管理员审批的标签。需要 [bssh Teams](/zh-cn/ai/teams-agents/)。 |
+| `read_paths` | `read_file` 无需询问即可读取的位置。设置后替换内置列表。 |
+| `deny_paths` | 无论使用哪个工具，都不会读取或写入。 |
+| `write_paths` | `edit_file` 唯一可以修改的位置。 |
+| `deny` | 直接拒绝的命令，不询问任何人。 |
+| `budgets` | 每分钟调用次数、每次运行的变更次数、运行时长，以及一分钟内多少次拒绝会结束运行。 |
+| `approval_timeout_secs` | 请求在这么多秒内无人回应即被拒绝。默认 300。 |
+
+### 无法关闭的部分
+
+`deny_paths` 和 `deny` 始终包含 bssh 的内置条目，你的列表只会追加。内置条目涵盖 `/etc/shadow`、`/etc/sudoers.d`、私钥（`*.key`、`*.pem`、`id_rsa*`、`id_ed25519*`）、`~/.ssh`、`.env` 文件和 AWS 凭据，以及 `rm -rf /`、`mkfs *`、`dd of=/dev/*`、`iptables -F`、`shutdown`、`reboot` 等命令。
+
+`bssh ai policy show <名称>` 会输出补全了这些内容的策略。
+
+## 命令如何被判定
+
+bssh 像 shell 一样解析每条 shell 命令，再逐一判定其中包含的每条命令：
+
+- `&&`、`||`、`;`、管道、子 shell、`$(…)`、重定向和 here-document 都会被拆开；
+- 包装会被打开：`sudo`、`env`、`timeout`、`nice`、`xargs`、`find -exec`、`sh -c '…'` 和 `bash -lc '…'`；
+- 每条命令根据规则表获得标签：`read`、`write`、`service-change`、`destructive`、`privilege`、`network`、`exfil-risk`；
+- bssh 无法完全理解的内容标记为 `unknown`：`eval`、通过管道交给 shell 的脚本、未知程序、过长而无法解析的命令。
+
+以最严格的结果为准。长管道末尾只要有一条破坏性命令，整个调用就是破坏性的。`unknown` 永远不会被当作只读。
+
+拒绝规则匹配的是解析后的命令而不是文本，所以引号、`/bin/rm`、`sudo` 或改变选项顺序都绕不过去：
+
+```text frame="terminal"
+$ bssh ai explain --host web-1 "sudo bash -c 'mkfs.ext4 /dev/sdb1'"
+...
+decision: deny - deny: the command matches 'mkfs *'
+```
+
+## 测试策略
+
+`bssh ai explain` 判定一条命令。`bssh ai policy test` 判定整个文件，预期结果写在注释里，只要有一条不符就以错误退出。把这个文件放在基础设施代码旁边，在 CI 中运行：
+
+```text title="checks.txt"
+uptime                                   # expect: allow
+journalctl -u nginx -n 200               # expect: allow
+systemctl restart nginx                  # expect: ask
+cat /etc/shadow                          # expect: deny
+mkfs.ext4 /dev/sdb1                      # expect: deny
+```
+
+```text frame="terminal"
+$ bssh ai policy test checks.txt --host web-1
+#  EXPECT  GOT    COMMAND                     (reason)
+1  allow   allow  uptime                      (analyzer: every command is read-only)
+2  allow   allow  journalctl -u nginx -n 200  (analyzer: every command is read-only)
+3  ask     ask    systemctl restart nginx     (write: Run changes the host and needs approval)
+4  deny    deny   cat /etc/shadow             (deny_paths: '/etc/shadow' matches '/etc/shadow')
+5  deny    deny   mkfs.ext4 /dev/sdb1         (deny: the command matches 'mkfs *')
+5 commands, 0 mismatches
+```
+
+<Aside type="tip">
+请给 `explain` 和 `policy test` 传入 `--host`。判定结果取决于主机的标签和受保护程度；不指定主机时，bssh 只能告诉你这次调用没有指定主机。
+</Aside>
+
+## 预算与熔断
+
+即使每次调用都被允许，预算也会约束一次运行。当智能体超出每分钟调用次数、每次运行的变更次数或运行时长时，后续调用会附带原因被拒绝。连续多次被拒绝，或反复尝试访问范围外的主机，会立即结束运行：被注入文本操纵的智能体通常就是这种表现。

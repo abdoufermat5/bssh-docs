@@ -1,0 +1,123 @@
+---
+title: Quick start
+description: Connect Claude Code, Codex, Cursor or another MCP agent to bssh AI, diagnose a host without a single prompt, then approve a first fix.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+You need Bayesian SSH 2.13 or later, a few hosts saved in `bssh`, and an agent that speaks MCP.
+
+<Aside type="caution" title="Agents can't type passwords">
+An agent runs `bssh ai mcp` with no terminal, so bssh never prompts during an agent run. Use key or ssh-agent authentication for the hosts you want agents on. A host that needs a password fails with a clear error instead of hanging.
+</Aside>
+
+## Connect your agent
+
+<Steps>
+
+1. Add bssh to your agent's MCP configuration:
+
+   ```sh
+   bssh ai install claude-code
+   ```
+
+   The same command works with `codex`, `cursor`, `vscode` and `claude-desktop`. It adds one entry named `bssh` and leaves everything else in the file alone, after a backup. `--dry-run` prints the change without writing it:
+
+   ```json title="~/.claude.json"
+   {
+     "mcpServers": {
+       "bssh": {
+         "type": "stdio",
+         "command": "/usr/bin/bssh",
+         "args": ["ai", "mcp", "--policy", "default"]
+       }
+     }
+   }
+   ```
+
+   Any other MCP client works too: point it at `bssh ai mcp` over stdio.
+
+2. Restart the agent. It now has 15 bssh tools, starting with `list_hosts`.
+
+3. Ask it something about a host:
+
+   > Why is nginx returning 502 on web-1?
+
+   A typical session: `list_hosts`, `observe` for the failed units, `search_logs` on the nginx journal, `read_file` on the site configuration. None of it asks you anything, because none of it can change the host.
+
+</Steps>
+
+## What the agent may do at first
+
+Until you write a policy, bssh uses the built-in **observe** profile on every host you have saved: the agent can read, and every write is refused. It acts for you, so it sees the hosts you already have, never more.
+
+Check how a command would be treated, here or at any time:
+
+```text frame="terminal"
+$ bssh ai explain --host web-1 "journalctl -u nginx --since '10 min ago' | grep -i error"
+command: journalctl -u nginx --since '10 min ago' | grep -i error
+tags:    read
+commands:
+  1. journalctl -u nginx --since 10 min ago
+     tags:     read
+     rule:     journalctl read
+  2. grep -i error
+     tags:     read
+     rule:     grep
+policy:  default  host: web-1
+decision: allow - analyzer: every command is read-only
+```
+
+## Let it fix things
+
+Give the `default` policy the **operate** profile and a scope. Policies live under `ai.policies` in your configuration file, `~/.config/bayesian-ssh/environments/default/config.json`:
+
+```json
+"ai": {
+  "policies": {
+    "default": {
+      "profile": "operate",
+      "scope": { "tags": ["staging", "prod"] },
+      "approval": { "in_client": ["staging"], "two_person": ["prod"] },
+      "write_paths": ["/etc/nginx/**"]
+    }
+  }
+}
+```
+
+Now the agent can propose changes on hosts tagged `staging` or `prod`, and edit files under `/etc/nginx`. Every change asks first. On `staging`, a low-risk change can be confirmed in the agent's own client; anything else goes to the desktop app or the terminal. See [Policies](/ai/policies/) for every field.
+
+## Approve the first change
+
+Ask the agent to fix what it found. It sends a change plan: the steps, the diff, how to check the fix and how to undo it. The desktop app shows it in its AI section; in a terminal:
+
+```sh
+bssh ai approve
+```
+
+`bssh ai approve` lists what is waiting, shows the request in full and asks for a decision. `--deny --reason "…"` refuses with a reason the agent receives. Once approved, bssh runs exactly the approved steps, then the plan's verify steps, and the agent reports back.
+
+## See what happened
+
+```sh
+bssh ai log                  # recent runs
+bssh ai log <run> --report   # hosts touched, changes with diffs, approvals, undo points
+bssh ai status               # running agents, pending approvals, active grants
+bssh ai stop                 # end a run now
+```
+
+Everything above also sits in a signed, hash-chained log on your machine.
+
+## Keep agents on the bssh path
+
+An agent that also has a shell tool can still try plain `ssh`. For Claude Code, bssh can install a hook that blocks `ssh`, `scp`, `sftp` and `rsync` to the hosts bssh knows and points the agent to the bssh tools instead:
+
+```sh
+bssh ai install claude-code --guard
+```
+
+## Next steps
+
+- [Policies](/ai/policies/): profiles, paths, deny rules, budgets, and testing a policy in CI.
+- [Host setup](/ai/host-setup/): the low-privilege agent user, the read-only jail and approval-bound certificates.
+- [Approvals](/ai/approvals/): plans, grants and the desktop app.

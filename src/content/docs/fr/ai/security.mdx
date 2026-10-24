@@ -1,0 +1,52 @@
+---
+title: Modèle de sécurité
+description: Ce que bssh AI applique, à quel endroit, comment il traite l'injection de prompt et les secrets, et les limites à connaître avant de vous y fier.
+---
+
+bssh AI part d'un principe : **un agent peut être manipulé par tout ce qu'il lit.** Une ligne de journal, un fichier, une bannière ou une page web peuvent contenir des instructions, et aucun modèle ne les ignore de façon fiable. bssh n'essaie pas de rendre le modèle sage. Il limite ce que tout agent, manipulé ou non, peut faire sur vos serveurs, et enregistre tout.
+
+## Les règles qui tiennent toujours
+
+- **L'agent ne détient aucun identifiant.** Clés, mots de passe et certificats restent dans bssh. L'agent envoie des appels d'outils et reçoit des résultats.
+- **Les décisions sont déterministes.** Un analyseur shell et votre politique autorisent, demandent ou refusent. Aucun modèle n'est consulté : une requête habile obtient la même réponse qu'une requête banale.
+- **Les hôtes hors périmètre n'existent pas.** L'agent ne peut pas les lister, et en nommer un échoue comme une faute de frappe.
+- **Les modifications attendent une personne,** qui voit la commande ou le diff exact. La justification de l'agent est affichée comme la sienne.
+- **Tout est enregistré.** Chaque appel, décision, approbation et empreinte de sortie rejoint un journal signé et chaîné, vérifiable hors ligne.
+
+## Où chaque limite est appliquée
+
+| Limite | Appliquée par | Tient même si bssh est contourné sur votre machine |
+| --- | --- | --- |
+| Périmètre, politique, approbations, budgets | bssh, sur la machine qui porte la connexion de l'agent | Non |
+| Les lectures ne peuvent ni écrire ni joindre le réseau | Le noyau, sur l'hôte (Landlock ou bubblewrap) | Oui, sur les hôtes dotés d'un bac à sable |
+| Une commande approuvée n'exécute qu'elle-même | sshd, sur l'hôte, via la commande forcée du certificat | Oui, sur les hôtes qui acceptent votre autorité de certification (les modifications de fichiers utilisent les identifiants de votre connexion) |
+| Les écritures des agents n'ont pas les droits root | L'utilisateur `bssh-agent` et vos règles sudo | Oui, sur les hôtes dotés de l'utilisateur agent |
+
+`bssh ai doctor` montre quelles lignes s'appliquent à chaque hôte. Un hôte qui n'en a aucune est protégé par bssh seul, ce qui reste bien plus qu'un agent qui détient votre clé.
+
+## Injection de prompt
+
+Ce que fait bssh face à du texte qui cherche à manipuler l'agent :
+
+- La sortie des serveurs est renvoyée dans des champs marqués comme données non fiables, jamais mêlée aux instructions de bssh à l'agent.
+- Les lectures s'exécutent dans le bac à sable : une commande « de lecture » injectée ne peut rien modifier ni envoyer de données au-dehors.
+- Les commandes qui téléchargent et exécutent du code, comme `curl … | sh`, sont étiquetées inconnues et demandent toujours.
+- Une rafale de refus ou de tentatives sur des hôtes hors périmètre met fin à la session.
+
+## Secrets
+
+Avant que la sortie n'atteigne l'agent, bssh retire ce qui ressemble à un secret : blocs de clés privées, jetons de services et de clouds, JWT, en-têtes bearer, mots de passe dans les lignes `clé=valeur` et dans les URL. Chacun est remplacé par un marqueur comme `«redacted:aws-key»` et compté dans le journal. Les chemins de `deny_paths` (clés privées, fichiers `.env`, `/etc/shadow` et d'autres) ne peuvent pas être lus du tout.
+
+Les secrets restent ainsi hors du contexte de l'agent et des journaux du fournisseur du modèle. La détection repose sur des motifs : elle couvre les formats courants, pas tous les secrets que vos systèmes peuvent afficher.
+
+## Avec bssh Teams
+
+Le serveur de synchronisation relaie les requêtes d'approbation et stocke les événements d'audit IA, chiffrés de bout en bout. Il voit quel agent a agi, quand, et qui a approuvé. Il ne voit jamais les commandes, les hôtes, la sortie ni les politiques. Les politiques sont signées par un administrateur, et la passerelle refuse celle qui ne l'est pas, ou une version plus ancienne qu'une version déjà vue.
+
+## Les limites à connaître
+
+- **La confirmation dans le client fait confiance au client de l'agent.** Un client réglé pour tout accepter accepterait aussi ces requêtes. C'est pourquoi ce niveau est facultatif, limité aux modifications à faible risque et aux hôtes que vous choisissez, et enregistré comme tel.
+- **Le nom du client est déclaratif.** Le journal indique quel agent un client MCP prétend être, marqué comme déclaré par lui.
+- **Sans bac à sable, « en lecture seule » est le jugement de l'analyseur.** Il est prudent, mais ne vaut que ce que valent ses règles. Installez bubblewrap ou un util-linux récent pour des lectures sûres par construction.
+- **bssh ne peut pas empêcher un agent de prendre un autre chemin.** Un agent qui a son propre shell et votre clé SSH peut toujours lancer `ssh`. Ne donnez pas de clés aux agents, et installez le [garde-fou de Claude Code](/fr/ai/quick-start/#garder-les-agents-sur-le-chemin-de-bssh) quand il s'applique.
+- **Une personne doit encore lire la requête.** Plans, diffs et autorisations temporaires gardent les requêtes rares et claires, mais une approbation donnée sans lire ne protège de rien.

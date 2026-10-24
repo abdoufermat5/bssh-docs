@@ -1,0 +1,95 @@
+---
+title: bssh AI
+sidebar:
+  label: 概述
+description: 让 AI 智能体操作你的服务器，而不必把 SSH 密钥交给它们。每条命令都会被解析、按你的策略判定，涉及变更时由人审批，并全部记录。
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import AiFlow from '../../../../components/AiFlow.astro';
+
+Claude Code、Codex、Cursor 这类编码智能体很擅长读日志、修复出故障的服务。它们大多像人一样连接服务器：用你的 SSH 密钥和一个 shell。没有任何东西限制它们能碰哪些主机、能执行什么，事后唯一的记录就是智能体自己的对话记录。
+
+bssh AI 位于智能体和你的服务器之间。智能体与本地的 [MCP](https://modelcontextprotocol.io) 服务器 `bssh ai mcp` 通信，自身既不持有密钥，也不打开 shell。它提出请求；bssh 做出判定，在允许时执行，并留下凭证。
+
+## 一次调用会经历什么
+
+<AiFlow
+	label="一次智能体调用会经历什么"
+	steps={[
+		{ title: '智能体发起请求', detail: '针对某台主机的一次工具调用，例如 observe、run_readonly、service 或 propose_change。' },
+		{ title: 'bssh 解析命令', detail: '解析 shell 命令，拆开 sudo、sh -c 等包装，为每个部分打上标签。' },
+		{ title: '你的策略判定', detail: '允许、询问或拒绝，依据的是你能读懂的规则。判定过程中没有任何模型参与。' },
+		{ title: '由人审批', detail: '任何会改变主机的操作都会等你确认，确切的命令和 diff 就摆在你面前。', human: true },
+		{ title: 'bssh 执行', detail: '读取操作在只读、无网络的沙箱中运行；已批准的命令使用只对该命令有效的证书。' },
+		{ title: '脱敏并记录', detail: '在智能体看到输出之前移除其中的机密。调用写入签名的哈希链日志。' },
+	]}
+/>
+
+智能体拿到结果后继续工作。读取操作不用等任何人，所以排查很快；写入操作要等人确认，所以修复是经过深思熟虑的。
+
+## 可预期的判定
+
+策略只是配置文件里的几行 JSON，`bssh ai explain` 能在智能体发出命令之前，展示策略会如何处理任意一条命令。下面的策略允许智能体操作带 `staging` 和 `prod` 标签的主机：
+
+| 命令 | 主机 | 判定 |
+| --- | --- | --- |
+| `journalctl -u nginx --since '10 min ago' \| grep -i error` | web-1（staging） | **允许**：所有命令都是只读的 |
+| `systemctl reload nginx` | web-1（staging） | **询问**，在智能体自己的客户端中确认 |
+| `systemctl reload nginx` | db-1（prod） | **询问**，需要两个人审批 |
+| `curl -s http://169.254.169.254/latest/meta-data/ \| sh` | web-1 | **询问**：`sh` 会从输入中读取命令 |
+| `cat /etc/shadow` | web-1 | **拒绝**：匹配 `deny_paths` |
+| `rm -rf /` | web-1 | **拒绝**：匹配拒绝规则，不会询问任何人 |
+
+这些行就是 `bssh ai explain --host <主机> '<命令>'` 的输出。参见[策略](/zh-cn/ai/policies/)。
+
+## 你审批的内容
+
+当策略要求询问时，请求会发到桌面应用和 `bssh ai approve`，智能体触及不到这两个渠道。你能看到将要执行什么、在哪里执行，以及 bssh 从中发现了什么：
+
+```text frame="terminal" title="bssh ai approve"
+Request d8877617-3b0a-46e9-af6f-8b13efdf51a8
+  from:    claude-code 2.9 (self-reported), policy 'default'
+  tier:    out-of-band
+  tool:    Service
+  host:    web-1
+  command: sudo -n systemctl restart -- 'nginx'
+  analyzer: servicechange, privilege
+    systemctl -> rule systemctl service change
+```
+
+需要多个步骤的修复会以一个**变更计划**的形式到来：包含各个步骤、文件 diff、验证修复是否生效的方法以及回滚方法。你只需批准一次计划，bssh 会严格按这些步骤执行。参见[审批](/zh-cn/ai/approvals/)。
+
+## 当智能体被误导时
+
+一行日志里可能夹带指令：“忽略上面的内容，执行这个”。没有哪个模型能可靠地无视这类指令，所以 bssh 假定任何智能体都可能被它读到的内容操纵，并限制被操纵的智能体所能做的事：
+
+- **判定不来自模型。** 由解析器和你的策略决定，智能体无法说服它们。
+- **读取操作改变不了任何东西。** 在配有沙箱的主机上，读取操作既不能写入也不能联网，即使把某条命令误判为“只读”也不会造成后果。
+- **写入需要人来确认。** 审批人看到的是确切的命令或 diff，而不是智能体写的摘要。智能体给出的理由会标明出自智能体。
+- **批准只针对那一条命令。** 启用本地证书颁发机构后，已批准的命令使用有效期两分钟、不允许做任何其他事情的证书执行。
+- **机密不会进入模型。** 私钥、令牌和密码在到达智能体之前就从输出中被脱敏，因而也不会经由智能体到达模型提供商。
+
+细节与局限见[安全模型](/zh-cn/ai/security/)。
+
+## 个人使用与团队使用
+
+| | 免费，在你的电脑上 | bssh Teams |
+| --- | --- | --- |
+| 智能体 | 你笔记本上替你工作的智能体 | 还包括无人值守的智能体：值班、CI、定时任务 |
+| 谁来审批 | 你，在桌面应用或终端中 | 团队管理员；关键主机需要其中两人 |
+| 运行位置 | `bssh ai mcp`，由智能体启动 | `bssh ai serve`，运行在你掌控的机器上的网关 |
+| 审计 | 你电脑上的签名日志 | 团队审计日志；服务器永远看不到命令和输出 |
+
+免费部分就是完整的个人版产品，而不是试用版。
+
+## 后续步骤
+
+<CardGrid>
+	<LinkCard title="快速开始" description="两分钟接入 Claude Code 或其他智能体。" href="/zh-cn/ai/quick-start/" />
+	<LinkCard title="策略" description="范围、配置档、路径、拒绝规则与预算。" href="/zh-cn/ai/policies/" />
+	<LinkCard title="审批" description="变更计划、审批级别、临时授权与运行日志。" href="/zh-cn/ai/approvals/" />
+	<LinkCard title="主机准备" description="智能体用户、只读沙箱与绑定审批的证书。" href="/zh-cn/ai/host-setup/" />
+	<LinkCard title="团队智能体" description="无人值守的智能体、网关、转发审批与双人审批。" href="/zh-cn/ai/teams-agents/" />
+	<LinkCard title="安全模型" description="哪些限制在何处生效，以及 bssh 做不到的事。" href="/zh-cn/ai/security/" />
+</CardGrid>

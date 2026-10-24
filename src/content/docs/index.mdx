@@ -41,6 +41,22 @@ bssh connect prod
 </CardGrid>
 
 
+## Let AI agents work on your servers, safely
+
+bssh AI connects Claude Code, Codex, Cursor and other agents to your hosts without giving them your keys. Reads run straight away, in a read-only jail. Anything that changes a host waits for you, and runs exactly as approved. Every call is recorded in a signed log.
+
+```text frame="terminal"
+$ bssh ai install claude-code
+$ bssh ai explain --host web-1 "journalctl -u nginx -n 50" | tail -1
+decision: allow - analyzer: every command is read-only
+$ bssh ai explain --host web-1 "systemctl reload nginx" | tail -1
+decision: deny - profile.observe: the observe profile cannot change anything
+```
+
+Out of the box, agents can only read. One policy entry lets them propose changes, and you approve each one.
+
+<LinkCard title="bssh AI" description="How it works, what it enforces, and how to connect your first agent." href="/ai/overview/" />
+
 ## Where to go next
 
 <CardGrid>

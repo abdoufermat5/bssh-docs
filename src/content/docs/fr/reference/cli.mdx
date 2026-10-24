@@ -871,6 +871,24 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--since <DATE>` | Seulement les événements reçus depuis cette date (`YYYY-MM-DD` ou RFC 3339). |
 | `--limit <LIMIT>` | Nombre maximal d'événements (par défaut et maximum : 1000). |
 
+### bssh teams agent
+
+Identités d'agent pour les agents IA autonomes (administrateur). Voir [Agents d'équipe](/fr/ai/teams-agents/).
+
+```text
+Usage: bssh teams agent <COMMAND>
+```
+
+| Commande | Description |
+| --- | --- |
+| `add <TEAM> <NAME> [--policy <NAME>]` | Créer un agent (il occupe un siège), signer sa politique depuis `ai.policies` (par défaut : `default`) et écrire son fichier d'identifiant. |
+| `list <TEAM>` | Lister les agents de l'équipe. |
+| `policy <TEAM> <NAME> [--policy <NAME>]` | Signer une politique mise à jour pour l'agent. |
+| `pending <TEAM>` | Lister les demandes d'approbation qui vous attendent. |
+| `approve <TEAM> <REQUEST> [--reason <REASON>]` | Approuver une demande. |
+| `deny <TEAM> <REQUEST> [--reason <REASON>]` | Refuser une demande. |
+| `remove <TEAM> <NAME>` | Retirer l'agent et libérer son siège. |
+
 ## Organisations
 
 Une organisation possède des équipes et, sur les serveurs avec facturation, leur abonnement et leurs sièges. Les sièges sont comptés par organisation : quelqu'un qui est dans plusieurs de ses équipes occupe un siège, et une invitation en attente en occupe un. Une organisation n'a pas de nom sur le serveur ; elle est affichée par les adresses e-mail de ses propriétaires. Voir [Organisations](/fr/teams/organizations/).
@@ -945,6 +963,186 @@ Usage: bssh org billing [OPTIONS] [ORG]
 | `--seats <SEATS>` | Nombre de sièges à souscrire (par défaut : les sièges utilisés, au moins un de plus que l'offre gratuite). |
 | `--yearly` | Payer à l'année plutôt qu'au mois. |
 | `--manage` | Ouvrir le portail de facturation : carte, factures, sièges, résiliation (propriétaire). |
+
+## bssh AI
+
+Commandes pour les agents IA. Voir [bssh AI](/fr/ai/overview/).
+
+### bssh ai mcp
+
+Lancer le serveur MCP d'un agent, en stdio. Les agents le lancent eux-mêmes ; `bssh ai install` le configure.
+
+```text
+Usage: bssh ai mcp [OPTIONS]
+```
+
+| Option | Description |
+| --- | --- |
+| `--policy <POLICY>` | Nom de politique dans `ai.policies` (par défaut : `default`). |
+
+### bssh ai install
+
+Ajouter bssh à la configuration MCP d'un client d'agent.
+
+```text
+Usage: bssh ai install [OPTIONS] <CLIENT>
+```
+
+| Option | Description |
+| --- | --- |
+| `<CLIENT>` | `claude-code`, `codex`, `cursor`, `vscode` ou `claude-desktop`. |
+| `--policy <POLICY>` | Politique appliquée par l'agent (par défaut : `default`). |
+| `--guard` | Installer aussi un hook qui renvoie les `ssh` et `scp` directs vers les outils bssh (Claude Code). |
+| `--dry-run` | Afficher la modification sans l'écrire. |
+| `--uninstall` | Retirer bssh de la configuration du client. |
+
+### bssh ai explain
+
+Montrer comment une commande est analysée, étiquetée et jugée.
+
+```text
+Usage: bssh ai explain [OPTIONS] <COMMAND>...
+```
+
+| Option | Description |
+| --- | --- |
+| `<COMMAND>...` | La commande, entre guillemets ou après `--`. |
+| `--host <HOST>` | Hôte pour lequel décider : ses tags et sa protection comptent. |
+| `--policy <POLICY>` | Politique à appliquer (par défaut : `default`). |
+| `--json` | Afficher l'analyse en JSON. |
+
+### bssh ai policy
+
+Lister, afficher ou tester les politiques d'agent.
+
+```text
+Usage: bssh ai policy <COMMAND>
+```
+
+| Commande | Description |
+| --- | --- |
+| `list` | Lister les politiques. |
+| `show [NAME]` | Afficher une politique avec les valeurs intégrées appliquées. |
+| `test <FILE> [--policy <POLICY>] [--host <HOST>]` | Juger chaque commande du fichier ; une ligne peut finir par `# expect: allow\|ask\|deny`. Sort en erreur en cas d'écart. |
+
+### bssh ai approve
+
+Approuver ou refuser une demande d'agent en attente.
+
+```text
+Usage: bssh ai approve [OPTIONS] [REQUEST_ID]
+```
+
+| Option | Description |
+| --- | --- |
+| `[REQUEST_ID]` | Identifiant ou préfixe de la demande. Sans lui, choisir dans la liste. |
+| `--deny` | Refuser au lieu d'approuver. |
+| `--reason <REASON>` | Motif transmis à l'agent. |
+| `--list` | Seulement lister les demandes en attente. |
+| `--grant <MINUTES>` | Laisser aussi passer le même type d'appel pendant ce nombre de minutes. |
+
+### bssh ai status
+
+Afficher les agents en cours, les approbations en attente et les autorisations actives. `--json` pour les scripts.
+
+### bssh ai stop
+
+Arrêter une session d'agent en cours.
+
+```text
+Usage: bssh ai stop [OPTIONS] [RUN]
+```
+
+| Option | Description |
+| --- | --- |
+| `[RUN]` | Identifiant de session. Facultatif quand une seule session est active. |
+| `--all` | Arrêter toutes les sessions. |
+
+### bssh ai log
+
+Montrer ce qu'ont fait les agents : appels, décisions, approbations, modifications.
+
+```text
+Usage: bssh ai log [OPTIONS] [RUN]
+```
+
+| Option | Description |
+| --- | --- |
+| `[RUN]` | Identifiant de session. Sans lui, la liste des sessions récentes. |
+| `--report` | Afficher le rapport de session : hôtes, modifications et diffs, approbations, points de retour. |
+| `--limit <LIMIT>` | Nombre de sessions listées (par défaut : 20). |
+| `--json` | Afficher en JSON. |
+
+### bssh ai replay
+
+Rejouer la sortie enregistrée d'une session d'agent. `--call <CALL>` pour un seul appel.
+
+### bssh ai setup
+
+Créer l'utilisateur sans privilège `bssh-agent` sur des hôtes (droits root une fois, via sudo).
+
+```text
+Usage: bssh ai setup [OPTIONS] [TARGET]
+```
+
+| Option | Description |
+| --- | --- |
+| `[TARGET]` | Nom de la connexion. |
+| `-t, --tag <TAG>` | Toutes les connexions portant ce tag. |
+| `--dry-run` | Afficher le script sans l'exécuter. |
+| `-y, --yes` | Ne pas demander de confirmation. |
+
+### bssh ai doctor
+
+Vérifier la protection de chaque hôte : bac à sable, utilisateur agent, confiance dans l'autorité de certification, configuration des clients d'agent, et règles sudo suggérées.
+
+```text
+Usage: bssh ai doctor [OPTIONS] [TARGET]
+```
+
+| Option | Description |
+| --- | --- |
+| `[TARGET]` | Nom de la connexion. |
+| `-t, --tag <TAG>` | Toutes les connexions portant ce tag. |
+| `--policy <POLICY>` | Politique dont les chemins d'écriture guident les suggestions sudo (par défaut : `default`). |
+| `--json` | Afficher en JSON. |
+
+### bssh ai ca
+
+Autorité de certification locale pour les certificats liés à l'approbation.
+
+| Commande | Description |
+| --- | --- |
+| `init` | Créer la clé de l'autorité sur cette machine. |
+| `show` | Afficher la clé publique et l'empreinte de l'autorité. |
+| `trust [TARGET] [-t <TAG>] [--dry-run] [-y]` | Faire accepter l'autorité par des hôtes pour l'utilisateur `bssh-agent` (droits root une fois). |
+
+### bssh ai serve
+
+Servir MCP sur HTTP pour un agent autonome de Teams.
+
+```text
+Usage: bssh ai serve [OPTIONS] --agent <TEAM/AGENT>
+```
+
+| Option | Description |
+| --- | --- |
+| `--agent <TEAM/AGENT>` | Identité d'agent à exécuter (voir `bssh teams agent add`). |
+| `--listen <ADDR>` | Adresse d'écoute (par défaut : `127.0.0.1:8765`). HTTP en clair : gardez-la sur localhost ou derrière un proxy TLS. |
+| `--allow-remote` | Autoriser une adresse `--listen` hors boucle locale. |
+
+### bssh ai token
+
+Émettre un jeton de passerelle de courte durée pour une identité d'agent.
+
+```text
+Usage: bssh ai token [OPTIONS] <AGENT>
+```
+
+| Option | Description |
+| --- | --- |
+| `<AGENT>` | Identité d'agent, `<équipe>/<nom>`. |
+| `--ttl <TTL>` | Durée de validité (par défaut : `1h`, 24 heures au plus). |
 
 ## Bureau et shell
 

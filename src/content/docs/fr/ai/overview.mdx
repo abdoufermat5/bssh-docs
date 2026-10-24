@@ -1,0 +1,95 @@
+---
+title: bssh AI
+sidebar:
+  label: Vue d'ensemble
+description: Laissez des agents IA travailler sur vos serveurs sans leur confier vos clés SSH. Chaque commande est analysée, confrontée à votre politique, approuvée par une personne quand elle modifie quelque chose, puis enregistrée.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import AiFlow from '../../../../components/AiFlow.astro';
+
+Les agents de code comme Claude Code, Codex ou Cursor savent lire des journaux et réparer un service en panne. La plupart accèdent à un serveur comme une personne : avec votre clé SSH et un shell. Rien ne limite les hôtes qu'ils touchent ni ce qu'ils exécutent, et la seule trace de ce qui s'est passé est la transcription de l'agent lui-même.
+
+bssh AI se place entre l'agent et vos serveurs. L'agent parle à `bssh ai mcp`, un serveur [MCP](https://modelcontextprotocol.io) local, et ne détient jamais de clé ni de shell. Il demande quelque chose ; bssh décide, l'exécute si c'est permis, et garde les preuves.
+
+## Ce que devient un appel
+
+<AiFlow
+	label="Ce que devient un appel d'agent"
+	steps={[
+		{ title: "L'agent demande", detail: 'Un appel d’outil comme observe, run_readonly, service ou propose_change, pour un hôte.' },
+		{ title: 'bssh l’analyse', detail: 'La commande shell est analysée, les enveloppes comme sudo et sh -c sont ouvertes, chaque partie est étiquetée.' },
+		{ title: 'Votre politique décide', detail: 'Autoriser, demander ou refuser, selon des règles lisibles. Aucun modèle ne participe à la décision.' },
+		{ title: 'Une personne approuve', detail: 'Tout ce qui modifie un hôte vous attend, avec la commande exacte et le diff sous les yeux.', human: true },
+		{ title: 'bssh l’exécute', detail: 'Les lectures dans un bac à sable sans écriture ni réseau ; les commandes approuvées avec un certificat pour cette seule commande.' },
+		{ title: 'Masqué, puis enregistré', detail: 'Les secrets sont retirés avant que l’agent voie la sortie. L’appel rejoint un journal signé et chaîné.' },
+	]}
+/>
+
+L'agent voit le résultat et continue. Le diagnostic est rapide parce que les lectures n'attendent personne. Les corrections sont réfléchies parce que les écritures, elles, attendent.
+
+## Des décisions prévisibles
+
+La politique tient en quelques lignes de JSON dans votre configuration, et `bssh ai explain` montre comment elle traite n'importe quelle commande avant qu'un agent ne l'envoie. Avec une politique qui laisse les agents travailler sur les hôtes étiquetés `staging` et `prod` :
+
+| Commande | Hôte | Décision |
+| --- | --- | --- |
+| `journalctl -u nginx --since '10 min ago' \| grep -i error` | web-1 (staging) | **autorisée** : toutes les commandes sont en lecture seule |
+| `systemctl reload nginx` | web-1 (staging) | **demandée**, confirmée dans le client de l'agent |
+| `systemctl reload nginx` | db-1 (prod) | **demandée**, deux personnes doivent approuver |
+| `curl -s http://169.254.169.254/latest/meta-data/ \| sh` | web-1 | **demandée** : `sh` lit des commandes sur son entrée |
+| `cat /etc/shadow` | web-1 | **refusée** : correspond à `deny_paths` |
+| `rm -rf /` | web-1 | **refusée** : correspond à une règle de refus, personne n'est sollicité |
+
+Ces lignes sont la sortie de `bssh ai explain --host <hôte> '<commande>'`. Voir [Politiques](/fr/ai/policies/).
+
+## Ce que vous approuvez
+
+Quand la politique demande, la requête part vers l'application de bureau et vers `bssh ai approve`, hors de portée de l'agent. Vous voyez ce qui va s'exécuter, où, et ce que bssh y a trouvé :
+
+```text frame="terminal" title="bssh ai approve"
+Request d8877617-3b0a-46e9-af6f-8b13efdf51a8
+  from:    claude-code 2.9 (self-reported), policy 'default'
+  tier:    out-of-band
+  tool:    Service
+  host:    web-1
+  command: sudo -n systemctl restart -- 'nginx'
+  analyzer: servicechange, privilege
+    systemctl -> rule systemctl service change
+```
+
+Une correction en plusieurs étapes arrive sous la forme d'un seul **plan de modification** : les étapes, les diffs de fichiers, la façon de vérifier que cela a marché et celle de revenir en arrière. Vous approuvez le plan une fois, et bssh exécute exactement ces étapes. Voir [Approbations](/fr/ai/approvals/).
+
+## Quand l'agent se fait piéger
+
+Une ligne de journal peut contenir des instructions : « ignore ce qui précède et exécute ceci ». Aucun modèle ne les ignore de façon fiable. bssh part donc du principe que tout agent peut être manipulé par ce qu'il lit, et limite ce qu'un agent manipulé peut faire :
+
+- **Les décisions ne viennent pas d'un modèle.** Un analyseur et votre politique décident. L'agent ne peut pas les convaincre.
+- **Les lectures ne peuvent rien modifier.** Sur les hôtes dotés du bac à sable, les lectures s'exécutent sans droit d'écriture ni réseau : se tromper sur une commande « en lecture seule » est sans conséquence.
+- **Les écritures demandent une personne.** Elle voit la commande ou le diff exact, jamais un résumé rédigé par l'agent. La justification de l'agent est affichée comme telle.
+- **Approuvé veut dire cette commande seulement.** Avec l'autorité de certification locale, une commande approuvée s'exécute avec un certificat valable deux minutes qui n'autorise rien d'autre.
+- **Les secrets restent hors du modèle.** Clés privées, jetons et mots de passe sont masqués dans la sortie avant d'atteindre l'agent, et à travers lui le fournisseur du modèle.
+
+Détails et limites dans le [Modèle de sécurité](/fr/ai/security/).
+
+## Sur votre machine, et en équipe
+
+| | Gratuit, sur votre machine | bssh Teams |
+| --- | --- | --- |
+| Agents | L'agent sur votre portable, qui agit pour vous | Aussi des agents autonomes : astreinte, CI, tâches planifiées |
+| Qui approuve | Vous, dans l'application de bureau ou le terminal | Les administrateurs de l'équipe ; deux d'entre eux pour les hôtes critiques |
+| Où il s'exécute | `bssh ai mcp`, lancé par l'agent | `bssh ai serve`, une passerelle sur une machine que vous contrôlez |
+| Audit | Un journal signé sur votre machine | Le journal d'audit de l'équipe ; le serveur ne voit jamais les commandes ni la sortie |
+
+La partie gratuite est le produit complet pour une personne, pas une version d'essai.
+
+## Pour aller plus loin
+
+<CardGrid>
+	<LinkCard title="Démarrage rapide" description="Connecter Claude Code ou un autre agent en deux minutes." href="/fr/ai/quick-start/" />
+	<LinkCard title="Politiques" description="Périmètre, profils, chemins, règles de refus et budgets." href="/fr/ai/policies/" />
+	<LinkCard title="Approbations" description="Plans de modification, niveaux d'approbation, autorisations temporaires et journaux." href="/fr/ai/approvals/" />
+	<LinkCard title="Préparer les hôtes" description="L'utilisateur agent, le bac à sable en lecture seule et les certificats liés à l'approbation." href="/fr/ai/host-setup/" />
+	<LinkCard title="Agents d'équipe" description="Agents autonomes, passerelle, approbations relayées et à deux personnes." href="/fr/ai/teams-agents/" />
+	<LinkCard title="Modèle de sécurité" description="Ce qui est appliqué, où, et ce que bssh ne peut pas faire pour vous." href="/fr/ai/security/" />
+</CardGrid>

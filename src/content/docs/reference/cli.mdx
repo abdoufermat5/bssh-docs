@@ -871,6 +871,24 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--since <DATE>` | Only events received since this date (`YYYY-MM-DD` or RFC 3339). |
 | `--limit <LIMIT>` | Maximum number of events (default and maximum: 1000). |
 
+### bssh teams agent
+
+Agent identities for unattended AI agents (admin). See [Teams agents](/ai/teams-agents/).
+
+```text
+Usage: bssh teams agent <COMMAND>
+```
+
+| Command | Description |
+| --- | --- |
+| `add <TEAM> <NAME> [--policy <NAME>]` | Create an agent (it takes a seat), sign its policy from `ai.policies` (default: `default`) and write its credential file. |
+| `list <TEAM>` | List the team's agents. |
+| `policy <TEAM> <NAME> [--policy <NAME>]` | Sign an updated policy for the agent. |
+| `pending <TEAM>` | List approval requests waiting for you. |
+| `approve <TEAM> <REQUEST> [--reason <REASON>]` | Approve a request. |
+| `deny <TEAM> <REQUEST> [--reason <REASON>]` | Deny a request. |
+| `remove <TEAM> <NAME>` | Remove the agent and free its seat. |
+
 ## Organizations
 
 An organization owns teams and, on servers with billing, their subscription and seats. Seats are counted per organization: someone in several of its teams takes one seat, and a pending invite holds one. An organization has no name on the server; it is shown by its owners' emails. See [Organizations](/teams/organizations/).
@@ -945,6 +963,186 @@ Usage: bssh org billing [OPTIONS] [ORG]
 | `--seats <SEATS>` | Seats to subscribe for (default: the seats in use, at least one above the free plan). |
 | `--yearly` | Pay yearly instead of monthly. |
 | `--manage` | Open the billing portal: card, invoices, seats, cancellation (owner). |
+
+## bssh AI
+
+Commands for AI agents. See [bssh AI](/ai/overview/).
+
+### bssh ai mcp
+
+Run the MCP server for an agent, on stdio. Agents start it themselves; `bssh ai install` sets that up.
+
+```text
+Usage: bssh ai mcp [OPTIONS]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--policy <POLICY>` | Policy name from `ai.policies` (default: `default`). |
+
+### bssh ai install
+
+Add bssh to an agent client's MCP configuration.
+
+```text
+Usage: bssh ai install [OPTIONS] <CLIENT>
+```
+
+| Flag | Description |
+| --- | --- |
+| `<CLIENT>` | `claude-code`, `codex`, `cursor`, `vscode` or `claude-desktop`. |
+| `--policy <POLICY>` | Policy the agent runs (default: `default`). |
+| `--guard` | Also install a hook that steers raw `ssh` and `scp` to the bssh tools (Claude Code). |
+| `--dry-run` | Print the change without writing it. |
+| `--uninstall` | Remove bssh from the client's configuration. |
+
+### bssh ai explain
+
+Show how a command is parsed, tagged and decided.
+
+```text
+Usage: bssh ai explain [OPTIONS] <COMMAND>...
+```
+
+| Flag | Description |
+| --- | --- |
+| `<COMMAND>...` | The command, quoted or after `--`. |
+| `--host <HOST>` | Host to decide for: its tags and protection matter. |
+| `--policy <POLICY>` | Policy to decide with (default: `default`). |
+| `--json` | Print the analysis as JSON. |
+
+### bssh ai policy
+
+List, show or test agent policies.
+
+```text
+Usage: bssh ai policy <COMMAND>
+```
+
+| Command | Description |
+| --- | --- |
+| `list` | List policies. |
+| `show [NAME]` | Print a policy with the built-in defaults applied. |
+| `test <FILE> [--policy <POLICY>] [--host <HOST>]` | Decide every command in the file; lines may end with `# expect: allow\|ask\|deny`. Exits non-zero on a mismatch. |
+
+### bssh ai approve
+
+Approve or deny a pending agent request.
+
+```text
+Usage: bssh ai approve [OPTIONS] [REQUEST_ID]
+```
+
+| Flag | Description |
+| --- | --- |
+| `[REQUEST_ID]` | Request id or prefix. Without it, pick from the pending list. |
+| `--deny` | Deny instead of approving. |
+| `--reason <REASON>` | Reason sent to the agent. |
+| `--list` | Only list pending requests. |
+| `--grant <MINUTES>` | Also allow the same kind of call for this many minutes. |
+
+### bssh ai status
+
+Show running agents, pending approvals and active grants. `--json` for scripts.
+
+### bssh ai stop
+
+Stop a running agent session.
+
+```text
+Usage: bssh ai stop [OPTIONS] [RUN]
+```
+
+| Flag | Description |
+| --- | --- |
+| `[RUN]` | Run id. Optional when a single run is active. |
+| `--all` | Stop every run. |
+
+### bssh ai log
+
+Show what agents did: calls, decisions, approvals, changes.
+
+```text
+Usage: bssh ai log [OPTIONS] [RUN]
+```
+
+| Flag | Description |
+| --- | --- |
+| `[RUN]` | Run id. Without it, the list of recent runs. |
+| `--report` | Print the run report: hosts, changes with diffs, approvals, undo points. |
+| `--limit <LIMIT>` | Number of runs listed (default: 20). |
+| `--json` | Print JSON. |
+
+### bssh ai replay
+
+Replay the recorded output of an agent run. `--call <CALL>` for one call.
+
+### bssh ai setup
+
+Create the low-privilege `bssh-agent` user on hosts (needs root once, through sudo).
+
+```text
+Usage: bssh ai setup [OPTIONS] [TARGET]
+```
+
+| Flag | Description |
+| --- | --- |
+| `[TARGET]` | Connection name. |
+| `-t, --tag <TAG>` | Every connection with this tag. |
+| `--dry-run` | Print the script without running it. |
+| `-y, --yes` | Don't ask for confirmation. |
+
+### bssh ai doctor
+
+Check each host's protection: jail, agent user, CA trust, agent client configuration, and suggested sudo rules.
+
+```text
+Usage: bssh ai doctor [OPTIONS] [TARGET]
+```
+
+| Flag | Description |
+| --- | --- |
+| `[TARGET]` | Connection name. |
+| `-t, --tag <TAG>` | Every connection with this tag. |
+| `--policy <POLICY>` | Policy whose write paths drive the sudo suggestions (default: `default`). |
+| `--json` | Print JSON. |
+
+### bssh ai ca
+
+Local certificate authority for approval-bound certificates.
+
+| Command | Description |
+| --- | --- |
+| `init` | Create the CA key on this machine. |
+| `show` | Print the CA public key and fingerprint. |
+| `trust [TARGET] [-t <TAG>] [--dry-run] [-y]` | Make hosts accept the CA for the `bssh-agent` user (needs root once). |
+
+### bssh ai serve
+
+Serve MCP over HTTP for an unattended Teams agent.
+
+```text
+Usage: bssh ai serve [OPTIONS] --agent <TEAM/AGENT>
+```
+
+| Flag | Description |
+| --- | --- |
+| `--agent <TEAM/AGENT>` | Agent identity to run (see `bssh teams agent add`). |
+| `--listen <ADDR>` | Address to listen on (default: `127.0.0.1:8765`). Plain HTTP: keep it on localhost or behind a TLS proxy. |
+| `--allow-remote` | Allow a non-loopback `--listen` address. |
+
+### bssh ai token
+
+Issue a short-lived gateway token for an agent identity.
+
+```text
+Usage: bssh ai token [OPTIONS] <AGENT>
+```
+
+| Flag | Description |
+| --- | --- |
+| `<AGENT>` | Agent identity, `<team>/<name>`. |
+| `--ttl <TTL>` | Lifetime (default: `1h`, at most 24 hours). |
 
 ## Desktop and shell
 

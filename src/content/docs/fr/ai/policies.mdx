@@ -1,0 +1,115 @@
+---
+title: Politiques
+description: Comment une politique bssh AI autorise, demande ou refuse chaque appel d'agent, ses profils et ses champs, et comment la tester avant qu'un agent ne s'en serve.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Pour chaque appel, une politique décide : **autoriser**, **demander** ou **refuser**. Elle est lue par un analyseur et un ensemble fixe de règles, jamais par un modèle : le même appel obtient toujours la même réponse, et vous pouvez la tester à l'avance.
+
+Les politiques se trouvent sous `ai.policies` dans votre fichier de configuration, par nom. Un agent utilise `default`, sauf si son entrée MCP passe `--policy <nom>`.
+
+## Profils
+
+Chaque politique part d'un profil :
+
+| Profil | Les agents peuvent | Budget |
+| --- | --- | --- |
+| `observe` | Lire seulement. Toute écriture est refusée. | 30 appels par minute, aucune modification |
+| `operate` | Lire, et proposer des modifications qu'une personne approuve | 30 appels par minute, 10 modifications par session, 2 h par session |
+| `oncall` | La même chose, pour les agents autonomes de Teams | 60 appels par minute, 20 modifications par session, 4 h par session |
+
+Sans aucune politique `default`, bssh applique `observe` sur tous les hôtes que vous avez enregistrés. Une politique que vous écrivez ne voit **aucun hôte** tant que vous ne lui donnez pas de périmètre.
+
+## Une politique complète
+
+```json
+"ai": {
+  "policies": {
+    "default": {
+      "profile": "operate",
+      "scope": { "tags": ["staging", "prod"], "hosts": ["bastion-ops"] },
+      "approval": {
+        "default": "out-of-band",
+        "in_client": ["staging"],
+        "two_person": ["prod-db"]
+      },
+      "read_paths": ["/var/log/**", "/etc/**", "/srv/**"],
+      "deny_paths": ["/srv/app/secrets/**"],
+      "write_paths": ["/etc/nginx/**", "/etc/systemd/system/**"],
+      "deny": ["systemctl stop sshd", "docker system prune *"],
+      "budgets": { "calls_per_min": 30, "changes_per_run": 10, "run_ttl": "2h", "max_denials_per_min": 5 }
+    }
+  },
+  "approval_timeout_secs": 300
+}
+```
+
+| Champ | Signification |
+| --- | --- |
+| `scope.tags`, `scope.hosts` | Les hôtes que l'agent voit. Les autres n'existent pas pour lui : `list_hosts` les omet, et un appel qui en nomme un échoue comme pour un hôte inconnu. |
+| `approval.default` | Qui approuve une modification : `out-of-band` (application de bureau, `bssh ai approve`) sauf si une règle par tag s'applique. |
+| `approval.in_client` | Les tags où une modification à faible risque peut être confirmée dans le client de l'agent. Désactivé tant que vous ne listez pas de tags. |
+| `approval.two_person` | Les tags où une modification exige deux administrateurs différents. Nécessite [bssh Teams](/fr/ai/teams-agents/). |
+| `read_paths` | Où `read_file` peut lire sans demander. Remplace la liste intégrée s'il est défini. |
+| `deny_paths` | Jamais lus, jamais écrits, quel que soit l'outil. |
+| `write_paths` | Les seuls endroits que `edit_file` peut modifier. |
+| `deny` | Commandes refusées d'emblée, sans solliciter personne. |
+| `budgets` | Appels par minute, modifications par session, durée d'une session, et nombre de refus en une minute qui met fin à la session. |
+| `approval_timeout_secs` | Une requête sans réponse est refusée au bout de ce nombre de secondes. 300 par défaut. |
+
+### Ce que vous ne pouvez pas désactiver
+
+`deny_paths` et `deny` contiennent toujours les entrées intégrées de bssh ; vos listes s'y ajoutent. Elles couvrent `/etc/shadow`, `/etc/sudoers.d`, les clés privées (`*.key`, `*.pem`, `id_rsa*`, `id_ed25519*`), `~/.ssh`, les fichiers `.env` et les identifiants AWS, ainsi que des commandes comme `rm -rf /`, `mkfs *`, `dd of=/dev/*`, `iptables -F`, `shutdown` et `reboot`.
+
+`bssh ai policy show <nom>` affiche une politique avec tout cela complété.
+
+## Comment une commande est jugée
+
+bssh analyse chaque commande shell comme le ferait un shell, puis juge chaque commande qu'elle contient :
+
+- `&&`, `||`, `;`, les tubes, les sous-shells, `$(…)`, les redirections et les here-documents sont tous décomposés ;
+- les enveloppes sont ouvertes : `sudo`, `env`, `timeout`, `nice`, `xargs`, `find -exec`, `sh -c '…'` et `bash -lc '…'` ;
+- chaque commande reçoit des étiquettes d'après une table de règles : `read`, `write`, `service-change`, `destructive`, `privilege`, `network`, `exfil-risk` ;
+- ce que bssh ne comprend pas entièrement est étiqueté `unknown` : `eval`, un script envoyé dans un shell, un programme inconnu, une commande trop longue pour être analysée.
+
+La réponse la plus stricte l'emporte. Une seule commande destructive au bout d'un long tube rend tout l'appel destructif. `unknown` n'est jamais traité comme une lecture.
+
+Les règles de refus portent sur la commande analysée, pas sur le texte : guillemets, `/bin/rm`, `sudo` ou un autre ordre des options n'y échappent pas :
+
+```text frame="terminal"
+$ bssh ai explain --host web-1 "sudo bash -c 'mkfs.ext4 /dev/sdb1'"
+...
+decision: deny - deny: the command matches 'mkfs *'
+```
+
+## Tester une politique
+
+`bssh ai explain` juge une commande. `bssh ai policy test` juge tout un fichier, avec la réponse attendue en commentaire, et se termine en erreur si une réponse diffère. Gardez ce fichier à côté de votre code d'infrastructure et lancez-le en CI :
+
+```text title="checks.txt"
+uptime                                   # expect: allow
+journalctl -u nginx -n 200               # expect: allow
+systemctl restart nginx                  # expect: ask
+cat /etc/shadow                          # expect: deny
+mkfs.ext4 /dev/sdb1                      # expect: deny
+```
+
+```text frame="terminal"
+$ bssh ai policy test checks.txt --host web-1
+#  EXPECT  GOT    COMMAND                     (reason)
+1  allow   allow  uptime                      (analyzer: every command is read-only)
+2  allow   allow  journalctl -u nginx -n 200  (analyzer: every command is read-only)
+3  ask     ask    systemctl restart nginx     (write: Run changes the host and needs approval)
+4  deny    deny   cat /etc/shadow             (deny_paths: '/etc/shadow' matches '/etc/shadow')
+5  deny    deny   mkfs.ext4 /dev/sdb1         (deny: the command matches 'mkfs *')
+5 commands, 0 mismatches
+```
+
+<Aside type="tip">
+Passez `--host` à `explain` et à `policy test`. Une décision dépend des tags de l'hôte et de son niveau de protection : sans hôte, bssh peut seulement dire que l'appel n'en désigne aucun.
+</Aside>
+
+## Budgets et coupe-circuit
+
+Les budgets bornent une session même quand chaque appel est autorisé. Quand un agent dépasse ses appels par minute, ses modifications par session ou la durée de sa session, les appels suivants sont refusés avec le motif. Une rafale de refus, ou des tentatives répétées sur des hôtes hors périmètre, mettent fin à la session immédiatement : c'est l'allure typique d'un agent manipulé par du texte injecté.

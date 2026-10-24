@@ -1,0 +1,123 @@
+---
+title: Démarrage rapide
+description: Connecter Claude Code, Codex, Cursor ou un autre agent MCP à bssh AI, diagnostiquer un hôte sans une seule demande, puis approuver une première correction.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Il vous faut Bayesian SSH 2.13 ou plus récent, quelques hôtes enregistrés dans `bssh`, et un agent qui parle MCP.
+
+<Aside type="caution" title="Les agents ne tapent pas de mot de passe">
+Un agent lance `bssh ai mcp` sans terminal : bssh ne pose donc jamais de question pendant une session d'agent. Utilisez une authentification par clé ou par ssh-agent pour les hôtes concernés. Un hôte qui exige un mot de passe échoue avec un message clair au lieu de rester bloqué.
+</Aside>
+
+## Connecter votre agent
+
+<Steps>
+
+1. Ajoutez bssh à la configuration MCP de votre agent :
+
+   ```sh
+   bssh ai install claude-code
+   ```
+
+   La même commande fonctionne avec `codex`, `cursor`, `vscode` et `claude-desktop`. Elle ajoute une entrée nommée `bssh` et ne touche pas au reste du fichier, après en avoir fait une sauvegarde. `--dry-run` affiche la modification sans l'écrire :
+
+   ```json title="~/.claude.json"
+   {
+     "mcpServers": {
+       "bssh": {
+         "type": "stdio",
+         "command": "/usr/bin/bssh",
+         "args": ["ai", "mcp", "--policy", "default"]
+       }
+     }
+   }
+   ```
+
+   Tout autre client MCP convient aussi : faites-le pointer vers `bssh ai mcp` en stdio.
+
+2. Redémarrez l'agent. Il dispose maintenant de 15 outils bssh, à commencer par `list_hosts`.
+
+3. Posez-lui une question sur un hôte :
+
+   > Pourquoi nginx renvoie-t-il des 502 sur web-1 ?
+
+   Une session typique : `list_hosts`, `observe` pour les unités en échec, `search_logs` sur le journal de nginx, `read_file` sur la configuration du site. Rien de tout cela ne vous sollicite, parce que rien ne peut modifier l'hôte.
+
+</Steps>
+
+## Ce que l'agent peut faire au départ
+
+Tant que vous n'avez pas écrit de politique, bssh applique le profil intégré **observe** sur tous les hôtes que vous avez enregistrés : l'agent peut lire, et toute écriture est refusée. Il agit pour vous : il voit les hôtes auxquels vous avez déjà accès, jamais plus.
+
+Vérifiez comment une commande serait traitée, maintenant ou à tout moment :
+
+```text frame="terminal"
+$ bssh ai explain --host web-1 "journalctl -u nginx --since '10 min ago' | grep -i error"
+command: journalctl -u nginx --since '10 min ago' | grep -i error
+tags:    read
+commands:
+  1. journalctl -u nginx --since 10 min ago
+     tags:     read
+     rule:     journalctl read
+  2. grep -i error
+     tags:     read
+     rule:     grep
+policy:  default  host: web-1
+decision: allow - analyzer: every command is read-only
+```
+
+## Le laisser corriger
+
+Donnez à la politique `default` le profil **operate** et un périmètre. Les politiques se trouvent sous `ai.policies` dans votre fichier de configuration, `~/.config/bayesian-ssh/environments/default/config.json` :
+
+```json
+"ai": {
+  "policies": {
+    "default": {
+      "profile": "operate",
+      "scope": { "tags": ["staging", "prod"] },
+      "approval": { "in_client": ["staging"], "two_person": ["prod"] },
+      "write_paths": ["/etc/nginx/**"]
+    }
+  }
+}
+```
+
+L'agent peut maintenant proposer des modifications sur les hôtes étiquetés `staging` ou `prod`, et modifier des fichiers sous `/etc/nginx`. Chaque modification demande d'abord. Sur `staging`, une modification à faible risque peut être confirmée dans le client de l'agent ; tout le reste passe par l'application de bureau ou le terminal. Chaque champ est détaillé dans [Politiques](/fr/ai/policies/).
+
+## Approuver la première modification
+
+Demandez à l'agent de corriger ce qu'il a trouvé. Il envoie un plan de modification : les étapes, le diff, la façon de vérifier la correction et celle de l'annuler. L'application de bureau l'affiche dans sa section IA ; dans un terminal :
+
+```sh
+bssh ai approve
+```
+
+`bssh ai approve` liste ce qui attend, affiche la requête en entier et vous demande votre décision. `--deny --reason "…"` refuse avec un motif que l'agent reçoit. Une fois le plan approuvé, bssh exécute exactement les étapes approuvées, puis ses étapes de vérification, et l'agent en rend compte.
+
+## Voir ce qui s'est passé
+
+```sh
+bssh ai log                  # sessions récentes
+bssh ai log <run> --report   # hôtes touchés, modifications et diffs, approbations, points de retour
+bssh ai status               # agents en cours, approbations en attente, autorisations actives
+bssh ai stop                 # arrêter une session tout de suite
+```
+
+Tout cela figure aussi dans un journal signé et chaîné sur votre machine.
+
+## Garder les agents sur le chemin de bssh
+
+Un agent qui dispose aussi d'un outil shell peut toujours tenter un `ssh` direct. Pour Claude Code, bssh peut installer un hook qui bloque `ssh`, `scp`, `sftp` et `rsync` vers les hôtes connus de bssh et renvoie l'agent vers les outils bssh :
+
+```sh
+bssh ai install claude-code --guard
+```
+
+## Pour aller plus loin
+
+- [Politiques](/fr/ai/policies/) : profils, chemins, règles de refus, budgets, et tester une politique en CI.
+- [Préparer les hôtes](/fr/ai/host-setup/) : l'utilisateur agent sans privilège, le bac à sable en lecture seule et les certificats liés à l'approbation.
+- [Approbations](/fr/ai/approvals/) : plans, autorisations temporaires et application de bureau.

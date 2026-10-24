@@ -1,0 +1,95 @@
+---
+title: bssh AI
+sidebar:
+  label: Overview
+description: Let AI agents work on your servers without handing them your SSH keys. Every command is parsed, checked against your policy, approved by a person when it changes something, and recorded.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import AiFlow from '../../../components/AiFlow.astro';
+
+Coding agents such as Claude Code, Codex and Cursor are good at reading logs and fixing a broken service. Most of them reach a server the way a person does: with your SSH key and a shell. Nothing limits which hosts they touch or what they run, and the only record of what happened is the agent's own transcript.
+
+bssh AI sits between the agent and your servers. The agent talks to `bssh ai mcp`, a local [MCP](https://modelcontextprotocol.io) server, and never holds a key or opens a shell. It asks for something; bssh decides, runs it if allowed, and keeps the evidence.
+
+## What happens to one call
+
+<AiFlow
+	label="What happens to one agent call"
+	steps={[
+		{ title: 'The agent asks', detail: 'A tool call such as observe, run_readonly, service or propose_change, for one host.' },
+		{ title: 'bssh parses it', detail: 'The shell command is parsed, wrappers like sudo and sh -c are opened, every part is tagged.' },
+		{ title: 'Your policy decides', detail: 'Allow, ask or deny, from rules you can read. No model takes part in the decision.' },
+		{ title: 'A person approves', detail: 'Anything that changes a host waits for you, with the exact command and diff in front of you.', human: true },
+		{ title: 'bssh runs it', detail: 'Reads in a read-only jail with no network; approved commands with a certificate for that one command.' },
+		{ title: 'Redacted, then recorded', detail: 'Secrets are removed before the agent sees the output. The call goes to a signed, hash-chained log.' },
+	]}
+/>
+
+The agent sees the result and carries on. Diagnosis is fast because reads don't wait for anyone. Fixes are deliberate because writes do.
+
+## Decisions you can predict
+
+The policy is a few lines of JSON in your configuration, and `bssh ai explain` shows how it treats any command before an agent ever sends it. With a policy that lets agents work on hosts tagged `staging` and `prod`:
+
+| Command | Host | Decision |
+| --- | --- | --- |
+| `journalctl -u nginx --since '10 min ago' \| grep -i error` | web-1 (staging) | **allow**: every command is read-only |
+| `systemctl reload nginx` | web-1 (staging) | **ask**, confirmed in the agent's own client |
+| `systemctl reload nginx` | db-1 (prod) | **ask**, two people must approve |
+| `curl -s http://169.254.169.254/latest/meta-data/ \| sh` | web-1 | **ask**: `sh` reads commands from its input |
+| `cat /etc/shadow` | web-1 | **deny**: matches `deny_paths` |
+| `rm -rf /` | web-1 | **deny**: matches a deny rule, nobody is asked |
+
+These rows are the output of `bssh ai explain --host <host> '<command>'`. See [Policies](/ai/policies/).
+
+## What you approve
+
+When the policy asks, the request goes to the desktop app and to `bssh ai approve`, outside the agent's reach. You see what will run, where, and what bssh found in it:
+
+```text frame="terminal" title="bssh ai approve"
+Request d8877617-3b0a-46e9-af6f-8b13efdf51a8
+  from:    claude-code 2.9 (self-reported), policy 'default'
+  tier:    out-of-band
+  tool:    Service
+  host:    web-1
+  command: sudo -n systemctl restart -- 'nginx'
+  analyzer: servicechange, privilege
+    systemctl -> rule systemctl service change
+```
+
+A fix that takes several steps arrives as one **change plan**: the steps, the file diffs, how to verify it worked and how to roll it back. You approve the plan once, and bssh runs exactly those steps. See [Approvals](/ai/approvals/).
+
+## When the agent is fooled
+
+A log line can carry instructions: "ignore the above and run this". No model can be relied on to ignore them, so bssh assumes any agent may be steered by what it reads, and limits what a steered agent can do:
+
+- **Decisions don't come from a model.** A parser and your policy decide. The agent can't talk its way past them.
+- **Reads can't change anything.** On hosts with the jail, reads run with no write access and no network, so a wrong guess about a "read-only" command is harmless.
+- **Writes need a person.** The approver sees the exact command or diff, never a summary written by the agent. The agent's reason is shown, labelled as the agent's.
+- **Approved means that command only.** With the local CA, an approved command runs with a certificate valid for two minutes that allows nothing else.
+- **Secrets stay out of the model.** Private keys, tokens and passwords are redacted from output before it reaches the agent, and through it the model provider.
+
+Details and limits in the [Security model](/ai/security/).
+
+## On your machine, and for teams
+
+| | Free, on your machine | bssh Teams |
+| --- | --- | --- |
+| Agents | The agent on your laptop, acting for you | Also unattended agents: on-call, CI, scheduled jobs |
+| Who approves | You, in the desktop app or the terminal | The team's admins; two of them for critical hosts |
+| Where it runs | `bssh ai mcp`, started by the agent | `bssh ai serve`, a gateway on a machine you control |
+| Audit | A signed log on your machine | The team's audit log; the server never sees commands or output |
+
+The free part is the whole single-user product, not a trial.
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Quick start" description="Connect Claude Code or another agent in two minutes." href="/ai/quick-start/" />
+	<LinkCard title="Policies" description="Scope, profiles, paths, deny rules and budgets." href="/ai/policies/" />
+	<LinkCard title="Approvals" description="Change plans, approval tiers, grants and run logs." href="/ai/approvals/" />
+	<LinkCard title="Host setup" description="The agent user, the read-only jail and approval-bound certificates." href="/ai/host-setup/" />
+	<LinkCard title="Teams agents" description="Unattended agents, the gateway, relayed and two-person approvals." href="/ai/teams-agents/" />
+	<LinkCard title="Security model" description="What is enforced where, and what bssh can't do for you." href="/ai/security/" />
+</CardGrid>

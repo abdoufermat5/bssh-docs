@@ -60,7 +60,7 @@ Sans aucune politique `default`, bssh applique `observe` sur tous les hôtes que
 
 ### Ce que vous ne pouvez pas désactiver
 
-`deny_paths` et `deny` contiennent toujours les entrées intégrées de bssh ; vos listes s'y ajoutent. Elles couvrent `/etc/shadow`, `/etc/sudoers.d`, les clés privées (`*.key`, `*.pem`, `id_rsa*`, `id_ed25519*`), `~/.ssh`, les fichiers `.env` et les identifiants AWS, ainsi que des commandes comme `rm -rf /`, `mkfs *`, `dd of=/dev/*`, `iptables -F`, `shutdown` et `reboot`.
+`deny_paths` et `deny` contiennent toujours les entrées intégrées de bssh ; vos listes s'y ajoutent. Elles couvrent `/etc/shadow`, `/etc/sudoers.d`, les clés privées (`*.key`, `*.pem`, `id_rsa*`, `id_ed25519*`), `~/.ssh`, les fichiers `.env` et les identifiants AWS, ainsi que des commandes comme `rm -rf /`, `mkfs *`, `dd of=/dev/**`, `iptables -F`, `shutdown` et `reboot`.
 
 `bssh ai policy show <nom>` affiche une politique avec tout cela complété.
 
@@ -74,6 +74,8 @@ bssh analyse chaque commande shell comme le ferait un shell, puis juge chaque co
 - ce que bssh ne comprend pas entièrement est étiqueté `unknown` : `eval`, un script envoyé dans un shell, un programme inconnu, une commande trop longue pour être analysée.
 
 La réponse la plus stricte l'emporte. Une seule commande destructive au bout d'un long tube rend tout l'appel destructif. `unknown` n'est jamais traité comme une lecture.
+
+Dans une règle de refus, `*` et `?` restent dans un seul répertoire et `**` traverse les répertoires, comme dans les chemins du shell : `rm -rf /*` refuse `/` et les répertoires de premier niveau comme `/var`, tandis que `rm -rf /var/www/cache` suit la décision normale et demande. Un `*` seul correspond à n'importe quel argument.
 
 Les règles de refus portent sur la commande analysée, pas sur le texte : guillemets, `/bin/rm`, `sudo` ou un autre ordre des options n'y échappent pas :
 

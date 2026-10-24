@@ -5,7 +5,7 @@ sidebar:
 description: 让 AI 智能体操作你的服务器，而不必把 SSH 密钥交给它们。每条命令都会被解析、按你的策略判定，涉及变更时由人审批，并全部记录。
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, TabItem, Tabs } from '@astrojs/starlight/components';
 import AiFlow from '../../../../components/AiFlow.astro';
 import DemoVideo from '../../../../components/DemoVideo.astro';
 
@@ -29,12 +29,36 @@ bssh AI 位于智能体和你的服务器之间。智能体与本地的 [MCP](ht
 
 智能体拿到结果后继续工作。读取操作不用等任何人，所以排查很快；写入操作要等人确认，所以修复是经过深思熟虑的。
 
-<DemoVideo
-	label="演示：左侧是使用 DeepSeek 模型的 opencode，右侧是 bssh。智能体用只读工具排查 web-1 的磁盘占用，提出清理计划，计划通过 bssh ai approve 批准，随后智能体执行并验证。"
-	src="/demo/ai-agent-opencode.mp4"
-	poster="/demo/ai-agent-opencode.jpg"
-	caption="真实运行，而非脚本：opencode 使用 DeepSeek V4.1 Flash，连接 bssh ai mcp，面对一台一次性服务器。视频已加速，计划等待审批的部分除外。"
-/>
+## 实际运行
+
+在一次性服务器上的真实运行：上方是 Claude Code，下方是 `bssh ai watch`，所有审批都在这里完成。每次运行都按实际过程呈现，只剪掉了结尾。
+
+<Tabs>
+	<TabItem label="修复一次错误部署">
+		<DemoVideo
+			label="演示：Claude Code 通过 bssh 排查 web-1 上的 502 错误，发现部署把应用改到了 8081 端口，而 nginx 仍转发到 8080；它提出变更计划，在 bssh ai watch 中获批后执行并验证修复。"
+			src="/demo/ai-claude-deploy.mp4"
+			poster="/demo/ai-claude-deploy.jpg"
+			caption="部署后结账返回 502。Claude Code 自行读取日志和配置；唯一的变更是让 nginx 指向应用的新端口并重新加载，它在 bssh ai watch 中等待审批。"
+		/>
+	</TabItem>
+	<TabItem label="释放磁盘空间">
+		<DemoVideo
+			label="演示：Claude Code 为 web-2 的 /var/www 释放空间：先确认哪些内容可以安全删除，提出删除两个最旧的版本，计划在 bssh ai watch 中获批并执行。"
+			src="/demo/ai-claude-disk.mp4"
+			poster="/demo/ai-claude-disk.jpg"
+			caption="/var/www 已用 93%。卡片准确写明要删除的内容：两个路径，不用 sudo；Claude 保留了在线版本和一个用于回滚的版本。"
+		/>
+	</TabItem>
+	<TabItem label="生产环境只读">
+		<DemoVideo
+			label="演示：Claude Code 在仅观察策略下排查 db-1 上结账变慢的问题：数据库查询被拒绝，日志中的数据库密码被隐去，它提出的建索引变更也被拒绝，于是它把修复方案交给人来执行。"
+			src="/demo/ai-claude-prod.mp4"
+			poster="/demo/ai-claude-prod.jpg"
+			caption="在生产环境中，智能体只能查看。psql 被拒绝，应用日志中的密码在模型看到之前就被隐去，建索引的变更也被拒绝：Claude 把计划交给你。"
+		/>
+	</TabItem>
+</Tabs>
 
 ## 可预期的判定
 

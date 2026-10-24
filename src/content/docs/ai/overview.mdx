@@ -5,7 +5,7 @@ sidebar:
 description: Let AI agents work on your servers without handing them your SSH keys. Every command is parsed, checked against your policy, approved by a person when it changes something, and recorded.
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, TabItem, Tabs } from '@astrojs/starlight/components';
 import AiFlow from '../../../components/AiFlow.astro';
 import DemoVideo from '../../../components/DemoVideo.astro';
 
@@ -29,12 +29,36 @@ bssh AI sits between the agent and your servers. The agent talks to `bssh ai mcp
 
 The agent sees the result and carries on. Diagnosis is fast because reads don't wait for anyone. Fixes are deliberate because writes do.
 
-<DemoVideo
-	label="Demo: opencode with a DeepSeek model on the left, bssh on the right. The agent investigates disk usage on web-1 with read-only tools, proposes a cleanup plan, the plan is approved with bssh ai approve, then the agent applies and verifies it."
-	src="/demo/ai-agent-opencode.mp4"
-	poster="/demo/ai-agent-opencode.jpg"
-	caption="A real run, not a script: opencode with DeepSeek V4.1 Flash, connected to bssh ai mcp, against a throwaway server. Sped up, except while the plan waits for approval."
-/>
+## See it work
+
+Real runs on throwaway servers: Claude Code on top, `bssh ai watch` below, where every approval is made. Each run is shown as it happened; only the end is trimmed.
+
+<Tabs>
+	<TabItem label="Fix a bad deploy">
+		<DemoVideo
+			label="Demo: Claude Code investigates 502 errors on web-1 through bssh, finds that the deploy moved the app to port 8081 while nginx still proxies to 8080, proposes a change plan that is approved in bssh ai watch, applies it and verifies the fix."
+			src="/demo/ai-claude-deploy.mp4"
+			poster="/demo/ai-claude-deploy.jpg"
+			caption="Checkout returns 502 after a deploy. Claude Code reads the logs and configs on its own; the one change, pointing nginx at the app's new port and reloading it, waits for approval in bssh ai watch."
+		/>
+	</TabItem>
+	<TabItem label="Free disk space">
+		<DemoVideo
+			label="Demo: Claude Code frees space on web-2's /var/www: it checks what is safe to remove, proposes deleting the two oldest releases, and the plan is approved in bssh ai watch and applied."
+			src="/demo/ai-claude-disk.mp4"
+			poster="/demo/ai-claude-disk.jpg"
+			caption="/var/www is at 93%. The card says exactly what will go, two paths and no sudo, and Claude keeps the live release and one more for rollback."
+		/>
+	</TabItem>
+	<TabItem label="Prod stays read-only">
+		<DemoVideo
+			label="Demo: Claude Code investigates slow checkout on db-1 under an observe-only policy: database queries are refused, a database password in a log is redacted, and its index change is refused, so it hands the fix to a person."
+			src="/demo/ai-claude-prod.mp4"
+			poster="/demo/ai-claude-prod.jpg"
+			caption="On prod the agent can only look. psql is refused, the password in the app log is redacted before the model sees it, and the index change is refused: Claude hands you the plan instead."
+		/>
+	</TabItem>
+</Tabs>
 
 ## Decisions you can predict
 

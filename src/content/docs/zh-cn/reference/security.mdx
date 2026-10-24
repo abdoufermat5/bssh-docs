@@ -1,11 +1,22 @@
 ---
 title: 安全
+sidebar:
+  label: 概述
 description: bssh 在哪里保存你的数据、如何验证发布的版本，以及如何报告漏洞。
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 bssh 把数据保存在你的机器上，从不介于你和服务器之间。本页列出相关文件、它们的保护方式，以及如何确认下载的文件是真实的。
+
+## 概览
+
+- **密钥始终属于你。** bssh 直接使用你现有的 SSH 密钥和 agent，从不把它们复制到自己的文件中。AI 智能体完全不持有密钥。
+- **没有中转。** 连接直接从你的机器到主机，与 `ssh` 相同。
+- **智能体遵守你的规则。** 智能体能执行什么，由解析器和你的策略决定，而不是由模型决定。变更需等待人工审批，获批的命令使用仅对该命令有效的证书执行。参见 [bssh AI 安全](/zh-cn/ai/security/)。
+- **共享连接端到端加密。** Teams 同步服务器只存储密文，永远看不到主机、用户名或密钥。参见 [bssh Teams 安全](/zh-cn/teams/security/)。
+- **重要操作全部留痕。** 智能体的调用和团队会话都写入签名的哈希链日志，你可以在自己的机器上验证。
+- **发布版本经过签名。** 安装前可以确认下载内容来自本项目。参见[验证发布的版本](#验证发布的版本)。
 
 ## 数据存放位置
 
@@ -84,11 +95,12 @@ gh attestation verify bayesian-ssh-linux-x86_64.tar.gz --repo abdoufermat5/bayes
 
 你会在 3 个工作日内收到确认。修复发布后，公告会署上你的名字，除非你希望匿名。
 
-## Teams
+## bssh AI 与 bssh Teams
 
-如果你使用 bssh Teams，请阅读 [Teams 安全](/zh-cn/teams/security/)：其中说明同步服务器的信任模型、密码学，以及恢复能力的有无。
+如果你让 AI 智能体操作服务器，请阅读 [bssh AI 安全](/zh-cn/ai/security/)：各项限制在哪里执行、如何处理提示注入和密钥，以及需要了解的局限。如果你使用 bssh Teams，请阅读 [bssh Teams 安全](/zh-cn/teams/security/)：同步服务器的信任模型、密码学，以及恢复能力的有无。
 
 <CardGrid>
-	<LinkCard title="Teams 安全" description="同步服务器能看到什么，以及团队密钥如何运作。" href="/zh-cn/teams/security/" />
+	<LinkCard title="bssh AI 安全" description="智能体能做什么、不能做什么，以及每项限制在哪里执行。" href="/zh-cn/ai/security/" />
+	<LinkCard title="bssh Teams 安全" description="同步服务器能看到什么，以及团队密钥如何运作。" href="/zh-cn/teams/security/" />
 	<LinkCard title="配置参考" description="所有设置、文件和环境变量。" href="/zh-cn/reference/configuration/" />
 </CardGrid>

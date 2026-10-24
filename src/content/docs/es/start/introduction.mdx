@@ -1,6 +1,6 @@
 ---
 title: ¿Qué es Bayesian SSH?
-description: Un gestor SSH pensado para el teclado, en la línea de comandos y en el escritorio, con uso compartido en equipo cifrado de extremo a extremo opcional.
+description: Un gestor SSH pensado para el teclado, en la línea de comandos y en el escritorio, que deja que agentes de IA trabajen en tus servidores según tu política y con tu aprobación, con uso compartido en equipo cifrado de extremo a extremo opcional.
 ---
 
 import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
@@ -15,6 +15,7 @@ No necesitas el nombre exacto. `bssh` busca entre nombres, alias, etiquetas y no
 
 ## Qué hace
 
+- **Deja que agentes de IA trabajen en tus servidores** sin tus claves: las lecturas se ejecutan en un entorno aislado de solo lectura, los cambios esperan tu aprobación y cada llamada queda registrada.
 - **Guarda conexiones** con su usuario, puerto, clave, bastión, configuración de Kerberos y etiquetas.
 - **Encuentra hosts rápido** mediante búsqueda aproximada y una clasificación que aprende de tu historial.
 - **Gestiona la ruta**: bastiones por defecto o por host, bastiones interactivos y tickets Kerberos.
@@ -25,6 +26,10 @@ No necesitas el nombre exacto. `bssh` busca entre nombres, alias, etiquetas y no
 ## Local ante todo
 
 Todo se almacena en tu equipo. Bayesian SSH nunca se interpone entre tus servidores y tú: las conexiones van directamente desde tu ordenador al host, exactamente igual que con `ssh`.
+
+## bssh AI
+
+bssh AI conecta agentes de código como Claude Code, Codex o Cursor a tus hosts mediante un servidor MCP local. El agente nunca tiene una clave ni abre un shell. Un analizador de shell y tu política deciden qué puede ejecutar, todo lo que cambia un host espera a una persona, y cada llamada va a un registro firmado y encadenado. Está incluido en el producto gratuito. Consulta [bssh AI](/es/ai/overview/) y su [modelo de seguridad](/es/ai/security/).
 
 ## bssh Teams
 
@@ -39,4 +44,5 @@ bssh Teams es el plan de pago para compartir conexiones con tu equipo. Las conex
 <CardGrid>
 	<LinkCard title="Instalar" description="Instalador en una línea, paquetes Linux, Snap o compilación desde fuentes." href="/es/start/installation/" />
 	<LinkCard title="Inicio rápido" description="Guarda un host y conéctate." href="/es/start/quick-start/" />
+	<LinkCard title="Conectar un agente de IA" description="Claude Code, Codex, Cursor o VS Code en dos minutos." href="/es/ai/quick-start/" />
 </CardGrid>

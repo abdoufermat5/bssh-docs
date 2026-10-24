@@ -1,7 +1,7 @@
 ---
 // A recorded demo: real bssh sessions against throwaway servers.
-// The homepage one plays muted in a loop; with reduced motion it stays on the poster and
-// shows controls. Demos inside pages start on their poster and play when asked.
+// Homepage demos play muted in a loop; with reduced motion they stay on the poster and
+// show controls. Demos inside pages start on their poster and play when asked.
 interface Props {
 	/** What the video shows, for screen readers (in the page's language). */
 	label: string;
@@ -10,14 +10,17 @@ interface Props {
 	poster?: string;
 	/** Shown under a demo inside a page. */
 	caption?: string;
+	/** Play muted in a loop, as on the homepage. On by default for the homepage demo. */
+	loop?: boolean;
 }
 const {
 	label,
 	src = '/demo/bssh-demo.mp4',
 	poster = '/demo/bssh-demo.jpg',
 	caption,
+	loop,
 } = Astro.props;
-const hero = src === '/demo/bssh-demo.mp4';
+const hero = loop ?? src === '/demo/bssh-demo.mp4';
 ---
 
 {

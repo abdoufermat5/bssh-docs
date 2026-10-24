@@ -1,25 +1,48 @@
 ---
-// The homepage demo: real bssh sessions against throwaway servers, then the desktop app.
-// Plays muted in a loop; with reduced motion it stays on the poster and shows controls.
+// A recorded demo: real bssh sessions against throwaway servers.
+// The homepage one plays muted in a loop; with reduced motion it stays on the poster and
+// shows controls. Demos inside pages start on their poster and play when asked.
 interface Props {
 	/** What the video shows, for screen readers (in the page's language). */
 	label: string;
+	/** Defaults to the homepage demo. */
+	src?: string;
+	poster?: string;
+	/** Shown under a demo inside a page. */
+	caption?: string;
 }
-const { label } = Astro.props;
+const {
+	label,
+	src = '/demo/bssh-demo.mp4',
+	poster = '/demo/bssh-demo.jpg',
+	caption,
+} = Astro.props;
+const hero = src === '/demo/bssh-demo.mp4';
 ---
 
-<video
-	class="landing-shot landing-demo"
-	autoplay
-	muted
-	loop
-	playsinline
-	preload="metadata"
-	poster="/demo/bssh-demo.jpg"
-	aria-label={label}
->
-	<source src="/demo/bssh-demo.mp4" type="video/mp4" />
-</video>
+{
+	hero ? (
+		<video
+			class="landing-shot landing-demo"
+			autoplay
+			muted
+			loop
+			playsinline
+			preload="metadata"
+			poster={poster}
+			aria-label={label}
+		>
+			<source src={src} type="video/mp4" />
+		</video>
+	) : (
+		<figure class="page-demo">
+			<video controls muted playsinline preload="none" poster={poster} aria-label={label}>
+				<source src={src} type="video/mp4" />
+			</video>
+			{caption && <figcaption>{caption}</figcaption>}
+		</figure>
+	)
+}
 
 <script>
 	if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -30,3 +53,24 @@ const { label } = Astro.props;
 		}
 	}
 </script>
+
+<style>
+	.page-demo {
+		margin: 1.75rem 0 2rem;
+	}
+	.page-demo video {
+		display: block;
+		width: 100%;
+		height: auto;
+		aspect-ratio: 16 / 9;
+		border-radius: 8px;
+		border: 1px solid var(--sl-color-hairline-light);
+		background: #111113;
+	}
+	.page-demo figcaption {
+		margin-top: 0.75rem;
+		font-size: 0.8125rem;
+		line-height: 1.5;
+		color: var(--sl-color-gray-2);
+	}
+</style>

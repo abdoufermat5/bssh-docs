@@ -4,8 +4,16 @@ description: Enruta conexiones SSH a través de hosts de salto y bastiones inter
 ---
 
 import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
 
 Los hosts bastión (o hosts de salto) te permiten acceder a servidores protegidos tras cortafuegos o redes privadas aisladas. Bayesian SSH es compatible tanto con hosts de salto estándar mediante reenvío de puertos TCP como con bastiones interactivos que requieren protocolos específicos de shell de salto.
+
+<FlowDiagram
+	label="Una conexión a través de un bastión"
+	nodes={[{"title": "Tu equipo", "detail": "bssh connect web-1"}, {"title": "Bastión", "detail": "Host de salto, o un bastión interactivo", "tone": "accent"}, {"title": "web-1", "detail": "Inaccesible desde fuera"}]}
+	links={["SSH", "SSH"]}
+	group={{"from": 1, "to": 2, "label": "Red privada"}}
+/>
 
 ## Configurar un bastión por defecto
 

@@ -7,6 +7,7 @@ description: Let AI agents work on your servers without handing them your SSH ke
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 import AiFlow from '../../../components/AiFlow.astro';
+import DemoVideo from '../../../components/DemoVideo.astro';
 
 Coding agents such as Claude Code, Codex and Cursor are good at reading logs and fixing a broken service. Most of them reach a server the way a person does: with your SSH key and a shell. Nothing limits which hosts they touch or what they run, and the only record of what happened is the agent's own transcript.
 
@@ -27,6 +28,13 @@ bssh AI sits between the agent and your servers. The agent talks to `bssh ai mcp
 />
 
 The agent sees the result and carries on. Diagnosis is fast because reads don't wait for anyone. Fixes are deliberate because writes do.
+
+<DemoVideo
+	label="Demo: opencode with a DeepSeek model on the left, bssh on the right. The agent investigates disk usage on web-1 with read-only tools, proposes a cleanup plan, the plan is approved with bssh ai approve, then the agent applies and verifies it."
+	src="/demo/ai-agent-opencode.mp4"
+	poster="/demo/ai-agent-opencode.jpg"
+	caption="A real run, not a script: opencode with DeepSeek V4.1 Flash, connected to bssh ai mcp, against a throwaway server. Sped up, except while the plan waits for approval."
+/>
 
 ## Decisions you can predict
 

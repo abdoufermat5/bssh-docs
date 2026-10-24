@@ -4,6 +4,8 @@ description: Comparte conexiones SSH con tu equipo a través de una bóveda cifr
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
+import DemoVideo from '../../../../components/DemoVideo.astro';
 
 bssh Teams comparte conexiones con las personas con las que trabajas. Todos disponen de los mismos hosts en `bssh` y en la aplicación de escritorio, sin tener que pasarse listas de servidores por chat o en una wiki.
 
@@ -11,11 +13,25 @@ Las conexiones compartidas se cifran en tu dispositivo antes de salir de él. El
 
 ## Cómo funciona
 
+<FlowDiagram
+	label="El recorrido de las conexiones compartidas"
+	nodes={[{"title": "Tu dispositivo", "detail": "Cifra cada entrada con la clave del equipo. Tus claves nunca salen de él."}, {"title": "Servidor de bssh Teams", "detail": "Guarda y retransmite texto cifrado. Nunca ve hosts, usuarios, etiquetas ni claves.", "tone": "accent"}, {"title": "Dispositivo de un compañero", "detail": "Comprueba el autor, descifra y la añade a la lista de hosts."}]}
+	links={["texto cifrado", "texto cifrado"]}
+	caption="El SSH va directo de cada dispositivo a tus servidores: el servidor de sincronización nunca está en ese camino."
+/>
+
 1. **Cada dispositivo tiene sus propias claves.** Configurar Teams crea una clave de firma y una clave de cifrado en tu máquina, protegidas por una frase de contraseña. Nunca salen del dispositivo.
 2. **Un equipo tiene una sola clave.** Un administrador se la entrega a cada nuevo dispositivo tras comprobar su huella, evitando que el servidor introduzca un dispositivo propio.
 3. **Las entradas se cifran localmente.** Compartir una conexión la cifra con la clave del equipo. El servidor almacena el resultado y lo transmite.
-4. **Los compañeros de equipo descifran localmente.** Cada sincronización descarga las nuevas entradas, verifica quién las escribió y las añade a tu lista de hosts como `nombre@equipo`.
+4. **Los compañeros de equipo descifran localmente.** Cada sincronización descarga las nuevas entradas, verifica quién las escribió y las añade a tu lista de hosts, con la etiqueta del equipo. Un host cuyo nombre ya usas aparece como `nombre@equipo`.
 5. **Las conexiones se auditan.** Conectarse a un host del equipo registra un evento firmado y encadenado por hash. Los administradores pueden verificar todo el registro en su propia máquina.
+
+<DemoVideo
+	label="Demo: Alice comparte web-1 con el equipo platform, Bob sincroniza, se conecta a web-1 y vuelve a sincronizar, y Alice muestra los miembros y el registro de auditoría verificado."
+	src="/demo/teams-share.mp4"
+	poster="/demo/teams-share.jpg"
+	caption="Alice comparte un host, Bob se conecta y su sesión llega al registro de auditoría firmado del equipo. Grabado con un servidor de bssh Teams local."
+/>
 
 ## Qué se comparte
 

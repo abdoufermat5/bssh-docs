@@ -4,6 +4,7 @@ description: bssh AI 如何在智能体改变主机之前征得人的同意，�
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import DemoVideo from '../../../../components/DemoVideo.astro';
 
 当策略判定为**询问**时，智能体的调用会一直等到有人做出决定。在此之前什么都不会执行，之后也不会执行任何其他内容：bssh 只执行被批准的内容。
 
@@ -45,6 +46,13 @@ bssh ai approve <id> --deny --reason "发布冻结期间不做变更"
 ## 在桌面应用中审批
 
 桌面应用有一个 AI 区域，显示每个正在运行的智能体、其调用及判定的时间线，以及一个**停止**按钮。新请求会弹出审批对话框并发出通知：命令和主机、分析结果，对于计划还会显示每个步骤及其 diff、验证和回滚步骤，并把智能体的理由与事实分开显示。
+
+<DemoVideo
+	label="演示：桌面应用的 AI 智能体区域。智能体的只读调用依次被放行，随后一个变更计划弹出审批对话框，滚动查看后批准。"
+	src="/demo/ai-desktop-approval.mp4"
+	poster="/demo/ai-desktop-approval.jpg"
+	caption="一次真实 opencode 运行在 web-1 上的调用，在桌面应用中显示：读取自动放行，清理计划等待审批对话框。"
+/>
 
 ## 临时授权
 

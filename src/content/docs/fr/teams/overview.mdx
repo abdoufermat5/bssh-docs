@@ -4,6 +4,8 @@ description: Partagez des connexions SSH avec votre équipe via un coffre chiffr
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
+import DemoVideo from '../../../../components/DemoVideo.astro';
 
 bssh Teams partage des connexions avec les personnes avec qui vous travaillez. Tout le monde dispose des mêmes hôtes dans `bssh` et dans l'application de bureau, sans avoir à s'échanger des listes de serveurs par messagerie ou sur un wiki.
 
@@ -11,11 +13,25 @@ Les connexions partagées sont chiffrées sur votre appareil avant de le quitter
 
 ## Fonctionnement
 
+<FlowDiagram
+	label="Le trajet des connexions partagées"
+	nodes={[{"title": "Votre appareil", "detail": "Chiffre chaque entrée avec la clé d'équipe. Vos clés ne le quittent jamais."}, {"title": "Serveur bssh Teams", "detail": "Stocke et relaie du texte chiffré. Ne voit jamais hôtes, utilisateurs, tags ni clés.", "tone": "accent"}, {"title": "Appareil d'un coéquipier", "detail": "Vérifie l'auteur, déchiffre, ajoute l'entrée à la liste d'hôtes."}]}
+	links={["texte chiffré", "texte chiffré"]}
+	caption="Le SSH va directement de chaque appareil à vos serveurs : le serveur de synchronisation n'est jamais sur ce trajet."
+/>
+
 1. **Chaque appareil possède ses propres clés.** La configuration de Teams crée une clé de signature et une clé de chiffrement sur votre machine, protégées par une phrase secrète. Elles ne quittent jamais l'appareil.
 2. **Une équipe possède une clé.** Un administrateur la transmet à chaque nouvel appareil après avoir vérifié l'empreinte de cet appareil, empêchant ainsi le serveur d'ajouter un appareil de son choix.
 3. **Les entrées sont chiffrées localement.** Partager une connexion la chiffre avec la clé d'équipe. Le serveur stocke le résultat et le transmet.
-4. **Les membres de l'équipe déchiffrent localement.** Chaque synchronisation récupère les nouvelles entrées, vérifie leur auteur et les ajoute à votre liste d'hôtes sous la forme `nom@équipe`.
+4. **Les membres de l'équipe déchiffrent localement.** Chaque synchronisation récupère les nouvelles entrées, vérifie leur auteur et les ajoute à votre liste d'hôtes, avec le tag de l'équipe. Un hôte dont vous utilisez déjà le nom apparaît sous la forme `nom@équipe`.
 5. **Les connexions sont auditées.** Se connecter à un hôte d'équipe enregistre un événement signé et chaîné par empreintes. Les administrateurs peuvent vérifier l'intégralité du journal sur leur propre machine.
+
+<DemoVideo
+	label="Démo : Alice partage web-1 avec l'équipe platform, Bob synchronise, se connecte à web-1 et synchronise à nouveau, puis Alice affiche les membres et le journal d'audit vérifié."
+	src="/demo/teams-share.mp4"
+	poster="/demo/teams-share.jpg"
+	caption="Alice partage un hôte, Bob s'y connecte, et sa session arrive dans le journal d'audit signé de l'équipe. Enregistré avec un serveur bssh Teams local."
+/>
 
 ## Ce qui est partagé
 

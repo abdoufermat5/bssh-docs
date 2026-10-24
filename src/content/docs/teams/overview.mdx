@@ -4,6 +4,8 @@ description: Share SSH connections with your team through an end-to-end encrypte
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+import DemoVideo from '../../../components/DemoVideo.astro';
 
 bssh Teams shares connections with the people you work with. Everyone gets the same hosts in `bssh` and in the desktop app, and nobody has to pass server lists around in a chat or a wiki.
 
@@ -11,11 +13,25 @@ Shared connections are encrypted on your device before they leave it. The sync s
 
 ## How it works
 
+<FlowDiagram
+	label="Where shared connections go"
+	nodes={[{"title": "Your device", "detail": "Encrypts each entry with the team key. Your keys never leave it."}, {"title": "bssh Teams server", "detail": "Stores and relays ciphertext. Never sees hosts, users, tags or keys.", "tone": "accent"}, {"title": "Teammate's device", "detail": "Checks who wrote the entry, decrypts it, adds it to the host list."}]}
+	links={["ciphertext", "ciphertext"]}
+	caption="SSH goes straight from each device to your servers: the sync server is never in that path."
+/>
+
 1. **Each device has its own keys.** Setting up Teams creates a signing key and an encryption key on your machine, protected by a passphrase. They never leave the device.
 2. **A team has one key.** An admin gives it to each new device after checking that device's fingerprint, so the server cannot slip in a device of its own.
 3. **Entries are encrypted locally.** Sharing a connection encrypts it with the team key. The server stores the result and passes it on.
-4. **Teammates decrypt locally.** Each sync pulls new entries, verifies who wrote them, and adds them to your host list as `name@team`.
+4. **Teammates decrypt locally.** Each sync pulls new entries, verifies who wrote them, and adds them to your host list, tagged with the team. A host whose name you already use is listed as `name@team`.
 5. **Connections are audited.** Connecting to a team host records a signed, hash-chained event. Admins can verify the whole log on their own machine.
+
+<DemoVideo
+	label="Demo: Alice shares web-1 with the platform team, Bob syncs, connects to web-1 and syncs again, then Alice lists the members and reads the verified audit log."
+	src="/demo/teams-share.mp4"
+	poster="/demo/teams-share.jpg"
+	caption="Alice shares a host, Bob connects to it, and his session lands in the team's signed audit log. Recorded against a local bssh Teams server."
+/>
 
 ## What is shared
 

@@ -7,6 +7,7 @@ description: Laissez des agents IA travailler sur vos serveurs sans leur confier
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 import AiFlow from '../../../../components/AiFlow.astro';
+import DemoVideo from '../../../../components/DemoVideo.astro';
 
 Les agents de code comme Claude Code, Codex ou Cursor savent lire des journaux et réparer un service en panne. La plupart accèdent à un serveur comme une personne : avec votre clé SSH et un shell. Rien ne limite les hôtes qu'ils touchent ni ce qu'ils exécutent, et la seule trace de ce qui s'est passé est la transcription de l'agent lui-même.
 
@@ -27,6 +28,13 @@ bssh AI se place entre l'agent et vos serveurs. L'agent parle à `bssh ai mcp`, 
 />
 
 L'agent voit le résultat et continue. Le diagnostic est rapide parce que les lectures n'attendent personne. Les corrections sont réfléchies parce que les écritures, elles, attendent.
+
+<DemoVideo
+	label="Démo : opencode avec un modèle DeepSeek à gauche, bssh à droite. L'agent examine l'espace disque de web-1 avec des outils en lecture seule, propose un plan de nettoyage, le plan est approuvé avec bssh ai approve, puis l'agent l'applique et le vérifie."
+	src="/demo/ai-agent-opencode.mp4"
+	poster="/demo/ai-agent-opencode.jpg"
+	caption="Une vraie session, pas un script : opencode avec DeepSeek V4.1 Flash, branché sur bssh ai mcp, face à un serveur jetable. Accéléré, sauf pendant que le plan attend l'approbation."
+/>
 
 ## Des décisions prévisibles
 

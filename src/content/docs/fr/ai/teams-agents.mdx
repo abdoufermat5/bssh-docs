@@ -4,10 +4,24 @@ description: Faire travailler des agents IA autonomes sur vos serveurs avec bssh
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
 
 Un agent sur votre portable agit pour vous, et vous approuvez ses modifications. Un agent d'astreinte à 3 h du matin, un robot de déploiement en CI ou une vérification planifiée n'ont personne au clavier. Avec [bssh Teams](/fr/teams/overview/), un tel agent obtient sa propre identité dans l'équipe, applique une politique signée par un administrateur, et ses modifications sont approuvées par les administrateurs de l'équipe depuis leurs propres machines.
 
 ## Comment cela s'articule
+
+<FlowDiagram
+	label="Où s'exécute un agent autonome"
+	nodes={[{"title": "Agent", "detail": "Tâche CI, agent d'astreinte, vérification planifiée"}, {"title": "bssh ai serve", "detail": "Confronte chaque appel à la politique signée", "tone": "accent"}, {"title": "Vos serveurs", "detail": "Commandes approuvées uniquement"}]}
+	links={["MCP sur HTTPS, jeton", "SSH, un certificat par commande"]}
+	group={{"from": 1, "to": 2, "label": "Votre infrastructure"}}
+/>
+
+<FlowDiagram
+	label="Le trajet d'une approbation"
+	nodes={[{"title": "bssh ai serve", "detail": "Demande quand la politique le prévoit"}, {"title": "Serveur bssh Teams", "detail": "Relaie la requête. Ne peut pas la lire."}, {"title": "Appareils des administrateurs", "detail": "Approuvent ou refusent. Deux pour les hôtes critiques.", "tone": "accent"}]}
+	links={["chiffrée, signée", "chiffrée, signée"]}
+/>
 
 - **Une identité d'agent** est un membre de l'équipe de type `agent`, créé par un administrateur. Elle a sa propre clé d'appareil, occupe un siège comme tout membre, et ne peut pas écrire dans le coffre de l'équipe.
 - **Une politique signée** l'accompagne. Un administrateur la signe, et la passerelle refuse une politique qui n'est pas signée par un administrateur ou qui est plus ancienne qu'une version déjà vue : le serveur ne peut pas changer ce qu'un agent a le droit de faire.

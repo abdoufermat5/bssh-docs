@@ -4,6 +4,7 @@ description: Cómo bssh AI pide permiso a una persona antes de que un agente cam
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import DemoVideo from '../../../../components/DemoVideo.astro';
 
 Cuando la política dice **preguntar**, la llamada del agente espera a que una persona decida. Nada se ejecuta antes, y nada más se ejecuta después: bssh ejecuta exactamente lo aprobado.
 
@@ -45,6 +46,13 @@ Basta con un prefijo del identificador. El agente recibe la decisión, y un rech
 ## Aprobar desde la aplicación de escritorio
 
 La aplicación de escritorio tiene una sección de IA con cada agente en curso, la cronología de sus llamadas y decisiones, y un botón **Detener**. Una solicitud nueva abre el diálogo de aprobación con una notificación: los comandos y los hosts, lo que encontró el análisis, en un plan cada paso con su diff, la verificación y la vuelta atrás, y la justificación del agente separada de los hechos.
+
+<DemoVideo
+	label="Demo: la sección de agentes de IA de la aplicación de escritorio. Las llamadas de solo lectura de un agente se permiten una tras otra, luego un plan de cambios abre el diálogo de aprobación, que se desplaza y se aprueba."
+	src="/demo/ai-desktop-approval.mp4"
+	poster="/demo/ai-desktop-approval.jpg"
+	caption="Las llamadas de una sesión real de opencode en web-1, en la aplicación de escritorio: las lecturas pasan solas, el plan de limpieza espera al diálogo."
+/>
 
 ## Permisos temporales
 

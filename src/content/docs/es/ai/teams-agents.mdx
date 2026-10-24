@@ -4,10 +4,24 @@ description: Ejecuta agentes de IA desatendidos sobre tus servidores con bssh Te
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../../components/FlowDiagram.astro';
 
 Un agente en tu portátil actúa por ti, y tú apruebas sus cambios. Un agente de guardia a las 3 de la madrugada, un bot de despliegue en CI o una comprobación programada no tienen a nadie delante del teclado. Con [bssh Teams](/es/teams/overview/), un agente así tiene su propia identidad en el equipo, aplica una política firmada por un administrador, y sus cambios los aprueban los administradores del equipo desde sus propias máquinas.
 
 ## Cómo encaja todo
+
+<FlowDiagram
+	label="Dónde se ejecuta un agente desatendido"
+	nodes={[{"title": "Agente", "detail": "Tarea de CI, agente de guardia, comprobación programada"}, {"title": "bssh ai serve", "detail": "Contrasta cada llamada con la política firmada", "tone": "accent"}, {"title": "Tus servidores", "detail": "Solo comandos aprobados"}]}
+	links={["MCP por HTTPS, token", "SSH, un certificado por comando"]}
+	group={{"from": 1, "to": 2, "label": "Tu infraestructura"}}
+/>
+
+<FlowDiagram
+	label="El recorrido de una aprobación"
+	nodes={[{"title": "bssh ai serve", "detail": "Pregunta cuando la política lo indica"}, {"title": "Servidor de bssh Teams", "detail": "Retransmite la solicitud. No puede leerla."}, {"title": "Dispositivos de los administradores", "detail": "Aprueban o rechazan. Dos para los hosts críticos.", "tone": "accent"}]}
+	links={["cifrada, firmada", "cifrada, firmada"]}
+/>
 
 - **Una identidad de agente** es un miembro del equipo de tipo `agent`, creado por un administrador. Tiene su propia clave de dispositivo, ocupa un puesto como cualquier miembro y no puede escribir en la bóveda del equipo.
 - **Una política firmada** lo acompaña. La firma un administrador, y la pasarela rechaza una política que no esté firmada por un administrador o que sea más antigua que una ya vista, así que el servidor no puede cambiar lo que un agente puede hacer.

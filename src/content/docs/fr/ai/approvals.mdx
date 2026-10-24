@@ -4,6 +4,7 @@ description: Comment bssh AI demande l'accord d'une personne avant qu'un agent n
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import DemoVideo from '../../../../components/DemoVideo.astro';
 
 Quand la politique dit **demander**, l'appel de l'agent attend qu'une personne décide. Rien ne s'exécute avant, et rien d'autre ne s'exécute après : bssh exécute exactement ce qui a été approuvé.
 
@@ -45,6 +46,13 @@ Un préfixe de l'identifiant suffit. L'agent reçoit la décision, et un refus a
 ## Approuver depuis l'application de bureau
 
 L'application de bureau a une section IA avec chaque agent en cours, la chronologie de ses appels et de leurs décisions, et un bouton **Arrêter**. Une nouvelle requête ouvre la fenêtre d'approbation avec une notification : les commandes et les hôtes, ce que l'analyse a trouvé, pour un plan chaque étape avec son diff, la vérification et le retour arrière, et la justification de l'agent séparée des faits.
+
+<DemoVideo
+	label="Démo : la section agents IA de l'application de bureau. Les appels en lecture seule d'un agent passent les uns après les autres, puis un plan de modification ouvre la fenêtre d'approbation, qu'on fait défiler avant d'approuver."
+	src="/demo/ai-desktop-approval.mp4"
+	poster="/demo/ai-desktop-approval.jpg"
+	caption="Les appels d'une vraie session opencode sur web-1, dans l'application de bureau : les lectures passent seules, le plan de nettoyage attend la fenêtre d'approbation."
+/>
 
 ## Autorisations temporaires
 

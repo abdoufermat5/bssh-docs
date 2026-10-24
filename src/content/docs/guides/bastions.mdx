@@ -4,8 +4,16 @@ description: Route SSH connections through jump hosts and interactive bastions.
 ---
 
 import { Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
 
 Bastion hosts (jump hosts) let you reach servers behind firewalls or isolated private networks. Bayesian SSH supports both standard jump hosts using TCP port forwarding and interactive bastions requiring dedicated jump shell protocols.
+
+<FlowDiagram
+	label="A connection through a bastion"
+	nodes={[{"title": "Your machine", "detail": "bssh connect web-1"}, {"title": "Bastion", "detail": "Jump host, or an interactive bastion", "tone": "accent"}, {"title": "web-1", "detail": "Not reachable from outside"}]}
+	links={["SSH", "SSH"]}
+	group={{"from": 1, "to": 2, "label": "Private network"}}
+/>
 
 ## Configure a default bastion
 

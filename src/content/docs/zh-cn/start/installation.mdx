@@ -3,7 +3,8 @@ title: 安装
 description: 使用单行安装脚本、预编译 Linux 软件包、Snap 或从源码编译安装 Bayesian SSH。
 ---
 
-import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, Code, LinkCard, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+import { latestVersion } from '../../../../lib/github.mjs';
 
 Bayesian SSH 提供了适用于 `x86_64` (amd64) 与 `aarch64` (arm64) 的预编译 Linux 软件包及二进制文件、自动化安装脚本、Snap 软件包以及源码编译支持。
 
@@ -89,14 +90,10 @@ curl -fsSL https://bssh.abdoufermat.dev/install.sh | bash
 
 <Tabs syncKey="os">
 	<TabItem label="Debian / Ubuntu">
-		```sh
-		sudo apt install ./bayesian-ssh_2.10.0_amd64.deb
-		```
+		<Code lang="sh" code={`sudo apt install ./bayesian-ssh_${latestVersion}_amd64.deb`} />
 	</TabItem>
 	<TabItem label="Fedora / RHEL">
-		```sh
-		sudo dnf install ./bayesian-ssh-2.10.0-1.x86_64.rpm
-		```
+		<Code lang="sh" code={`sudo dnf install ./bayesian-ssh-${latestVersion}-1.x86_64.rpm`} />
 	</TabItem>
 </Tabs>
 

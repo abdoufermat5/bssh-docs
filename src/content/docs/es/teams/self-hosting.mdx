@@ -18,15 +18,15 @@ El servidor solo guarda texto cifrado y metadatos. Nunca contiene nombres de hos
 
 ## Obtener la imagen
 
-La imagen se distribuye como un archivo de imagen Docker llamado `bssh-cloud-api_<version>.tar`, por ejemplo `bssh-cloud-api_0.2.0.tar`. Solicita acceso en un [issue de GitHub](https://github.com/abdoufermat5/bayesian-ssh/issues).
+La imagen se distribuye como un archivo de imagen Docker llamado `bssh-cloud-api_<version>.tar`. Solicita acceso en un [issue de GitHub](https://github.com/abdoufermat5/bayesian-ssh/issues).
 
 Carga el archivo en el servidor:
 
 ```sh
-docker load -i bssh-cloud-api_0.2.0.tar
+docker load -i bssh-cloud-api_<version>.tar
 ```
 
-La imagen cargada lleva la etiqueta de su versión, por ejemplo `bssh-cloud-api:0.2.0`.
+La imagen cargada lleva la etiqueta de su versión: `bssh-cloud-api:<version>`.
 
 ## Configuración
 
@@ -88,7 +88,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: bssh-cloud-api:0.2.0
+    image: bssh-cloud-api:<version>
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,7 +115,7 @@ docker compose up -d
 docker compose logs -f api
 ```
 
-La API ejecuta sus migraciones de base de datos al arrancar, antes de aceptar conexiones, y registra su versión, por ejemplo `bssh-cloud 0.2.0`. Si una migración falla, el proceso termina y el registro explica por qué.
+La API ejecuta sus migraciones de base de datos al arrancar, antes de aceptar conexiones, y registra su versión (`bssh-cloud <version>`). Si una migración falla, el proceso termina y el registro explica por qué.
 
 La API se publica solo en la dirección de bucle local, porque TLS termina delante de ella. `curl http://127.0.0.1:8080/healthz` devuelve `ok`; úsalo para monitorizar.
 

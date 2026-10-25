@@ -18,15 +18,15 @@ Le serveur ne stocke que du texte chiffré et des métadonnées. Il ne détient 
 
 ## Obtenir l'image
 
-L'image est distribuée sous forme d'archive Docker nommée `bssh-cloud-api_<version>.tar`, par exemple `bssh-cloud-api_0.2.0.tar`. Demandez l'accès dans un [ticket GitHub](https://github.com/abdoufermat5/bayesian-ssh/issues).
+L'image est distribuée sous forme d'archive Docker nommée `bssh-cloud-api_<version>.tar`. Demandez l'accès dans un [ticket GitHub](https://github.com/abdoufermat5/bayesian-ssh/issues).
 
 Chargez l'archive sur le serveur :
 
 ```sh
-docker load -i bssh-cloud-api_0.2.0.tar
+docker load -i bssh-cloud-api_<version>.tar
 ```
 
-L'image chargée porte le tag de sa version, par exemple `bssh-cloud-api:0.2.0`.
+L'image chargée porte le tag de sa version: `bssh-cloud-api:<version>`.
 
 ## Configuration
 
@@ -88,7 +88,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: bssh-cloud-api:0.2.0
+    image: bssh-cloud-api:<version>
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,7 +115,7 @@ docker compose up -d
 docker compose logs -f api
 ```
 
-L'API exécute ses migrations de base de données au démarrage, avant d'accepter des connexions, et journalise sa version, par exemple `bssh-cloud 0.2.0`. Si une migration échoue, le processus s'arrête et le journal en donne la raison.
+L'API exécute ses migrations de base de données au démarrage, avant d'accepter des connexions, et journalise sa version (`bssh-cloud <version>`). Si une migration échoue, le processus s'arrête et le journal en donne la raison.
 
 L'API n'est publiée que sur l'adresse de bouclage, car TLS est terminé devant elle. `curl http://127.0.0.1:8080/healthz` renvoie `ok` ; utilisez-le pour la supervision.
 

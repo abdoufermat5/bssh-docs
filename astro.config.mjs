@@ -46,6 +46,7 @@ export default defineConfig({
 			],
 			components: {
 				Footer: './src/components/Footer.astro',
+				SocialIcons: './src/components/SocialIcons.astro',
 			},
 			plugins: [starlightLinksValidator({ errorOnInconsistentLocale: true })],
 			sidebar: [

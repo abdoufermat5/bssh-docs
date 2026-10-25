@@ -75,7 +75,7 @@ bssh teams share db-prod --team platform
 
 Una conexión compartida lleva su host, usuario, puerto, bastión (con su usuario), ajuste de Kerberos y etiquetas. Nunca lleva rutas de claves ni contraseñas: cada miembro se conecta con sus propias claves. Todos los miembros ven la conexión después de su siguiente sincronización, y cada conexión a ese host se registra en el registro de auditoría del equipo.
 
-En tu máquina, la copia del equipo aparece como `db-prod@platform` junto a tu propia `db-prod`.
+Tu `db-prod` pasa a ser la conexión del equipo: no hay una segunda copia. Tu ruta de clave y el reenvío del agente siguen siendo tuyos, y cuando un miembro cambia su destino, bssh te pide confirmación antes de la siguiente conexión.
 
 </TabItem>
 <TabItem label="Aplicación de escritorio">
@@ -89,11 +89,11 @@ También puedes compartir desde la página del equipo: abre el equipo, ve a **Ho
 
 ## Cambiar una conexión compartida
 
-Edita la copia del equipo y vuelve a compartirla antes de la siguiente sincronización. De lo contrario, una sincronización restaura la versión de la bóveda:
+Edítala y vuelve a compartirla antes de la siguiente sincronización. De lo contrario, una sincronización restaura la versión de la bóveda:
 
 ```sh
-bssh edit db-prod@platform --user deploy
-bssh teams share db-prod@platform --team platform
+bssh edit db-prod --user deploy
+bssh teams share db-prod --team platform
 ```
 
 En la aplicación de escritorio, edita el host y elige **Update in platform** en su menú.
@@ -101,10 +101,10 @@ En la aplicación de escritorio, edita el host y elige **Update in platform** en
 ## Quitar una conexión compartida
 
 ```sh
-bssh teams unshare db-prod@platform
+bssh teams unshare db-prod
 ```
 
-bssh pide confirmación. La conexión se elimina de la bóveda del equipo para todos los miembros, en su siguiente sincronización; el servidor conserva su historial. Si no se puede alcanzar el servidor, la eliminación queda en cola para la siguiente sincronización. En la aplicación de escritorio, abre la pestaña **Hosts** del equipo, elige **Unshare** junto a la conexión y luego **Remove for everyone**.
+bssh pide confirmación. La conexión se elimina de la bóveda del equipo para todos los miembros, en su siguiente sincronización; el servidor conserva su historial. En tu máquina se queda, como conexión local (`bssh remove` la elimina). Si no se puede alcanzar el servidor, la eliminación queda en cola para la siguiente sincronización. En la aplicación de escritorio, abre la pestaña **Hosts** del equipo, elige **Unshare** junto a la conexión y luego **Remove for everyone**.
 
 :::caution
 El servidor conserva el historial de la entrada, y un miembro que aún no ha sincronizado sigue viendo la conexión hasta que lo haga.

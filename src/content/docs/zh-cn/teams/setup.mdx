@@ -75,7 +75,7 @@ bssh teams share db-prod --team platform
 
 共享的连接包含主机、用户、端口、跳板机（包括其用户）、Kerberos 设置和标签。它绝不包含密钥路径或密码：每位成员使用自己的密钥连接。团队中的所有成员会在下次同步后看到这条连接，连接到该主机会记入团队的审计日志。
 
-在你的设备上，团队的副本会以 `db-prod@platform` 列在你自己的 `db-prod` 旁边。
+你的 `db-prod` 会成为团队的连接，不会再有第二份副本。你的密钥路径和代理转发设置仍归你所有；当团队成员修改它指向的地址时，bssh 会在下次连接前请你确认。
 
 </TabItem>
 <TabItem label="桌面应用">
@@ -89,11 +89,11 @@ bssh teams share db-prod --team platform
 
 ## 修改共享的连接
 
-编辑团队的副本，然后在下次同步前重新共享。否则同步会恢复保险库中的版本：
+编辑它，然后在下次同步前重新共享。否则同步会恢复保险库中的版本：
 
 ```sh
-bssh edit db-prod@platform --user deploy
-bssh teams share db-prod@platform --team platform
+bssh edit db-prod --user deploy
+bssh teams share db-prod --team platform
 ```
 
 在桌面应用中，编辑该主机并在其菜单中选择 **Update in platform**。
@@ -101,10 +101,10 @@ bssh teams share db-prod@platform --team platform
 ## 移除共享的连接
 
 ```sh
-bssh teams unshare db-prod@platform
+bssh teams unshare db-prod
 ```
 
-bssh 会要求确认。这条连接会从团队保险库中删除，对所有人生效，成员在下次同步时不再看到它；服务器会保留其历史。如果无法连接服务器，删除会排队到下次同步。在桌面应用中，打开团队的 **Hosts** 标签页，在连接旁选择 **Unshare**，然后选择 **Remove for everyone**。
+bssh 会要求确认。这条连接会从团队保险库中删除，对所有人生效，成员在下次同步时不再看到它；服务器会保留其历史。在你的设备上它会保留为本地连接（`bssh remove` 可删除）。如果无法连接服务器，删除会排队到下次同步。在桌面应用中，打开团队的 **Hosts** 标签页，在连接旁选择 **Unshare**，然后选择 **Remove for everyone**。
 
 :::caution
 服务器会保留该条目的历史，尚未同步的成员在下一次同步前仍会看到这条连接。

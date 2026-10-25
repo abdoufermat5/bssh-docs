@@ -43,8 +43,19 @@ Everything is set at run time; no environment-specific value is baked into the i
 | `DEFAULT_SEATS` | `5` | Seats of a new organization when billing is off. |
 | `MIN_CLIENT_VERSION` | `0.0.0` | Oldest client version accepted. |
 | `RUST_LOG` | unset | Log filter, for example `info`. |
+| `AUDIT_MAX_BYTES_PER_TEAM` | `1073741824` (1 GiB) | Audit storage allowed per team, in bytes; `0` turns the limit off. Over it, a device's audit upload is refused with `AuditQuotaExceeded` (HTTP 403) and stores nothing, and reading the log keeps working. An event counts 512 bytes plus the size of its actor and detail fields. The counter only grows: deleting events does not give the space back. |
+| `AUDIT_UPLOADS_PER_DEVICE_PER_MIN` | `60` | Audit upload requests allowed per minute and device; `0` turns the limit off. Over it, the answer is `RateLimited` (HTTP 429) and the device retries later. |
+| `AUDIT_VERIFY_INTERVAL_SECS` | `3600` | Seconds between runs of the audit verifier; `0` turns it off. See below. |
 
 The `_FILE` variants name a file whose trimmed contents replace the variable. Use them for secrets, which then stay out of `docker inspect` and the environment.
+
+A variable set to an invalid value stops the server at startup, with an error that names it.
+
+### Audit storage and verification
+
+The audit limit protects the database, not the log: at the limit, devices keep their events queued and upload them once you raise `AUDIT_MAX_BYTES_PER_TEAM`. Members see the message [The team's audit storage is full](/reference/troubleshooting/#the-teams-audit-storage-is-full).
+
+The verifier runs in the API process, every `AUDIT_VERIFY_INTERVAL_SECS`. Each run does two things. First an incremental pass: it checks the events that arrived since each chain's checkpoint. Then a rolling sweep: it re-verifies the next 100,000 stored events from the whole log, and picks up where it stopped on the next run. So every stored event is re-checked once per pass, and a log of N events is covered in about N / 100,000 runs (10 million events: 100 hourly runs). That is how long a change made directly in the database can go unreported. The sweep size is fixed, not a setting. When the verifier finds a break, it logs an error naming the team, device and event, and logs it again at every run until the data is fixed. It catches edits to the database made by anyone except you, the operator: a bug, a restored backup, a person with database access but not your server configuration. It is not a guarantee against the operator, who can change or silence it. Admins verify the log on their own machines with `bssh teams audit`, which is the check that does not rely on the server. See [Audit log](/teams/audit-log/).
 
 ## Create the secrets
 
@@ -230,6 +241,8 @@ docker compose exec -T postgres psql -U bssh -d bssh_restore < bssh-2026-10-23.s
 Migrations run automatically at startup, and the API stays under `/v1`, so clients do not need a change for a server upgrade. Clients older than `MIN_CLIENT_VERSION` are refused with HTTP 426, and `bssh teams` reports `the server needs a newer bssh; please upgrade`.
 
 The image ships forward migrations only, so rolling back to an older image means restoring the database backup taken before the upgrade.
+
+Migration `1003` rebuilds the audit indexes without `CONCURRENTLY`, because migrations run in a transaction. While each index builds, audit writes to the table wait. On a large audit table, upgrade at a quiet time.
 
 ## What the server stores
 

@@ -208,6 +208,7 @@ Los puestos y la facturación pertenecen a la [organización](/es/teams/organiza
 - `read-only: the organization has ...`: la organización tiene más miembros que su límite de puestos, porque la suscripción caducó o paga menos puestos que miembros hay. Un propietario lo corrige con `bssh org billing --checkout` o `--manage`. Las descargas y la concesión de claves siguen funcionando mientras sus equipos están en solo lectura.
 - `only an owner of the organization can manage billing`: eres administrador de equipo pero no propietario. Pídeselo a uno; `bssh org show` los lista.
 - `one organization is free per account`: `bssh org create` se rechazó porque ya posees una organización sin suscripción. Suscríbela o crea equipos en ella.
+- `a checkout for this organization is already in progress; retry in a moment`: el servidor está ocupado con otra petición de pago o del portal de facturación de la misma organización, o con una actualización de pago del proveedor de pagos. Espera un momento y vuelve a ejecutar el comando.
 
 ### La cadena de auditoría no se verifica
 
@@ -220,6 +221,18 @@ bssh teams audit platform
 ```
 
 El comando devuelve un código distinto de cero cuando un evento no se verifica. [Registro de auditoría](/es/teams/audit-log/) explica qué demuestra la cadena.
+
+### El almacenamiento de auditoría del equipo está lleno
+
+`bssh teams sync` imprime `The team's audit storage is full. Your audit events stay queued on this device and upload once the server's operator raises the team's audit storage limit.` Lo imprime una vez por sincronización, y la aplicación de escritorio muestra el mismo mensaje tras una sincronización.
+
+El servidor rechazó la subida y no guardó nada. Tus eventos no se pierden: siguen en cola en el dispositivo, y el resto de la sincronización, la bóveda incluida, se ejecuta igualmente. Leer el registro sigue funcionando. Los administradores del equipo no pueden subir el límite. Es un ajuste del servidor, `AUDIT_MAX_BYTES_PER_TEAM`: en un servicio alojado, pídeselo al operador; en tu propio servidor, consulta [Autoalojamiento](/es/teams/self-hosting/#configuración). Los eventos en cola se suben en la primera sincronización después de subir el límite.
+
+### El servidor es demasiado antiguo para verificar el registro de auditoría
+
+`bssh teams audit` informa `this Teams server is too old to read its whole audit log in pages, so the log was not verified in full: ask its operator to update it` y sale con código distinto de cero.
+
+El comando verifica todo el registro leyéndolo página a página, algo que un servidor más antiguo no puede hacer. Un servidor así solo se puede verificar mientras todo el registro quepa en una página. Pide al operador que actualice el servidor; consulta [Autoalojamiento](/es/teams/self-hosting/#actualizaciones). [Registro de auditoría](/es/teams/audit-log/) explica qué cubre la verificación.
 
 ### El servidor necesita un cliente más reciente
 

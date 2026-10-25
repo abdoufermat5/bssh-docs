@@ -678,6 +678,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | `billing` | Show the plan and seats of a team's organization; subscribe or manage the subscription (organization owner). |
 | `remove` | Remove a member and rotate the team key (admin). |
 | `audit` | Show and verify the team's audit log (admin). Exits non-zero if anything fails to verify. |
+| `device` | Devices of your account, or of a team's members (admin): revoke one. |
 
 ### bssh teams init
 
@@ -816,7 +817,7 @@ Usage: bssh teams unshare [OPTIONS] <CONNECTION>
 
 ### bssh teams members
 
-List a team's members and their devices.
+List a team's members and their devices. Each device shows its fingerprint and its id (the argument of `bssh teams device revoke`); revoked devices stay listed, marked `revoked <date>`.
 
 ```text
 Usage: bssh teams members [OPTIONS] <TEAM>
@@ -869,7 +870,34 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--host <CONNECTION>` | Only events for this team connection. |
 | `--member <EMAIL>` | Only events by this member. |
 | `--since <DATE>` | Only events received since this date (`YYYY-MM-DD` or RFC 3339). |
-| `--limit <LIMIT>` | Maximum number of events (default and maximum: 1000). |
+| `--limit <N>` | How many of the newest events to show (default: 100). The whole log is verified either way. |
+| `--all` | Show every matching event instead of the newest ones. Cannot be combined with `--limit`. |
+
+The filters narrow the listing only. Verification always covers the whole log. See [Audit log](/teams/audit-log/).
+
+### bssh teams device
+
+Devices of your account, or of a team's members (admin): revoke one.
+
+```text
+Usage: bssh teams device [OPTIONS] <COMMAND>
+```
+
+| Command | Description |
+| --- | --- |
+| `revoke <DEVICE_ID>` | Revoke a device for good: it is locked out at once and every team its account is in needs a new team key. |
+
+### bssh teams device revoke
+
+Revoke a device for good: it is locked out at once and every team its account is in needs a new team key. Allowed for the device's own account, and for an admin of a team its account is in. See [Revoke a device](/teams/members/#revoke-a-device).
+
+```text
+Usage: bssh teams device revoke [OPTIONS] <DEVICE_ID>
+```
+
+| Flag | Description |
+| --- | --- |
+| `<DEVICE_ID>` | Id of the device (a full UUID). `bssh teams whoami` shows this device's id; `bssh teams members <team>` shows a member's devices (admin). |
 
 ### bssh teams agent
 

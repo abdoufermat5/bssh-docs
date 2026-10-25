@@ -1,6 +1,6 @@
 ---
 title: Members and devices
-description: Invite people, exchange fingerprints, grant the team key, revoke invites and remove members.
+description: Invite people, exchange fingerprints, grant the team key, revoke invites and devices, and remove members.
 ---
 
 import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -136,7 +136,44 @@ After the rotation, Ana's devices can no longer sync, and nothing written afterw
 
 A rotation wraps the new key only to devices this admin machine approved with `bssh teams grant`. If the server lists a device you never approved, the rotation stops and names it. On the command line, the member is already removed when this message appears; the team keeps its current key until the rotation succeeds. Check the device's fingerprint with its owner and grant it, then sync again to finish the rotation. The desktop app's **Remove…** dialog lists those devices and does not let you remove the member until each one is granted; if a rotation stops for another reason, the reason stays in the dialog.
 
-Devices cannot be revoked one by one yet. To remove a single device, remove the member, then invite them again.
+## Revoke a device
+
+Revoke a device when it is lost, stolen or retired. A revoked device stays revoked: this cannot be undone.
+
+Two kinds of people can do it: the owner of the device's account, and an admin of any team that account is in. Only the command line has this action; the desktop app does not, but its **Remove…** dialog points to the command for a lost laptop.
+
+<Steps>
+1. Find the device id. On the machine itself, `bssh teams whoami` prints it on the `Device` line. As an admin, `bssh teams members platform` lists every device of a member with its id.
+
+2. Revoke it with the full id:
+
+   ```sh
+   bssh teams device revoke 6f1c2f64-2a63-4a43-9a43-1f0f0b6f6c11
+   ```
+
+   bssh asks you to confirm first.
+
+3. An admin runs `bssh teams sync platform` to finish the key rotation.
+</Steps>
+
+What happens:
+
+- The server ends the device's sessions at once. It can no longer sign in or sync, and its next request is refused.
+- Every team the device's account is in asks for a new team key that leaves the device out. The key changes the next time an admin runs `bssh teams sync`, which is what bssh prints after the revocation. The rotation follows the same rules as [removing a member](#remove-a-member): the new key is wrapped only to devices that admin machine approved. Until it happens, members' edits stay queued.
+- The device stays in `bssh teams members`, marked `revoked` with its date, because the events it wrote still belong to it in the [audit log](/teams/audit-log/).
+- If you revoke the device you are running on, bssh says so in the confirmation. It then removes this machine's Teams identity. Team connections you already synced stay as local connections.
+
+### A stolen laptop
+
+Ana's laptop is stolen. An admin runs `bssh teams members platform`, copies the id of Ana's laptop and revokes it:
+
+```sh
+bssh teams members platform
+bssh teams device revoke 6f1c2f64-2a63-4a43-9a43-1f0f0b6f6c11
+bssh teams sync platform
+```
+
+From then on the laptop cannot reach the server, and nothing written after the rotation is readable by it. It may still hold copies of what it already synced, so rotate any credentials that matter, as after removing a member.
 
 ## Members and devices
 
@@ -144,7 +181,7 @@ Devices cannot be revoked one by one yet. To remove a single device, remove the 
 bssh teams members platform
 ```
 
-This lists each member with their role and the fingerprint of each of their devices, then the pending invites if you are an admin. In the desktop app, the team's **Members & devices** tab shows the same, with a seat meter, the devices waiting for the key and a **Remove…** button for each member other than you.
+This lists each member with their role and, for each of their devices, its name, fingerprint and id, then the pending invites if you are an admin. Revoked devices are listed too, marked `revoked` with the date, for example `revoked 2026-10-25`. In the desktop app, the team's **Members & devices** tab shows the members, with a seat meter, the devices waiting for the key and a **Remove…** button for each member other than you.
 
 ## Next steps
 

@@ -1,6 +1,6 @@
 ---
 title: Miembros y dispositivos
-description: Invita personas, intercambia huellas, concede la clave del equipo, revoca invitaciones y quita miembros.
+description: Invita personas, intercambia huellas, concede la clave del equipo, revoca invitaciones y dispositivos, y quita miembros.
 ---
 
 import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -136,7 +136,44 @@ Tras la rotación, los dispositivos de Ana ya no pueden sincronizar, y nada de l
 
 Una rotación envuelve la nueva clave solo para los dispositivos que esta máquina de administración aprobó con `bssh teams grant`. Si el servidor enumera un dispositivo que nunca aprobaste, la rotación se detiene y lo nombra. En la línea de comandos, el miembro ya está quitado cuando aparece este mensaje; el equipo conserva su clave actual hasta que la rotación tenga éxito. Comprueba la huella del dispositivo con su propietario y concédela, y luego sincroniza de nuevo para terminar la rotación. El diálogo **Remove…** de la aplicación de escritorio enumera esos dispositivos y no permite quitar al miembro hasta que se conceda cada uno; si una rotación se detiene por otro motivo, el motivo permanece en el diálogo.
 
-Los dispositivos aún no se pueden revocar uno a uno. Para quitar un solo dispositivo, quita al miembro y vuelve a invitarlo.
+## Revocar un dispositivo
+
+Revoca un dispositivo cuando se pierde, te lo roban o lo retiras de uso. Un dispositivo revocado sigue revocado: no se puede deshacer.
+
+Pueden hacerlo dos tipos de personas: el titular de la cuenta del dispositivo y un administrador de cualquier equipo del que esa cuenta sea miembro. Solo la línea de comandos tiene esta acción; la aplicación de escritorio no, pero su diálogo **Remove…** remite al comando para un portátil perdido.
+
+<Steps>
+1. Busca el id del dispositivo. En la propia máquina, `bssh teams whoami` lo muestra en la línea `Device`. Como administrador, `bssh teams members platform` lista cada dispositivo de un miembro con su id.
+
+2. Revócalo con el id completo:
+
+   ```sh
+   bssh teams device revoke 6f1c2f64-2a63-4a43-9a43-1f0f0b6f6c11
+   ```
+
+   bssh te pide confirmación antes.
+
+3. Un administrador ejecuta `bssh teams sync platform` para terminar la rotación de la clave.
+</Steps>
+
+Qué ocurre:
+
+- El servidor termina al instante las sesiones del dispositivo. Ya no puede iniciar sesión ni sincronizar, y su siguiente petición se rechaza.
+- Cada equipo del que la cuenta del dispositivo es miembro pide una nueva clave del equipo que deje fuera al dispositivo. La clave cambia la próxima vez que un administrador ejecuta `bssh teams sync`, que es lo que bssh muestra tras la revocación. La rotación sigue las mismas reglas que [quitar a un miembro](#quitar-a-un-miembro): la nueva clave solo se envuelve para los dispositivos que esa máquina de administración aprobó. Hasta entonces, los cambios de los miembros quedan en cola.
+- El dispositivo sigue en `bssh teams members`, marcado `revoked` con su fecha, porque los eventos que escribió siguen siendo suyos en el [registro de auditoría](/es/teams/audit-log/).
+- Si revocas el dispositivo en el que estás trabajando, bssh lo dice en la confirmación. Después elimina la identidad de Teams de esta máquina. Las conexiones de equipo que ya sincronizaste siguen como conexiones locales.
+
+### Un portátil robado
+
+Le roban el portátil a Ana. Un administrador ejecuta `bssh teams members platform`, copia el id del portátil de Ana y lo revoca:
+
+```sh
+bssh teams members platform
+bssh teams device revoke 6f1c2f64-2a63-4a43-9a43-1f0f0b6f6c11
+bssh teams sync platform
+```
+
+A partir de ese momento el portátil no puede acceder al servidor, y nada de lo escrito después de la rotación le resulta legible. Aún puede conservar copias de lo que ya sincronizó, así que cambia las credenciales que importen, como después de quitar a un miembro.
 
 ## Miembros y dispositivos
 
@@ -144,7 +181,7 @@ Los dispositivos aún no se pueden revocar uno a uno. Para quitar un solo dispos
 bssh teams members platform
 ```
 
-Esto enumera cada miembro con su rol y la huella de cada uno de sus dispositivos, y luego las invitaciones pendientes si eres administrador. En la aplicación de escritorio, la pestaña **Members & devices** del equipo muestra lo mismo, con un medidor de puestos, los dispositivos que esperan la clave y un botón **Remove…** para cada miembro que no seas tú.
+Esto enumera cada miembro con su rol y, de cada uno de sus dispositivos, su nombre, huella e id, y luego las invitaciones pendientes si eres administrador. Los dispositivos revocados también aparecen, marcados `revoked` con la fecha, por ejemplo `revoked 2026-10-25`. En la aplicación de escritorio, la pestaña **Members & devices** del equipo muestra los miembros, con un medidor de puestos, los dispositivos que esperan la clave y un botón **Remove…** para cada miembro que no seas tú.
 
 ## Siguientes pasos
 

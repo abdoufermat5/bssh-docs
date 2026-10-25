@@ -25,8 +25,9 @@ bssh teams audit platform --member ana@example.com --since 2026-01-01
 | --- | --- |
 | `--host <CONNECTION>` | Les événements d'une connexion d'équipe |
 | `--member <EMAIL>` | Les événements d'un membre |
-| `--since <DATE>` | Les événements survenus depuis une date (`YYYY-MM-DD`) ou une heure RFC 3339 |
-| `--limit <LIMIT>` | Combien d'événements récupérer, du plus récent au plus ancien (valeur par défaut et maximum : 1000) |
+| `--since <DATE>` | Les événements reçus par le serveur depuis une date (`YYYY-MM-DD`) ou une heure RFC 3339 |
+| `--limit <N>` | Combien d'événements les plus récents lister (par défaut : 100) ; le journal entier est vérifié dans tous les cas |
+| `--all` | Lister tous les événements correspondants ; incompatible avec `--limit` |
 
 La commande affiche pour chaque événement son heure, le membre et l'appareil, l'événement, l'hôte, l'adresse source et le résultat du contrôle. En ligne de commande, les heures utilisent l'heure locale de la machine. L'application de bureau les affiche en UTC.
 
@@ -41,20 +42,38 @@ Chaque événement est vérifié sur votre machine : sa signature avec la clé d
 
 Quand quelque chose échoue, `bssh teams audit` affiche les problèmes et sort avec un code non nul : la commande peut donc tourner dans un contrôle de conformité.
 
-## La limite des événements les plus récents
+## Quelle part du journal vous voyez
 
-Le journal est récupéré du plus récent au plus ancien, 1000 événements par défaut et au plus 1000 avec `--limit`. Si la récupération atteint la limite, la commande indique qu'elle n'affiche que les plus récents. Les événements récupérés sont quand même vérifiés, mais les plus anciens ne l'ont pas été ; restreignez avec `--since` ou `--host` pour les couvrir.
+`bssh teams audit` affiche les 100 événements les plus récents. `--limit 500` en affiche davantage, au-delà de 1000 aussi, et `--all` affiche tous les événements correspondants. Les deux ne se combinent pas. Quand la liste est tronquée, la commande dit `Showing the newest N event(s) only: --limit <N> shows more, --all shows every one.`
+
+La vérification ne dépend pas de la liste. La commande lit toujours le journal entier sur le serveur, page par page dans l'ordre des chaînes, et vérifie chaque signature et la chaîne de chaque appareil depuis son premier événement. `--host`, `--member`, `--since` et `--limit` restreignent seulement ce qui est affiché. Un appareil dont les premiers événements manquent est signalé comme un problème. Quand tout est correct, la commande affiche `Verified on this machine, the whole log`, avec le nombre de signatures et de chaînes d'appareil vérifiées.
+
+`--since` compare l'heure à laquelle le serveur a reçu un événement, pas celle du début de la session. Un événement enregistré hors ligne le lundi et téléversé le jeudi est inclus quand vous filtrez à partir du mercredi, même si la session a commencé plus tôt.
+
+Un serveur trop ancien pour paginer son journal d'audit ne peut être vérifié que si le journal entier tient dans une page. Sinon la commande signale que le serveur est trop ancien, sort avec un code non nul et laisse le journal non vérifié en entier. Demandez à l'opérateur de mettre le serveur à jour.
 
 Une limite ne peut pas être détectée à partir du journal seul. Si le serveur supprime les événements les plus récents d'un membre avant que ce membre n'en téléverse de plus récents, ce qui reste est encore un journal valide. La synchronisation suivante du membre signale alors une erreur de chaîne d'audit. L'application de bureau garde cet avertissement à l'écran, et sur l'entrée Teams de la barre latérale, jusqu'à ce qu'une synchronisation ultérieure réussisse. En ligne de commande, surveillez le message de chaîne d'audit après une synchronisation.
+
+## Quand les téléversements sont refusés
+
+Deux limites du serveur peuvent retenir les événements d'audit d'un appareil. Aucune ne fait perdre quoi que ce soit : les événements restent en attente sur l'appareil et sont téléversés à une synchronisation ultérieure.
+
+- **Le stockage d'audit de l'équipe est plein.** Le serveur plafonne le stockage d'audit de chaque équipe et, au-delà, ne stocke rien du téléversement. `bssh teams sync` affiche `The team's audit storage is full.` et indique que les événements restent en attente, une fois par synchronisation. Le reste de la synchronisation, coffre compris, continue. Les administrateurs d'équipe ne peuvent pas relever la limite : c'est l'opérateur du serveur, voir [Auto-hébergement](/fr/teams/self-hosting/#configuration). La lecture du journal continue de fonctionner, donc les administrateurs peuvent toujours lancer `bssh teams audit`.
+- **Trop de téléversements.** Le serveur accepte un nombre limité de requêtes de téléversement d'audit par minute et par appareil, 60 par défaut, et répond `RateLimited` (HTTP 429) au-delà. Attendez une minute et synchronisez à nouveau.
+
+## Vérifications côté serveur
+
+Un serveur peut aussi revérifier les événements qu'il stocke, à intervalle régulier (`AUDIT_VERIFY_INTERVAL_SECS`, toutes les heures par défaut), et consigner une erreur quand il trouve une rupture. Chaque passage contrôle les événements arrivés depuis le passage précédent, puis revérifie une tranche de tout le journal stocké : 100 000 événements par passage, si bien que chaque événement stocké est revérifié une fois par tour complet. Un journal de N événements est couvert en environ N / 100 000 passages, ce qui est le temps pendant lequel une modification faite dans le dos du serveur peut rester non signalée. Cela détecte les modifications de la base de données faites par toute personne autre que l'opérateur : un bogue, une sauvegarde restaurée, quelqu'un qui a accès à la base mais pas à la configuration du serveur.
+
+C'est une couche supplémentaire, pas une garantie. Celui qui exploite le serveur peut aussi modifier ou faire taire cette vérification. Seule la vérification sur votre machine, avec des clés que le serveur ne détient jamais, vous protège de l'opérateur.
 
 ## Dans l'application de bureau
 
 Ouvrez l'équipe et choisissez **Audit log**. L'onglet vérifie le journal dès son ouverture, et de nouveau à chaque changement de filtre ou lorsque vous choisissez **Verify again**. Administrateurs uniquement.
 
-La bannière donne l'un de trois verdicts :
+La bannière donne l'un de deux verdicts :
 
-- **Verified on this device** : chaque événement a été vérifié, depuis le premier de chaque appareil.
-- **Verified, partial: older events weren't checked** : les événements affichés sont valides, mais les plus anciens n'ont pas été vérifiés, parce que seuls les plus récents ont été récupérés ou parce que le journal ne commence pas au premier événement d'un appareil.
+- **Verified on this device** : le journal entier est vérifié, la chaîne de chaque appareil depuis son premier événement. La liste montre les 1000 événements les plus récents ; quand le journal en compte davantage, la bannière indique que la liste ne montre que les plus récents et que le reste a été vérifié aussi.
 - **Verification failed: treat this log as tampered** : les problèmes sont listés ; vérifiez le journal sur une autre machine d'administration avant de faire confiance aux lignes.
 
 Filtrez par **Member**, **Host** et **Since (UTC)**, et choisissez **Export CSV** pour en garder une copie. La colonne **Check** indique **Valid**, **Bad signature**, **Unknown device** ou **Other team** pour chaque événement. Les heures sont en UTC.

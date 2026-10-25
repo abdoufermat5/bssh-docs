@@ -25,8 +25,9 @@ bssh teams audit platform --member ana@example.com --since 2026-01-01
 | --- | --- |
 | `--host <CONNECTION>` | Los eventos de una conexión de equipo |
 | `--member <EMAIL>` | Los eventos de un miembro |
-| `--since <DATE>` | Los eventos ocurridos desde una fecha (`YYYY-MM-DD`) o una hora RFC 3339 |
-| `--limit <LIMIT>` | Cuántos eventos descargar, del más reciente al más antiguo (valor predeterminado y máximo: 1000) |
+| `--since <DATE>` | Los eventos que el servidor recibió desde una fecha (`YYYY-MM-DD`) o una hora RFC 3339 |
+| `--limit <N>` | Cuántos de los eventos más recientes mostrar (por defecto: 100); todo el registro se verifica en cualquier caso |
+| `--all` | Mostrar todos los eventos que coinciden; no se puede combinar con `--limit` |
 
 El comando muestra de cada evento su hora, el miembro y el dispositivo, el evento, el host, la dirección de origen y el resultado de la comprobación. En la línea de comandos, las horas usan la hora local de la máquina. La aplicación de escritorio las muestra en UTC.
 
@@ -41,20 +42,38 @@ Cada evento se verifica en tu máquina: su firma con la clave del dispositivo au
 
 Cuando algo falla, `bssh teams audit` muestra los problemas y termina con un código distinto de cero, así que el comando puede ejecutarse en una comprobación de cumplimiento.
 
-## El límite de los eventos más recientes
+## Cuánto del registro ves
 
-El registro se descarga del más reciente al más antiguo, 1000 eventos por defecto y como máximo 1000 con `--limit`. Si la descarga alcanza el límite, el comando indica que solo muestra los más recientes. Los eventos descargados se verifican igualmente, pero los más antiguos no; limita con `--since` o `--host` para cubrirlos.
+`bssh teams audit` muestra los 100 eventos más recientes. `--limit 500` muestra más, también por encima de 1000, y `--all` muestra todos los eventos que coinciden. Las dos opciones no se pueden combinar. Cuando la lista se corta, el comando dice `Showing the newest N event(s) only: --limit <N> shows more, --all shows every one.`
+
+La verificación no depende de la lista. El comando siempre lee todo el registro del servidor, página a página en orden de cadena, y comprueba cada firma y la cadena de cada dispositivo desde su primer evento. `--host`, `--member`, `--since` y `--limit` solo acotan lo que se imprime. Un dispositivo al que le faltan los primeros eventos se informa como un problema. Cuando todo cuadra, el comando imprime `Verified on this machine, the whole log`, con el número de firmas y de cadenas de dispositivo comprobadas.
+
+`--since` compara la hora en que el servidor recibió un evento, no la hora en que empezó la sesión. Un evento registrado sin conexión el lunes y subido el jueves se incluye al filtrar desde el miércoles, aunque la sesión empezara antes.
+
+Un servidor demasiado antiguo para paginar su registro de auditoría solo se puede verificar cuando todo el registro cabe en una página. Si no, el comando informa de que el servidor es demasiado antiguo, sale con código distinto de cero y deja el registro sin verificar por completo. Pide al operador que actualice el servidor.
 
 Hay un límite que no se puede detectar solo con el registro. Si el servidor elimina los eventos más recientes de un miembro antes de que ese miembro suba otros más recientes, lo que queda sigue siendo un registro válido. La siguiente sincronización del miembro informa entonces de un error de cadena de auditoría. La aplicación de escritorio mantiene ese aviso en pantalla, y en la entrada Teams de la barra lateral, hasta que una sincronización posterior tenga éxito. En la línea de comandos, atento al mensaje de cadena de auditoría después de una sincronización.
+
+## Cuando se rechazan las subidas
+
+Dos límites del servidor pueden retener los eventos de auditoría de un dispositivo. Ninguno hace perder nada: los eventos quedan en cola en el dispositivo y se suben en una sincronización posterior.
+
+- **El almacenamiento de auditoría del equipo está lleno.** El servidor limita el almacenamiento de auditoría de cada equipo y, por encima del límite, no guarda nada de la subida. `bssh teams sync` imprime `The team's audit storage is full.` e indica que los eventos siguen en cola, una vez por sincronización. El resto de la sincronización, la bóveda incluida, continúa. Los administradores del equipo no pueden subir el límite: lo hace el operador del servidor, consulta [Autoalojamiento](/es/teams/self-hosting/#configuración). Leer el registro sigue funcionando, así que los administradores todavía pueden ejecutar `bssh teams audit`.
+- **Demasiadas subidas.** El servidor acepta un número limitado de peticiones de subida de auditoría por minuto y dispositivo, 60 por defecto, y responde `RateLimited` (HTTP 429) por encima. Espera un minuto y sincroniza de nuevo.
+
+## Comprobaciones en el servidor
+
+Un servidor también puede volver a verificar los eventos que almacena, de forma periódica (`AUDIT_VERIFY_INTERVAL_SECS`, cada hora por defecto), y registrar un error cuando encuentra una ruptura. Cada pasada comprueba los eventos llegados desde la anterior y luego vuelve a verificar un tramo de todo el registro almacenado: 100 000 eventos por pasada, de modo que cada evento almacenado se vuelve a comprobar una vez por vuelta completa. Un registro de N eventos queda cubierto en unas N / 100 000 pasadas, que es el tiempo que puede pasar sin avisarse una edición hecha a espaldas del servidor. Así detecta las ediciones de la base de datos hechas por cualquiera que no sea el operador: un error, una copia de seguridad restaurada, alguien con acceso a la base de datos pero no a la configuración del servidor.
+
+Es una capa adicional, no una garantía. Quien opera el servidor también puede cambiar o silenciar esa comprobación. Solo la verificación en tu máquina, con claves que el servidor nunca tiene, te protege del operador.
 
 ## En la aplicación de escritorio
 
 Abre el equipo y elige **Audit log**. La pestaña verifica el registro en cuanto se abre, y de nuevo cada vez que cambias un filtro o eliges **Verify again**. Solo administradores.
 
-El aviso da uno de tres veredictos:
+El aviso da uno de dos veredictos:
 
-- **Verified on this device**: cada evento comprobado, desde el primero de cada dispositivo.
-- **Verified, partial: older events weren't checked**: los eventos mostrados son válidos, pero los más antiguos no se comprobaron, porque solo se descargaron los más recientes o porque el registro no empieza en el primer evento de un dispositivo.
+- **Verified on this device**: se verifica todo el registro, la cadena de cada dispositivo desde su primer evento. La lista muestra los 1000 eventos más recientes; cuando el registro tiene más, el aviso indica que la lista solo muestra los más recientes y que el resto también se verificó.
 - **Verification failed: treat this log as tampered**: los problemas aparecen listados; comprueba el registro en otra máquina de administración antes de confiar en las filas.
 
 Filtra por **Member**, **Host** y **Since (UTC)**, y elige **Export CSV** para guardar una copia. La columna **Check** indica **Valid**, **Bad signature**, **Unknown device** o **Other team** para cada evento. Las horas están en UTC.

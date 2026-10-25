@@ -678,6 +678,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | `billing` | 显示团队所属组织的方案和席位；订阅或管理订阅（组织所有者）。 |
 | `remove` | 移除成员并轮换团队密钥（管理员）。 |
 | `audit` | 显示并验证团队的审计日志（管理员）。任何一项验证失败即以非零状态退出。 |
+| `device` | 你账号的设备，或团队成员的设备（管理员）：撤销其中一台。 |
 
 ### bssh teams init
 
@@ -816,7 +817,7 @@ Usage: bssh teams unshare [OPTIONS] <CONNECTION>
 
 ### bssh teams members
 
-列出团队成员及其设备。
+列出团队成员及其设备。每台设备显示其指纹和 ID（即 `bssh teams device revoke` 的参数）；已撤销的设备仍在列表中，标记为 `revoked <日期>`。
 
 ```text
 Usage: bssh teams members [OPTIONS] <TEAM>
@@ -869,7 +870,34 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--host <CONNECTION>` | 只显示该团队连接的事件。 |
 | `--member <EMAIL>` | 只显示该成员的事件。 |
 | `--since <DATE>` | 只显示该日期之后收到的事件（`YYYY-MM-DD` 或 RFC 3339）。 |
-| `--limit <LIMIT>` | 最多显示的事件数（默认值和上限均为 1000）。 |
+| `--limit <N>` | 显示最新的多少个事件（默认值：100）。无论如何都会验证整个日志。 |
+| `--all` | 显示所有匹配的事件，而不只是最新的。不能与 `--limit` 同时使用。 |
+
+筛选条件只缩小显示范围，验证始终覆盖整个日志。参见[审计日志](/zh-cn/teams/audit-log/)。
+
+### bssh teams device
+
+你账号的设备，或团队成员的设备（管理员）：撤销其中一台。
+
+```text
+Usage: bssh teams device [OPTIONS] <COMMAND>
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `revoke <DEVICE_ID>` | 永久撤销一台设备：它立即被拒之门外，其账号所在的每个团队都需要新的团队密钥。 |
+
+### bssh teams device revoke
+
+永久撤销一台设备：它立即被拒之门外，其账号所在的每个团队都需要新的团队密钥。设备所属账号本人可以执行，其账号所在团队的管理员也可以。参见[撤销设备](/zh-cn/teams/members/#撤销设备)。
+
+```text
+Usage: bssh teams device revoke [OPTIONS] <DEVICE_ID>
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `<DEVICE_ID>` | 设备 ID（完整的 UUID）。`bssh teams whoami` 显示本设备的 ID；`bssh teams members <team>` 显示成员的设备（管理员）。 |
 
 ### bssh teams agent
 

@@ -678,6 +678,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | `billing` | Afficher l'offre et les sièges de l'organisation d'une équipe ; s'abonner ou gérer l'abonnement (propriétaire de l'organisation). |
 | `remove` | Retirer un membre et faire tourner la clé d'équipe (administrateur). |
 | `audit` | Afficher et vérifier le journal d'audit de l'équipe (administrateur). Sort avec un code non nul si une vérification échoue. |
+| `device` | Appareils de votre compte, ou de ceux des membres d'une équipe (administrateur) : en révoquer un. |
 
 ### bssh teams init
 
@@ -816,7 +817,7 @@ Usage: bssh teams unshare [OPTIONS] <CONNECTION>
 
 ### bssh teams members
 
-Lister les membres d'une équipe et leurs appareils.
+Lister les membres d'une équipe et leurs appareils. Chaque appareil s'affiche avec son empreinte et son identifiant (l'argument de `bssh teams device revoke`) ; les appareils révoqués restent listés, marqués `revoked <date>`.
 
 ```text
 Usage: bssh teams members [OPTIONS] <TEAM>
@@ -869,7 +870,34 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--host <CONNECTION>` | Seulement les événements de cette connexion d'équipe. |
 | `--member <EMAIL>` | Seulement les événements de ce membre. |
 | `--since <DATE>` | Seulement les événements reçus depuis cette date (`YYYY-MM-DD` ou RFC 3339). |
-| `--limit <LIMIT>` | Nombre maximal d'événements (par défaut et maximum : 1000). |
+| `--limit <N>` | Nombre d'événements les plus récents à afficher (par défaut : 100). Le journal entier est vérifié dans tous les cas. |
+| `--all` | Afficher tous les événements correspondants au lieu des plus récents. Incompatible avec `--limit`. |
+
+Les filtres restreignent seulement l'affichage. La vérification couvre toujours le journal entier. Voir [Journal d'audit](/fr/teams/audit-log/).
+
+### bssh teams device
+
+Appareils de votre compte, ou de ceux des membres d'une équipe (administrateur) : en révoquer un.
+
+```text
+Usage: bssh teams device [OPTIONS] <COMMAND>
+```
+
+| Commande | Description |
+| --- | --- |
+| `revoke <DEVICE_ID>` | Révoquer définitivement un appareil : il est exclu aussitôt et chaque équipe de son compte a besoin d'une nouvelle clé d'équipe. |
+
+### bssh teams device revoke
+
+Révoquer définitivement un appareil : il est exclu aussitôt et chaque équipe de son compte a besoin d'une nouvelle clé d'équipe. Autorisé pour le compte de l'appareil lui-même, et pour un administrateur d'une équipe dont son compte est membre. Voir [Révoquer un appareil](/fr/teams/members/#révoquer-un-appareil).
+
+```text
+Usage: bssh teams device revoke [OPTIONS] <DEVICE_ID>
+```
+
+| Option | Description |
+| --- | --- |
+| `<DEVICE_ID>` | Identifiant de l'appareil (un UUID complet). `bssh teams whoami` affiche celui de cet appareil ; `bssh teams members <team>` affiche les appareils d'un membre (administrateur). |
 
 ### bssh teams agent
 

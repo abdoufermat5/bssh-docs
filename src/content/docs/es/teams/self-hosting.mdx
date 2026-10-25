@@ -43,8 +43,19 @@ Todo se define en tiempo de ejecución; ningún valor específico de un entorno 
 | `DEFAULT_SEATS` | `5` | Puestos de una organización nueva cuando la facturación está desactivada. |
 | `MIN_CLIENT_VERSION` | `0.0.0` | Versión de cliente más antigua aceptada. |
 | `RUST_LOG` | sin definir | Filtro de registros, por ejemplo `info`. |
+| `AUDIT_MAX_BYTES_PER_TEAM` | `1073741824` (1 GiB) | Almacenamiento de auditoría permitido por equipo, en bytes; `0` desactiva el límite. Por encima, la subida de auditoría de un dispositivo se rechaza con `AuditQuotaExceeded` (HTTP 403) y no guarda nada, y leer el registro sigue funcionando. Un evento cuenta 512 bytes más el tamaño de sus campos de actor y detalle. El contador solo crece: borrar eventos no devuelve el espacio. |
+| `AUDIT_UPLOADS_PER_DEVICE_PER_MIN` | `60` | Peticiones de subida de auditoría permitidas por minuto y dispositivo; `0` desactiva el límite. Por encima, la respuesta es `RateLimited` (HTTP 429) y el dispositivo reintenta más tarde. |
+| `AUDIT_VERIFY_INTERVAL_SECS` | `3600` | Segundos entre pasadas del verificador de auditoría; `0` lo desactiva. Consulta más abajo. |
 
 Las variantes `_FILE` nombran un archivo cuyo contenido, sin espacios sobrantes, sustituye a la variable. Úsalas para secretos, que así quedan fuera de `docker inspect` y del entorno.
+
+Una variable con un valor no válido detiene el servidor al arrancar, con un error que la nombra.
+
+### Almacenamiento y verificación de la auditoría
+
+El límite de auditoría protege la base de datos, no el registro: al llegar al límite, los dispositivos mantienen sus eventos en cola y los suben en cuanto subes `AUDIT_MAX_BYTES_PER_TEAM`. Los miembros ven el mensaje [El almacenamiento de auditoría del equipo está lleno](/es/reference/troubleshooting/#el-almacenamiento-de-auditoría-del-equipo-está-lleno).
+
+El verificador se ejecuta dentro del proceso de la API, cada `AUDIT_VERIFY_INTERVAL_SECS`. Cada pasada hace dos cosas. Primero una pasada incremental: comprueba los eventos llegados desde el punto de control de cada cadena. Luego un barrido continuo: vuelve a verificar los siguientes 100 000 eventos almacenados de todo el registro y, en la pasada siguiente, continúa donde se quedó. Así, cada evento almacenado se vuelve a comprobar una vez por vuelta completa, y un registro de N eventos queda cubierto en unas N / 100 000 pasadas (10 millones de eventos: 100 pasadas horarias). Es el tiempo que puede pasar sin avisarse un cambio hecho directamente en la base de datos. El tamaño del barrido es fijo, no un ajuste. Cuando el verificador encuentra una ruptura, registra un error que nombra el equipo, el dispositivo y el evento, y lo registra de nuevo en cada pasada hasta que se corrijan los datos. Detecta las ediciones de la base de datos hechas por cualquiera que no seas tú, el operador: un error, una copia de seguridad restaurada, alguien con acceso a la base de datos pero no a la configuración de tu servidor. No es una garantía frente al operador, que puede cambiarlo o silenciarlo. Los administradores verifican el registro en sus propias máquinas con `bssh teams audit`, la comprobación que no depende del servidor. Consulta [Registro de auditoría](/es/teams/audit-log/).
 
 ## Crear los secretos
 
@@ -230,6 +241,8 @@ docker compose exec -T postgres psql -U bssh -d bssh_restore < bssh-2026-10-23.s
 Las migraciones se ejecutan automáticamente al arrancar, y la API sigue bajo `/v1`, así que los clientes no necesitan cambios al actualizar el servidor. Los clientes anteriores a `MIN_CLIENT_VERSION` reciben HTTP 426, y `bssh teams` muestra `the server needs a newer bssh; please upgrade`.
 
 La imagen solo incluye migraciones hacia delante, así que volver a una imagen anterior implica restaurar la copia hecha antes de la actualización.
+
+La migración `1003` reconstruye los índices de auditoría sin `CONCURRENTLY`, porque las migraciones se ejecutan dentro de una transacción. Mientras se construye cada índice, las escrituras de auditoría en la tabla esperan. En una tabla de auditoría grande, actualiza en un momento tranquilo.
 
 ## Lo que guarda el servidor
 

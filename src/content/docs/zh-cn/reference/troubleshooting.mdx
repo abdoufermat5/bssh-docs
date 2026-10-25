@@ -208,6 +208,7 @@ bssh teams grant platform --fingerprint <FINGERPRINT>
 - `read-only: the organization has ...`：组织的成员数超过席位上限，因为订阅已失效，或支付的席位少于成员数。所有者用 `bssh org billing --checkout` 或 `--manage` 修复。其团队为只读时，拉取和授予密钥仍然可用。
 - `only an owner of the organization can manage billing`：你是团队管理员但不是所有者。请所有者操作；`bssh org show` 会列出他们。
 - `one organization is free per account`：`bssh org create` 被拒绝，因为你已拥有一个没有订阅的组织。请为它订阅，或在其中创建团队。
+- `a checkout for this organization is already in progress; retry in a moment`：服务器正忙于处理同一组织的另一个结账或账单门户请求，或来自支付服务商的付款更新。请稍等片刻，再次运行该命令。
 
 ### 审计链无法验证
 
@@ -220,6 +221,18 @@ bssh teams audit platform
 ```
 
 有事件验证失败时，命令以非零状态退出。[审计日志](/zh-cn/teams/audit-log/) 说明了链能证明什么。
+
+### 团队的审计存储已满
+
+`bssh teams sync` 会打印 `The team's audit storage is full. Your audit events stay queued on this device and upload once the server's operator raises the team's audit storage limit.` 每次同步只打印一次，桌面应用在同步后会显示同一条消息。
+
+服务器拒绝了这次上传，没有保存任何内容。你的事件不会丢失：它们仍在设备的队列中，同步的其余部分（包括保险库）照常进行。读取日志仍然可用。团队管理员无法调高这个上限。它是服务器设置 `AUDIT_MAX_BYTES_PER_TEAM`：使用托管服务时请联系运维方，使用自己的服务器时参见[自托管](/zh-cn/teams/self-hosting/#配置)。上限调高后，队列中的事件会在第一次同步时上传。
+
+### 服务器过旧，无法验证审计日志
+
+`bssh teams audit` 显示 `this Teams server is too old to read its whole audit log in pages, so the log was not verified in full: ask its operator to update it`，并以非零状态退出。
+
+该命令通过逐页读取来验证整个日志，而较旧的服务器做不到这一点。这样的服务器只有在整个日志能放进一页时才能验证。请让运维方更新服务器；参见[自托管](/zh-cn/teams/self-hosting/#升级)。[审计日志](/zh-cn/teams/audit-log/)说明了验证涵盖什么。
 
 ### 服务器需要更新的客户端
 

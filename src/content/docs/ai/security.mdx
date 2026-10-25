@@ -5,6 +5,8 @@ sidebar:
 description: What bssh AI enforces, where it is enforced, how it handles prompt injection and secrets, and the limits you should know before you rely on it.
 ---
 
+import DemoVideo from '../../../components/DemoVideo.astro';
+
 bssh AI starts from one assumption: **an agent can be steered by anything it reads.** A log line, a file, a banner or a web page can carry instructions, and no model reliably ignores them. bssh doesn't try to make the model behave. It limits what any agent, steered or not, can do on your servers, and records all of it.
 
 ## The rules that always hold
@@ -34,6 +36,13 @@ What bssh does about text that tries to steer the agent:
 - Reads run in the jail, so injected "read" commands can't change anything or send data out.
 - Commands that fetch and run code, such as `curl … | sh`, are tagged unknown and always ask.
 - A burst of denials or attempts at hosts outside the scope ends the run.
+
+<DemoVideo
+	label="Demo: Claude Code works on a prod database host under an observe-only policy. Queries are refused, a password in a log is redacted before the model sees it, and its proposed change is refused."
+	src="/demo/ai-claude-prod.mp4"
+	poster="/demo/ai-claude-prod.jpg"
+	caption="A real run on prod with the observe profile: what the agent reads, what bssh redacts, and the change it is not allowed to make."
+/>
 
 ## Secrets
 

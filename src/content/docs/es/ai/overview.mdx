@@ -5,7 +5,7 @@ sidebar:
 description: Deja que agentes de IA trabajen en tus servidores sin entregarles tus claves SSH. Cada comando se analiza, se contrasta con tu política, lo aprueba una persona cuando cambia algo, y queda registrado.
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, TabItem, Tabs } from '@astrojs/starlight/components';
 import AiFlow from '../../../../components/AiFlow.astro';
 import DemoVideo from '../../../../components/DemoVideo.astro';
 
@@ -29,12 +29,36 @@ bssh AI se sitúa entre el agente y tus servidores. El agente habla con `bssh ai
 
 El agente ve el resultado y sigue. El diagnóstico es rápido porque las lecturas no esperan a nadie. Las correcciones son deliberadas porque las escrituras sí esperan.
 
-<DemoVideo
-	label="Demo: opencode con un modelo DeepSeek a la izquierda, bssh a la derecha. El agente examina el uso de disco de web-1 con herramientas de solo lectura, propone un plan de limpieza, el plan se aprueba con bssh ai approve, y el agente lo aplica y lo verifica."
-	src="/demo/ai-agent-opencode.mp4"
-	poster="/demo/ai-agent-opencode.jpg"
-	caption="Una sesión real, no un guion: opencode con DeepSeek V4.1 Flash, conectado a bssh ai mcp, contra un servidor desechable. Acelerado, salvo mientras el plan espera la aprobación."
-/>
+## En acción
+
+Sesiones reales en servidores desechables: Claude Code arriba y `bssh ai watch` abajo, donde se da cada aprobación. Cada sesión se muestra tal como ocurrió; solo se recorta el final.
+
+<Tabs>
+	<TabItem label="Arreglar un despliegue">
+		<DemoVideo
+			label="Demo: Claude Code investiga errores 502 en web-1 a través de bssh, descubre que el despliegue movió la aplicación al puerto 8081 mientras nginx sigue enviando al 8080, propone un plan de cambios que se aprueba en bssh ai watch, lo aplica y verifica la solución."
+			src="/demo/ai-claude-deploy.mp4"
+			poster="/demo/ai-claude-deploy.jpg"
+			caption="El pago devuelve 502 tras un despliegue. Claude Code lee por su cuenta los registros y la configuración; el único cambio, apuntar nginx al nuevo puerto de la aplicación y recargarlo, espera aprobación en bssh ai watch."
+		/>
+	</TabItem>
+	<TabItem label="Liberar espacio en disco">
+		<DemoVideo
+			label="Demo: Claude Code libera espacio en /var/www de web-2: comprueba qué se puede borrar sin riesgo, propone eliminar las dos versiones más antiguas, y el plan se aprueba en bssh ai watch y se aplica."
+			src="/demo/ai-claude-disk.mp4"
+			poster="/demo/ai-claude-disk.jpg"
+			caption="/var/www está al 93 %. La tarjeta dice exactamente qué se borra, dos rutas y sin sudo, y Claude conserva la versión en uso y una más para volver atrás."
+		/>
+	</TabItem>
+	<TabItem label="Producción solo lectura">
+		<DemoVideo
+			label="Demo: Claude Code investiga un pago lento en db-1 con una política solo de observación: las consultas a la base se rechazan, una contraseña en un registro se oculta, y su cambio de índice se rechaza, así que entrega la solución a una persona."
+			src="/demo/ai-claude-prod.mp4"
+			poster="/demo/ai-claude-prod.jpg"
+			caption="En producción el agente solo puede mirar. psql se rechaza, la contraseña del registro de la aplicación se oculta antes de que el modelo la vea, y el cambio de índice se rechaza: Claude te entrega el plan."
+		/>
+	</TabItem>
+</Tabs>
 
 ## Decisiones previsibles
 

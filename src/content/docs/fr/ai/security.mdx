@@ -5,6 +5,8 @@ sidebar:
 description: Ce que bssh AI applique, à quel endroit, comment il traite l'injection de prompt et les secrets, et les limites à connaître avant de vous y fier.
 ---
 
+import DemoVideo from '../../../../components/DemoVideo.astro';
+
 bssh AI part d'un principe : **un agent peut être manipulé par tout ce qu'il lit.** Une ligne de journal, un fichier, une bannière ou une page web peuvent contenir des instructions, et aucun modèle ne les ignore de façon fiable. bssh n'essaie pas de rendre le modèle sage. Il limite ce que tout agent, manipulé ou non, peut faire sur vos serveurs, et enregistre tout.
 
 ## Les règles qui tiennent toujours
@@ -34,6 +36,13 @@ Ce que fait bssh face à du texte qui cherche à manipuler l'agent :
 - Les lectures s'exécutent dans le bac à sable : une commande « de lecture » injectée ne peut rien modifier ni envoyer de données au-dehors.
 - Les commandes qui téléchargent et exécutent du code, comme `curl … | sh`, sont étiquetées inconnues et demandent toujours.
 - Une rafale de refus ou de tentatives sur des hôtes hors périmètre met fin à la session.
+
+<DemoVideo
+	label="Démo : Claude Code travaille sur un serveur de base de données de prod avec une politique en observation seule. Les requêtes sont refusées, un mot de passe présent dans un journal est masqué avant que le modèle ne le voie, et sa modification est refusée."
+	src="/demo/ai-claude-prod.mp4"
+	poster="/demo/ai-claude-prod.jpg"
+	caption="Une vraie session en prod avec le profil observe : ce que l'agent lit, ce que bssh masque, et la modification qu'il n'a pas le droit de faire."
+/>
 
 ## Secrets
 

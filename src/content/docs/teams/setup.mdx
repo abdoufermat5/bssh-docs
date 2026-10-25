@@ -75,7 +75,7 @@ bssh teams share db-prod --team platform
 
 A shared connection carries its host, user, port, bastion (with its user), Kerberos setting and tags. It never carries key paths or passwords: each member connects with their own keys. Everyone in the team sees the connection after their next sync, and connecting to it is recorded in the team's audit log.
 
-On your machine, the team's copy is listed as `db-prod@platform` next to your own `db-prod`.
+Your `db-prod` becomes the team's connection: there is no second copy. Your key path and agent forwarding stay yours, and when a teammate changes where it points, bssh asks you to confirm before the next connection.
 
 </TabItem>
 <TabItem label="Desktop app">
@@ -89,11 +89,11 @@ You can also share from the team page: open the team, go to **Hosts**, pick a ho
 
 ## Change a shared connection
 
-Edit the team's copy, then share it again before the next sync. A sync would otherwise restore the vault's version:
+Edit it, then share it again before the next sync. A sync would otherwise restore the vault's version:
 
 ```sh
-bssh edit db-prod@platform --user deploy
-bssh teams share db-prod@platform --team platform
+bssh edit db-prod --user deploy
+bssh teams share db-prod --team platform
 ```
 
 In the desktop app, edit the host and choose **Update in platform** in its menu.
@@ -101,10 +101,10 @@ In the desktop app, edit the host and choose **Update in platform** in its menu.
 ## Remove a shared connection
 
 ```sh
-bssh teams unshare db-prod@platform
+bssh teams unshare db-prod
 ```
 
-bssh asks for confirmation. The connection is deleted from the team vault for everyone, at their next sync; the server keeps its history. If the server cannot be reached, the removal is queued for the next sync. In the desktop app, open the team's **Hosts** tab, choose **Unshare** next to the connection, then **Remove for everyone**.
+bssh asks for confirmation. The connection is deleted from the team vault for everyone, at their next sync; the server keeps its history. On your machine it stays, as a local connection (`bssh remove` deletes it). If the server cannot be reached, the removal is queued for the next sync. In the desktop app, open the team's **Hosts** tab, choose **Unshare** next to the connection, then **Remove for everyone**.
 
 :::caution
 The server keeps the entry's history, and a member who has not synced yet still sees the connection until they do.

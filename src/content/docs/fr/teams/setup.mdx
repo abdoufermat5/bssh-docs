@@ -75,7 +75,7 @@ bssh teams share db-prod --team platform
 
 Une connexion partagée contient son hôte, son utilisateur, son port, son bastion (avec son utilisateur), son réglage Kerberos et ses tags. Elle ne contient jamais les chemins des clés ni les mots de passe : chaque membre se connecte avec ses propres clés. Tous les membres voient la connexion après leur prochaine synchronisation, et chaque connexion à cet hôte est enregistrée dans le journal d'audit de l'équipe.
 
-Sur votre machine, la copie de l'équipe figure comme `db-prod@platform` à côté de votre propre `db-prod`.
+Votre `db-prod` devient la connexion de l'équipe : il n'y a pas de seconde copie. Votre chemin de clé et le transfert d'agent restent les vôtres, et quand un membre change sa destination, bssh vous demande confirmation avant la connexion suivante.
 
 </TabItem>
 <TabItem label="Application de bureau">
@@ -89,11 +89,11 @@ Vous pouvez aussi partager depuis la page de l'équipe : ouvrez l'équipe, allez
 
 ## Modifier une connexion partagée
 
-Modifiez la copie de l'équipe, puis partagez-la à nouveau avant la prochaine synchronisation. Sinon, une synchronisation rétablit la version du coffre :
+Modifiez-la, puis partagez-la à nouveau avant la prochaine synchronisation. Sinon, une synchronisation rétablit la version du coffre :
 
 ```sh
-bssh edit db-prod@platform --user deploy
-bssh teams share db-prod@platform --team platform
+bssh edit db-prod --user deploy
+bssh teams share db-prod --team platform
 ```
 
 Dans l'application de bureau, modifiez l'hôte et choisissez **Update in platform** dans son menu.
@@ -101,10 +101,10 @@ Dans l'application de bureau, modifiez l'hôte et choisissez **Update in platfor
 ## Retirer une connexion partagée
 
 ```sh
-bssh teams unshare db-prod@platform
+bssh teams unshare db-prod
 ```
 
-bssh demande confirmation. La connexion est supprimée du coffre de l'équipe pour tous les membres, lors de leur prochaine synchronisation ; le serveur garde son historique. Si le serveur est injoignable, la suppression est mise en file pour la prochaine synchronisation. Dans l'application de bureau, ouvrez l'onglet **Hosts** de l'équipe, choisissez **Unshare** à côté de la connexion, puis **Remove for everyone**.
+bssh demande confirmation. La connexion est supprimée du coffre de l'équipe pour tous les membres, lors de leur prochaine synchronisation ; le serveur garde son historique. Sur votre machine, elle reste, comme connexion locale (`bssh remove` la supprime). Si le serveur est injoignable, la suppression est mise en file pour la prochaine synchronisation. Dans l'application de bureau, ouvrez l'onglet **Hosts** de l'équipe, choisissez **Unshare** à côté de la connexion, puis **Remove for everyone**.
 
 :::caution
 Le serveur garde l'historique de l'entrée, et un membre qui n'a pas encore synchronisé voit toujours la connexion jusqu'à ce qu'il le fasse.

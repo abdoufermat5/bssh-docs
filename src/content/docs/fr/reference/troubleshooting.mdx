@@ -208,6 +208,7 @@ Les sièges et la facturation appartiennent à l'[organisation](/fr/teams/organi
 - `read-only: the organization has ...` : l'organisation compte plus de membres que sa limite de sièges, parce que l'abonnement a expiré ou paie moins de sièges qu'il n'y a de membres. Un propriétaire corrige avec `bssh org billing --checkout` ou `--manage`. Les récupérations et les attributions de clés continuent de fonctionner pendant que ses équipes sont en lecture seule.
 - `only an owner of the organization can manage billing` : vous êtes administrateur d'équipe sans être propriétaire. Demandez à un propriétaire ; `bssh org show` les liste.
 - `one organization is free per account` : `bssh org create` a été refusée car vous possédez déjà une organisation sans abonnement. Abonnez-la ou créez-y des équipes.
+- `a checkout for this organization is already in progress; retry in a moment` : le serveur traite une autre demande de paiement ou de portail de facturation pour la même organisation, ou une mise à jour de paiement venant du prestataire de paiement. Patientez un instant et relancez la commande.
 
 ### La chaîne d'audit ne se vérifie pas
 
@@ -220,6 +221,18 @@ bssh teams audit platform
 ```
 
 La commande renvoie un code non nul quand un événement échoue à se vérifier. [Journal d'audit](/fr/teams/audit-log/) explique ce que la chaîne prouve.
+
+### Le stockage d'audit de l'équipe est plein
+
+`bssh teams sync` affiche `The team's audit storage is full. Your audit events stay queued on this device and upload once the server's operator raises the team's audit storage limit.` Il l'affiche une fois par synchronisation, et l'application de bureau montre le même message après une synchronisation.
+
+Le serveur a refusé le téléversement et n'a rien stocké. Vos événements ne sont pas perdus : ils restent en attente sur l'appareil, et le reste de la synchronisation, coffre compris, s'exécute quand même. La lecture du journal continue de fonctionner. Les administrateurs d'équipe ne peuvent pas relever la limite. C'est un réglage du serveur, `AUDIT_MAX_BYTES_PER_TEAM` : sur un service hébergé, demandez à l'opérateur ; sur votre propre serveur, voir [Auto-hébergement](/fr/teams/self-hosting/#configuration). Les événements en attente sont téléversés à la première synchronisation après le relèvement de la limite.
+
+### Le serveur est trop ancien pour vérifier le journal d'audit
+
+`bssh teams audit` affiche `this Teams server is too old to read its whole audit log in pages, so the log was not verified in full: ask its operator to update it` et sort avec un code non nul.
+
+La commande vérifie le journal entier en le lisant page par page, ce qu'un serveur plus ancien ne sait pas faire. Un tel serveur ne peut être vérifié que tant que le journal entier tient dans une page. Demandez à l'opérateur de mettre le serveur à jour ; voir [Auto-hébergement](/fr/teams/self-hosting/#mises-à-jour). [Journal d'audit](/fr/teams/audit-log/) explique ce que couvre la vérification.
 
 ### Le serveur exige un client plus récent
 

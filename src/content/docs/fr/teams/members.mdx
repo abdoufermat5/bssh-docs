@@ -1,6 +1,6 @@
 ---
 title: Membres et appareils
-description: Inviter des personnes, échanger les empreintes, accorder la clé d'équipe, révoquer des invitations et retirer des membres.
+description: Inviter des personnes, échanger les empreintes, accorder la clé d'équipe, révoquer des invitations et des appareils, et retirer des membres.
 ---
 
 import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -136,7 +136,44 @@ Après la rotation, les appareils d'Ana ne peuvent plus synchroniser, et rien d'
 
 Une rotation emballe la nouvelle clé uniquement pour les appareils que cette machine d'administration a approuvés avec `bssh teams grant`. Si le serveur liste un appareil que vous n'avez jamais approuvé, la rotation s'arrête et le nomme. En ligne de commande, le membre est déjà retiré lorsque ce message apparaît ; l'équipe garde sa clé actuelle jusqu'à ce que la rotation réussisse. Vérifiez l'empreinte de l'appareil auprès de son propriétaire et accordez-la, puis synchronisez à nouveau pour terminer la rotation. La boîte de dialogue **Remove…** de l'application de bureau liste ces appareils et ne laisse pas retirer le membre avant que chacun soit accordé ; si une rotation s'arrête pour une autre raison, la raison reste dans la boîte de dialogue.
 
-Les appareils ne peuvent pas encore être révoqués un par un. Pour retirer un seul appareil, retirez le membre, puis invitez-le à nouveau.
+## Révoquer un appareil
+
+Révoquez un appareil quand il est perdu, volé ou retiré du service. Un appareil révoqué le reste : cela ne peut pas être annulé.
+
+Deux sortes de personnes peuvent le faire : le titulaire du compte de l'appareil, et un administrateur de n'importe quelle équipe dont ce compte est membre. Seule la ligne de commande propose cette action ; l'application de bureau non, mais sa boîte de dialogue **Remove…** renvoie à la commande pour un ordinateur perdu.
+
+<Steps>
+1. Trouvez l'identifiant de l'appareil. Sur la machine elle-même, `bssh teams whoami` l'affiche sur la ligne `Device`. En tant qu'administrateur, `bssh teams members platform` liste chaque appareil d'un membre avec son identifiant.
+
+2. Révoquez-le avec l'identifiant complet :
+
+   ```sh
+   bssh teams device revoke 6f1c2f64-2a63-4a43-9a43-1f0f0b6f6c11
+   ```
+
+   bssh vous demande d'abord de confirmer.
+
+3. Un administrateur lance `bssh teams sync platform` pour terminer la rotation de la clé.
+</Steps>
+
+Ce qui se passe :
+
+- Le serveur met fin aussitôt aux sessions de l'appareil. Il ne peut plus se connecter ni synchroniser, et sa prochaine requête est refusée.
+- Chaque équipe dont le compte de l'appareil est membre demande une nouvelle clé d'équipe qui exclut l'appareil. La clé change la prochaine fois qu'un administrateur lance `bssh teams sync`, ce que bssh affiche après la révocation. La rotation suit les mêmes règles que le [retrait d'un membre](#retirer-un-membre) : la nouvelle clé est emballée uniquement pour les appareils que cette machine d'administration a approuvés. D'ici là, les modifications des membres restent en attente.
+- L'appareil reste dans `bssh teams members`, marqué `revoked` avec sa date, parce que les événements qu'il a écrits continuent de lui appartenir dans le [journal d'audit](/fr/teams/audit-log/).
+- Si vous révoquez l'appareil sur lequel vous travaillez, bssh le dit dans la confirmation. Il supprime ensuite l'identité Teams de cette machine. Les connexions d'équipe déjà synchronisées restent des connexions locales.
+
+### Un ordinateur volé
+
+L'ordinateur portable d'Ana est volé. Un administrateur lance `bssh teams members platform`, copie l'identifiant de l'appareil d'Ana et le révoque :
+
+```sh
+bssh teams members platform
+bssh teams device revoke 6f1c2f64-2a63-4a43-9a43-1f0f0b6f6c11
+bssh teams sync platform
+```
+
+Dès lors, l'ordinateur ne peut plus joindre le serveur, et rien d'écrit après la rotation ne lui est lisible. Il peut encore contenir des copies de ce qu'il avait déjà synchronisé : changez les identifiants qui comptent, comme après le retrait d'un membre.
 
 ## Membres et appareils
 
@@ -144,7 +181,7 @@ Les appareils ne peuvent pas encore être révoqués un par un. Pour retirer un 
 bssh teams members platform
 ```
 
-Cette commande liste chaque membre avec son rôle et l'empreinte de chacun de ses appareils, puis les invitations en attente si vous êtes administrateur. Dans l'application de bureau, l'onglet **Members & devices** de l'équipe montre la même chose, avec une jauge de sièges, les appareils en attente de la clé et un bouton **Remove…** pour chaque membre autre que vous.
+Cette commande liste chaque membre avec son rôle et, pour chacun de ses appareils, son nom, son empreinte et son identifiant, puis les invitations en attente si vous êtes administrateur. Les appareils révoqués sont listés aussi, marqués `revoked` avec la date, par exemple `revoked 2026-10-25`. Dans l'application de bureau, l'onglet **Members & devices** de l'équipe montre les membres, avec une jauge de sièges, les appareils en attente de la clé et un bouton **Remove…** pour chaque membre autre que vous.
 
 ## Étapes suivantes
 

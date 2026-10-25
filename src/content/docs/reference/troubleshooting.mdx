@@ -208,6 +208,7 @@ Seats and billing belong to the team's [organization](/teams/organizations/). Bo
 - `read-only: the organization has ...`: the organization has more members than its seat limit, because the subscription lapsed or pays for fewer seats than there are members. An owner fixes it with `bssh org billing --checkout` or `--manage`. Pulls and key grants keep working while its teams are read-only.
 - `only an owner of the organization can manage billing`: you are a team admin but not an owner. Ask one; `bssh org show` lists them.
 - `one organization is free per account`: `bssh org create` was refused because you already own an organization without a subscription. Subscribe to it or create teams in it.
+- `a checkout for this organization is already in progress; retry in a moment`: the server is busy with another checkout or billing portal request for the same organization, or with a payment update from the payment provider. Wait a moment and run the command again.
 
 ### The audit chain does not verify
 
@@ -220,6 +221,18 @@ bssh teams audit platform
 ```
 
 The command exits non-zero when an event fails to verify. [Audit log](/teams/audit-log/) explains what the chain proves.
+
+### The team's audit storage is full
+
+`bssh teams sync` prints `The team's audit storage is full. Your audit events stay queued on this device and upload once the server's operator raises the team's audit storage limit.` It prints it once per sync, and the desktop app shows the same message after a sync.
+
+The server refused the upload and stored nothing. Your events are not lost: they stay queued on the device, and the rest of the sync, vault included, still runs. Reading the log keeps working. Team admins cannot raise the limit. It is a server setting, `AUDIT_MAX_BYTES_PER_TEAM`, so on a hosted service ask the operator, and on your own server see [Self-hosting](/teams/self-hosting/#configuration). The queued events upload at the first sync after it is raised.
+
+### The server is too old to verify the audit log
+
+`bssh teams audit` reports `this Teams server is too old to read its whole audit log in pages, so the log was not verified in full: ask its operator to update it` and exits non-zero.
+
+The command verifies the whole log by reading it page by page, which an older server cannot do. A server that old can be verified only while the whole log fits in one page. Ask the operator to update the server; see [Self-hosting](/teams/self-hosting/#upgrades). [Audit log](/teams/audit-log/) explains what verification covers.
 
 ### The server needs a newer client
 

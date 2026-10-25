@@ -43,8 +43,19 @@ Tout se règle à l'exécution ; aucune valeur propre à un environnement n'est 
 | `DEFAULT_SEATS` | `5` | Sièges d'une nouvelle organisation lorsque la facturation est désactivée. |
 | `MIN_CLIENT_VERSION` | `0.0.0` | Plus ancienne version de client acceptée. |
 | `RUST_LOG` | non défini | Filtre de journalisation, par exemple `info`. |
+| `AUDIT_MAX_BYTES_PER_TEAM` | `1073741824` (1 GiB) | Stockage d'audit autorisé par équipe, en octets ; `0` désactive la limite. Au-delà, le téléversement d'audit d'un appareil est refusé avec `AuditQuotaExceeded` (HTTP 403) et ne stocke rien, et la lecture du journal continue de fonctionner. Un événement compte 512 octets plus la taille de ses champs acteur et détail. Le compteur ne fait que croître : supprimer des événements ne rend pas l'espace. |
+| `AUDIT_UPLOADS_PER_DEVICE_PER_MIN` | `60` | Requêtes de téléversement d'audit autorisées par minute et par appareil ; `0` désactive la limite. Au-delà, la réponse est `RateLimited` (HTTP 429) et l'appareil réessaie plus tard. |
+| `AUDIT_VERIFY_INTERVAL_SECS` | `3600` | Secondes entre deux passages du vérificateur d'audit ; `0` le désactive. Voir plus bas. |
 
 Les variantes `_FILE` désignent un fichier dont le contenu, espaces retirés, remplace la variable. Utilisez-les pour les secrets, qui restent alors hors de `docker inspect` et de l'environnement.
+
+Une variable définie avec une valeur invalide arrête le serveur au démarrage, avec une erreur qui la nomme.
+
+### Stockage et vérification de l'audit
+
+La limite d'audit protège la base de données, pas le journal : une fois la limite atteinte, les appareils gardent leurs événements en attente et les téléversent dès que vous relevez `AUDIT_MAX_BYTES_PER_TEAM`. Les membres voient le message [Le stockage d'audit de l'équipe est plein](/fr/reference/troubleshooting/#le-stockage-daudit-de-léquipe-est-plein).
+
+Le vérificateur s'exécute dans le processus de l'API, toutes les `AUDIT_VERIFY_INTERVAL_SECS`. Chaque passage fait deux choses. D'abord une passe incrémentale : il contrôle les événements arrivés depuis le point de contrôle de chaque chaîne. Ensuite un balayage continu : il revérifie les 100 000 événements stockés suivants dans tout le journal, et reprend là où il s'est arrêté au passage suivant. Chaque événement stocké est donc revérifié une fois par tour complet, et un journal de N événements est couvert en environ N / 100 000 passages (10 millions d'événements : 100 passages horaires). C'est le temps pendant lequel une modification faite directement dans la base peut rester non signalée. La taille du balayage est fixe, ce n'est pas un réglage. Quand le vérificateur trouve une rupture, il consigne une erreur qui nomme l'équipe, l'appareil et l'événement, et la consigne de nouveau à chaque passage tant que les données ne sont pas corrigées. Il détecte les modifications de la base de données faites par toute personne autre que vous, l'opérateur : un bogue, une sauvegarde restaurée, quelqu'un qui a accès à la base mais pas à la configuration de votre serveur. Ce n'est pas une garantie contre l'opérateur, qui peut le modifier ou le faire taire. Les administrateurs vérifient le journal sur leur propre machine avec `bssh teams audit`, la seule vérification qui ne repose pas sur le serveur. Voir [Journal d'audit](/fr/teams/audit-log/).
 
 ## Créer les secrets
 
@@ -230,6 +241,8 @@ docker compose exec -T postgres psql -U bssh -d bssh_restore < bssh-2026-10-23.s
 Les migrations s'exécutent automatiquement au démarrage, et l'API reste sous `/v1` : une mise à jour du serveur ne demande aucun changement côté client. Les clients plus anciens que `MIN_CLIENT_VERSION` sont refusés avec le code HTTP 426, et `bssh teams` affiche `the server needs a newer bssh; please upgrade`.
 
 L'image ne contient que des migrations ascendantes : revenir à une image plus ancienne suppose de restaurer la sauvegarde prise avant la mise à jour.
+
+La migration `1003` reconstruit les index d'audit sans `CONCURRENTLY`, car les migrations s'exécutent dans une transaction. Pendant la construction de chaque index, les écritures d'audit dans la table attendent. Sur une grande table d'audit, mettez à jour à un moment calme.
 
 ## Ce que le serveur stocke
 

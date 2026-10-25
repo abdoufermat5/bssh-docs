@@ -678,6 +678,7 @@ Usage: bssh teams [OPTIONS] <COMMAND>
 | `billing` | Mostrar el plan y los puestos de la organización de un equipo; suscribirse o gestionar la suscripción (propietario de la organización). |
 | `remove` | Quitar a un miembro y rotar la clave del equipo (administrador). |
 | `audit` | Mostrar y verificar el registro de auditoría del equipo (administrador). Sale con código distinto de cero si algo no se verifica. |
+| `device` | Dispositivos de tu cuenta, o de los miembros de un equipo (administrador): revocar uno. |
 
 ### bssh teams init
 
@@ -816,7 +817,7 @@ Usage: bssh teams unshare [OPTIONS] <CONNECTION>
 
 ### bssh teams members
 
-Lista los miembros de un equipo y sus dispositivos.
+Lista los miembros de un equipo y sus dispositivos. Cada dispositivo aparece con su huella y su id (el argumento de `bssh teams device revoke`); los dispositivos revocados siguen en la lista, marcados `revoked <fecha>`.
 
 ```text
 Usage: bssh teams members [OPTIONS] <TEAM>
@@ -869,7 +870,34 @@ Usage: bssh teams audit [OPTIONS] <TEAM>
 | `--host <CONNECTION>` | Solo los eventos de esta conexión de equipo. |
 | `--member <EMAIL>` | Solo los eventos de este miembro. |
 | `--since <DATE>` | Solo los eventos recibidos desde esta fecha (`YYYY-MM-DD` o RFC 3339). |
-| `--limit <LIMIT>` | Número máximo de eventos (por defecto y máximo: 1000). |
+| `--limit <N>` | Cuántos de los eventos más recientes mostrar (por defecto: 100). Todo el registro se verifica en cualquier caso. |
+| `--all` | Mostrar todos los eventos que coinciden en lugar de los más recientes. No se puede combinar con `--limit`. |
+
+Los filtros solo acotan lo que se muestra. La verificación siempre cubre todo el registro. Consulta [Registro de auditoría](/es/teams/audit-log/).
+
+### bssh teams device
+
+Dispositivos de tu cuenta, o de los miembros de un equipo (administrador): revocar uno.
+
+```text
+Usage: bssh teams device [OPTIONS] <COMMAND>
+```
+
+| Comando | Descripción |
+| --- | --- |
+| `revoke <DEVICE_ID>` | Revocar un dispositivo para siempre: queda bloqueado al instante y cada equipo de su cuenta necesita una nueva clave del equipo. |
+
+### bssh teams device revoke
+
+Revocar un dispositivo para siempre: queda bloqueado al instante y cada equipo de su cuenta necesita una nueva clave del equipo. Permitido a la cuenta del propio dispositivo y a un administrador de un equipo en el que esa cuenta es miembro. Consulta [Revocar un dispositivo](/es/teams/members/#revocar-un-dispositivo).
+
+```text
+Usage: bssh teams device revoke [OPTIONS] <DEVICE_ID>
+```
+
+| Opción | Descripción |
+| --- | --- |
+| `<DEVICE_ID>` | Id del dispositivo (un UUID completo). `bssh teams whoami` muestra el de este dispositivo; `bssh teams members <team>` muestra los dispositivos de un miembro (administrador). |
 
 ### bssh teams agent
 

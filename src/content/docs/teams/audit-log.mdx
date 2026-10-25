@@ -25,8 +25,9 @@ bssh teams audit platform --member ana@example.com --since 2026-01-01
 | --- | --- |
 | `--host <CONNECTION>` | Events for one team connection |
 | `--member <EMAIL>` | Events by one member |
-| `--since <DATE>` | Events that happened since a date (`YYYY-MM-DD`) or an RFC 3339 time |
-| `--limit <LIMIT>` | How many events to fetch, newest first (default and maximum: 1000) |
+| `--since <DATE>` | Events the server received since a date (`YYYY-MM-DD`) or an RFC 3339 time |
+| `--limit <N>` | How many of the newest events to list (default: 100); the whole log is verified either way |
+| `--all` | List every matching event; cannot be combined with `--limit` |
 
 The command shows each event's time, member and device, event, host, source address and check result. On the command line, times use the machine's local time. The desktop app shows them in UTC.
 
@@ -41,20 +42,38 @@ Every event is verified on your machine: its signature against the author device
 
 When anything fails, `bssh teams audit` prints the problems and exits non-zero, so the command can run in a compliance check.
 
-## The newest-events limit
+## How much of the log you see
 
-The log is fetched newest first, 1000 events by default and at most 1000 with `--limit`. If the fetch reaches the limit, the command says it is showing the newest events only. The events it did fetch are still verified, but older ones were not checked; narrow with `--since` or `--host` to cover them.
+`bssh teams audit` lists the newest 100 events. `--limit 500` lists more, beyond 1000 too, and `--all` lists every matching event. The two cannot be combined. When the list is cut, the command says `Showing the newest N event(s) only: --limit <N> shows more, --all shows every one.`
+
+Verification does not depend on the list. The command always reads the whole log from the server, page by page in chain order, and checks every signature and each device's chain from its first event. `--host`, `--member`, `--since` and `--limit` narrow only what is printed. A device whose first events are missing is reported as a problem. When everything checks out, the command prints `Verified on this machine, the whole log`, with the number of signatures and device chains it checked.
+
+`--since` compares the time the server received an event, not the time the session started. An event recorded offline on Monday and uploaded on Thursday is included when you filter from Wednesday, even though the session began earlier.
+
+A server too old to page its audit log can only be verified when the whole log fits in one page. Otherwise the command reports that the server is too old, exits non-zero and leaves the log unverified in full. Ask the operator to update the server.
 
 One limit cannot be detected from the log alone. If the server drops a member's newest events before that member uploads anything more recent, what remains is still a valid log. The member's next sync then reports an audit-chain error. The desktop app keeps that warning on screen, and on the Teams entry in the sidebar, until a later sync succeeds. On the command line, watch for the audit-chain message after a sync.
+
+## When uploads are refused
+
+Two server limits can hold back a device's audit events. Neither loses anything: the events stay queued on the device and upload at a later sync.
+
+- **The team's audit storage is full.** The server caps the audit storage of each team and, over the cap, stores nothing from the upload. `bssh teams sync` prints `The team's audit storage is full.` and says the events stay queued, once per sync. The rest of the sync, the vault included, carries on. Team admins cannot raise the limit: the server's operator does, see [Self-hosting](/teams/self-hosting/#configuration). Reading the log keeps working, so admins can still run `bssh teams audit`.
+- **Too many uploads.** The server accepts a limited number of audit upload requests per minute from each device, 60 by default, and answers `RateLimited` (HTTP 429) beyond it. Wait a minute and sync again.
+
+## Server-side checks
+
+A server can also re-verify the events it stores, on a schedule (`AUDIT_VERIFY_INTERVAL_SECS`, hourly by default), and log an error when it finds a break. Each run checks the events that arrived since the last run, then re-verifies a slice of the whole stored log: 100,000 events per run, so every stored event is re-checked once per pass. A log of N events is covered in about N / 100,000 runs, which is how long an edit made behind the server's back can go unreported. This catches edits made to the database by anyone except the operator: a bug, a restored backup, someone with database access but not the server's configuration.
+
+It is an extra layer, not a guarantee. Whoever runs the server can also change or silence that check. Only the verification on your machine, with keys the server never holds, protects you from the operator.
 
 ## In the desktop app
 
 Open the team and choose **Audit log**. The tab verifies the log as soon as it opens, and again whenever you change a filter or choose **Verify again**. Admins only.
 
-The banner gives one of three verdicts:
+The banner gives one of two verdicts:
 
-- **Verified on this device**: every event checked, from each device's first one.
-- **Verified, partial: older events weren't checked**: the events shown are valid, but older ones were not checked, because only the newest were fetched or the log does not start at a device's first event.
+- **Verified on this device**: the whole log is checked, every device's chain from its first event. The list shows the newest 1000 events; when the log has more, the banner says the list shows only the newest events and that the rest were verified too.
 - **Verification failed: treat this log as tampered**: the problems are listed; check the log on another admin machine before trusting the rows.
 
 Filter by **Member**, **Host** and **Since (UTC)**, and choose **Export CSV** to keep a copy. The **Check** column says **Valid**, **Bad signature**, **Unknown device** or **Other team** for each event. Times are in UTC.

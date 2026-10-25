@@ -31,6 +31,8 @@ jobs:
       - run: npm run build # fails on broken internal links (starlight-links-validator)
         env:
           DOCS_SITE: ${{ vars.DOCS_SITE }}
+          # The latest release and star count are read from the GitHub API at build time.
+          GITHUB_TOKEN: ${{ github.token }}
       # The installer of the latest bayesian-ssh release, served at /install.sh.
       # Releases attach it and list it in the cosign-signed SHA256SUMS: both are
       # checked before publishing. Releases older than that have no asset; the

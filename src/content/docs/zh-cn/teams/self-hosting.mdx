@@ -18,15 +18,15 @@ bssh Teams 同步服务器是一个由 PostgreSQL 支持的单容器镜像。托
 
 ## 获取镜像
 
-镜像以 Docker 镜像归档的形式分发，文件名为 `bssh-cloud-api_<version>.tar`，例如 `bssh-cloud-api_0.2.0.tar`。请通过 [GitHub issue](https://github.com/abdoufermat5/bayesian-ssh/issues) 申请访问权限。
+镜像以 Docker 镜像归档的形式分发，文件名为 `bssh-cloud-api_<version>.tar`。请通过 [GitHub issue](https://github.com/abdoufermat5/bayesian-ssh/issues) 申请访问权限。
 
 在服务器上加载该归档：
 
 ```sh
-docker load -i bssh-cloud-api_0.2.0.tar
+docker load -i bssh-cloud-api_<version>.tar
 ```
 
-加载后的镜像带有版本标签，例如 `bssh-cloud-api:0.2.0`。
+加载后的镜像带有版本标签：`bssh-cloud-api:<version>`。
 
 ## 配置
 
@@ -88,7 +88,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: bssh-cloud-api:0.2.0
+    image: bssh-cloud-api:<version>
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,7 +115,7 @@ docker compose up -d
 docker compose logs -f api
 ```
 
-API 在启动时、开始接受连接之前执行数据库迁移，并记录版本，例如 `bssh-cloud 0.2.0`。如果迁移失败，进程会退出，日志会说明原因。
+API 在启动时、开始接受连接之前执行数据库迁移，并记录版本（`bssh-cloud <version>`）。如果迁移失败，进程会退出，日志会说明原因。
 
 API 只发布在回环地址上，因为 TLS 在它前面终止。`curl http://127.0.0.1:8080/healthz` 返回 `ok`；可用于监控。
 

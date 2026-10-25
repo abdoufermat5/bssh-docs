@@ -3,7 +3,8 @@ title: Installation
 description: Installez Bayesian SSH à l'aide du script en une ligne, des paquets Linux précompilés, de Snap ou depuis les sources.
 ---
 
-import { Steps, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, Code, LinkCard, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+import { latestVersion } from '../../../../lib/github.mjs';
 
 Bayesian SSH fournit des paquets et des binaires Linux précompilés pour `x86_64` (amd64) et `aarch64` (arm64), un script d'installation automatisé, un paquet Snap et la compilation depuis les sources.
 
@@ -89,14 +90,10 @@ Des paquets unifiés `.deb` et `.rpm` contenant à la fois l'outil en ligne de c
 
 <Tabs syncKey="os">
 	<TabItem label="Debian / Ubuntu">
-		```sh
-		sudo apt install ./bayesian-ssh_2.10.0_amd64.deb
-		```
+		<Code lang="sh" code={`sudo apt install ./bayesian-ssh_${latestVersion}_amd64.deb`} />
 	</TabItem>
 	<TabItem label="Fedora / RHEL">
-		```sh
-		sudo dnf install ./bayesian-ssh-2.10.0-1.x86_64.rpm
-		```
+		<Code lang="sh" code={`sudo dnf install ./bayesian-ssh-${latestVersion}-1.x86_64.rpm`} />
 	</TabItem>
 </Tabs>
 

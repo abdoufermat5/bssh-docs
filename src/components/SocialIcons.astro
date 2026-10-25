@@ -1,0 +1,51 @@
+---
+// The GitHub link in the header, with the repository's star count read at build time.
+import Default from '@astrojs/starlight/components/SocialIcons.astro';
+import { repoUrl, stars } from '../lib/github.mjs';
+
+const strings = {
+	en: (n: string) => `${n} stars on GitHub`,
+	fr: (n: string) => `${n} étoiles sur GitHub`,
+	es: (n: string) => `${n} estrellas en GitHub`,
+	'zh-CN': (n: string) => `GitHub 上 ${n} 颗星`,
+};
+const lang = Astro.locals.starlightRoute.lang as keyof typeof strings;
+const label = strings[lang] ?? strings.en;
+const count =
+	stars === null
+		? null
+		: new Intl.NumberFormat(lang, { notation: 'compact', maximumFractionDigits: 1 }).format(stars);
+---
+
+<Default />
+{
+	count !== null && (
+		<a class="stars sl-flex" href={`${repoUrl}/stargazers`} aria-label={label(count)}>
+			<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+				<path
+					fill="currentColor"
+					d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"
+				/>
+			</svg>
+			<span>{count}</span>
+		</a>
+	)
+}
+
+<style>
+	.stars {
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0.15rem 0.55rem;
+		border: 1px solid var(--sl-color-hairline-light);
+		border-radius: 999px;
+		font-size: var(--sl-text-xs);
+		font-variant-numeric: tabular-nums;
+		color: var(--sl-color-gray-2);
+		text-decoration: none;
+	}
+	.stars:hover {
+		color: var(--sl-color-white);
+		border-color: var(--sl-color-gray-4);
+	}
+</style>

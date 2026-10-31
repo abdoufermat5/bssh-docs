@@ -62,6 +62,7 @@ export default defineConfig({
 					'ai/policies',
 					'ai/approvals',
 					'ai/host-setup',
+					'ai/bastions',
 					'ai/teams-agents',
 				]),
 				group('Security', { fr: 'Sécurité', es: 'Seguridad', 'zh-CN': '安全' }, [

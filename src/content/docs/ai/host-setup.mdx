@@ -94,4 +94,6 @@ bssh ai doctor web-1
 bssh ai doctor -t staging
 ```
 
-For each host: whether it is reachable, whether `bssh-agent` exists, which jail it has, whether it trusts your CA, and the sudo rules your policy would need. It also lists the agent clients bssh found on your machine and whether they are set up with `bssh ai install`.
+For each host: whether it is reachable, which route it takes (`direct`, `jump host <name>`, `Kerberos bastion <name>` or `ssh_config ProxyJump <hop>`), whether `bssh-agent` exists, which jail it has, whether it trusts your CA, and the sudo rules your policy would need. It also lists the agent clients bssh found on your machine and whether they are set up with `bssh ai install`.
+
+A Kerberos bastion changes what is possible on a host: commands run as your user, and certificates and the separate agent user are not available. See [Bastions and jump hosts](/ai/bastions/).

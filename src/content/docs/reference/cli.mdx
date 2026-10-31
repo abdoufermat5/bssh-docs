@@ -1019,10 +1019,12 @@ Usage: bssh ai install [OPTIONS] <CLIENT>
 | Flag | Description |
 | --- | --- |
 | `<CLIENT>` | `claude-code`, `codex`, `cursor`, `vscode`, `claude-desktop` or `omp`. |
-| `--policy <POLICY>` | Policy the agent runs (default: `default`). |
+| `--policy <POLICY>` | Policy the agent runs (default: `default`). It must exist: `bssh ai policy list` shows what is defined. |
 | `--guard` | Also install a hook that steers raw `ssh` and `scp` to the bssh tools (Claude Code). |
 | `--dry-run` | Print the change without writing it. |
 | `--uninstall` | Remove bssh from the client's configuration. |
+
+The entry is written with `--env <environment>` for the active environment, so `bssh env use` does not change what the agent reaches. For Codex it also writes `tool_timeout_sec` = `ai.approval_timeout_secs` + 30, so an approval can arrive before Codex drops the call. After writing, the command prints the next steps: restart the client, what the policy allows, `bssh ai watch` for approvals, and `bssh ai doctor` for the hosts.
 
 ### bssh ai explain
 
@@ -1041,7 +1043,7 @@ Usage: bssh ai explain [OPTIONS] <COMMAND>...
 
 ### bssh ai policy
 
-List, show or test agent policies.
+List, show, set or test agent policies.
 
 ```text
 Usage: bssh ai policy <COMMAND>
@@ -1050,8 +1052,25 @@ Usage: bssh ai policy <COMMAND>
 | Command | Description |
 | --- | --- |
 | `list` | List policies. |
-| `show [NAME]` | Print a policy with the built-in defaults applied. |
+| `show [NAME]` | Print a policy with the built-in defaults applied, then any warnings: an unknown field (a typo such as `in-client`), or an explicit policy with an empty scope. |
+| `set <NAME> [--profile <P>] [--tag <TAG>]... [--host <HOST>]... [--all-hosts]` | Write or update a policy in this environment's `config.json`, keeping the fields you don't name. `--profile` is `observe`, `operate` or `oncall`; a new policy needs it, an existing one keeps it. `--tag`/`--host` replace the scope; `--all-hosts` sets it to `["*"]`. An empty scope is refused. Prints the resulting policy and asks you to restart the agent. |
 | `test <FILE> [--policy <POLICY>] [--host <HOST>]` | Decide every command in the file; lines may end with `# expect: allow\|ask\|deny`. Exits non-zero on a mismatch. |
+
+```text
+Usage: bssh ai policy set [OPTIONS] <NAME>
+```
+
+For example, let the default policy change hosts after `bssh ai install`:
+
+```sh
+bssh ai policy set default --profile operate --all-hosts
+```
+
+To keep it narrow instead:
+
+```sh
+bssh ai policy set default --profile operate --tag staging --host web-1
+```
 
 ### bssh ai approve
 
@@ -1068,6 +1087,9 @@ Usage: bssh ai approve [OPTIONS] [REQUEST_ID]
 | `--reason <REASON>` | Reason sent to the agent. |
 | `--list` | Only list pending requests. |
 | `--grant <MINUTES>` | Also allow the same kind of call for this many minutes. |
+| `--follow` | Keep answering requests as they arrive, until Ctrl-C. With `--list` or `--deny`, one pass only. |
+
+The first line names the environment whose runs it reads. With none connected it says so instead of pointing at `bssh ai mcp`, which is not a command to run by hand. Out-of-band approval needs Unix sockets and is not available on Windows.
 
 ### bssh ai status
 
@@ -1085,6 +1107,18 @@ Usage: bssh ai stop [OPTIONS] [RUN]
 | --- | --- |
 | `[RUN]` | Run id. Optional when a single run is active. |
 | `--all` | Stop every run. |
+
+### bssh ai resume
+
+Resume a run paused by the circuit breaker. A pause is not a stop: `status` keeps working while paused, and resuming clears the pause so the agent's next call is decided again.
+
+```text
+Usage: bssh ai resume [RUN]
+```
+
+| Flag | Description |
+| --- | --- |
+| `[RUN]` | Run id or unique prefix. Optional when a single run is active. |
 
 ### bssh ai log
 
@@ -1122,7 +1156,7 @@ Usage: bssh ai setup [OPTIONS] [TARGET]
 
 ### bssh ai doctor
 
-Check each host's protection: jail, agent user, CA trust, agent client configuration, and suggested sudo rules.
+Check each host's protection: route, jail, agent user, CA trust, agent client configuration, suggested sudo rules, and warnings from the policy.
 
 ```text
 Usage: bssh ai doctor [OPTIONS] [TARGET]
@@ -1134,6 +1168,8 @@ Usage: bssh ai doctor [OPTIONS] [TARGET]
 | `-t, --tag <TAG>` | Every connection with this tag. |
 | `--policy <POLICY>` | Policy whose write paths drive the sudo suggestions (default: `default`). |
 | `--json` | Print JSON. |
+
+Each host shows its route — `direct`, `jump host <name>`, `Kerberos bastion <name>` or `ssh_config ProxyJump <hop>` — and what that route means for an agent, including a missing Kerberos ticket. Policy warnings (unknown fields, an empty scope, tags from an untrusted inventory source) are printed before the hosts. See [Bastions and jump hosts](/ai/bastions/).
 
 ### bssh ai ca
 
@@ -1171,6 +1207,22 @@ Usage: bssh ai token [OPTIONS] <AGENT>
 | --- | --- |
 | `<AGENT>` | Agent identity, `<team>/<name>`. |
 | `--ttl <TTL>` | Lifetime (default: `1h`, at most 24 hours). |
+
+### bssh ai watch
+
+Follow what agents do, live, and answer approval requests. It names the environment it reads, shows every run as a header followed by one line per event, and puts a new approval in front of you: `a` approves, `d` denies, `r` folds runs of reads, `q` quits. New runs that start while it is open are picked up. Needs Unix sockets; not available on Windows.
+
+```text
+Usage: bssh ai watch [OPTIONS]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--run <RUN>` | Only this run (id or unique prefix). |
+| `--host <HOST>` | Only calls on this host. |
+| `--json` | One event per line as JSON; no prompts, no raw mode. |
+
+Its decisions go through the same control socket as `bssh ai approve`, so both are outside the agent's reach. See [Approvals](/ai/approvals/).
 
 ## Desktop and shell
 

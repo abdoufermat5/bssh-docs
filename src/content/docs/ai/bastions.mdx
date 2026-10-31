@@ -1,0 +1,55 @@
+---
+title: Bastions and jump hosts
+description: How bssh AI reaches hosts behind a jump host, an OVH-style Kerberos bastion, or a ProxyJump set only in ~/.ssh/config, and what to check before an agent uses one.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+An agent runs `bssh ai mcp` with no terminal, so every hop it adds has to work without a prompt. bssh keeps that rule on each hop of the route, not just the last one. `bssh ai doctor` prints the route it will take for each host.
+
+Three routes are supported.
+
+## A jump host
+
+The connection stores a `bastion` and does not use Kerberos. bssh builds the hop itself, and both `ssh` processes run non-interactively:
+
+- `BatchMode=yes` and a connect timeout, so a hop that wants a password, a passphrase or a one-time code fails at once instead of waiting;
+- `-T -a -x`, and `ClearAllForwardings=yes`, so no terminal, agent or X11 forwarding is set up;
+- the bastion only has to allow TCP forwarding (`-W`); nothing runs on it.
+
+Authentication on both hops is key or ssh-agent (`ssh -A` is not used, and certificates are the only thing that carries a temporary credential). A bastion that asks for a password or an OTP cannot be used by an agent. Give the bastion a key for your user, or move the agent to a host that can reach the target directly.
+
+## A Kerberos bastion (OVH "The Bastion")
+
+The connection stores a `bastion` **and** uses Kerberos: you log in to the bastion and it runs the command on the target for you. This is a different route, not a jump host, and the agent uses it the same way the CLI does:
+
+- get a Kerberos ticket first: `kinit`. An agent cannot prompt for a password, and an expired ticket shows up as an authentication failure, not as an approval request. `bssh ai doctor` runs `klist -s` for Kerberos hosts and tells you to run `kinit` when there is no ticket;
+- commands then run **as your user on the target, through the bastion**. The target sees the bastion's connection, and the bastion enforces its own access rules for your account. The agent's `ssh` to the bastion uses `BatchMode`, forces a real `TERM` (agent shells often set `TERM=dumb`, which some bastions refuse with a misleading "add -t"), and — unlike a direct Kerberos login — **delegates the TGT** and honours `forward_agent` when the connection has it, because the bastion's own hop to the target needs those credentials;
+- the route is not certificate-capable: `bssh ai ca trust` and the `bssh-agent` user do not change how commands run, so approved steps run as your user rather than as the low-privilege agent;
+- file reads and edits go over the same command channel instead of SFTP, so they follow the bastion's routing and need no extra port from your machine.
+
+Because commands run as you, `observe` and `run_readonly` work as usual, while the extra protection of [certificates](/ai/host-setup/#approval-bound-certificates) and the separate agent user is not available. If you need those, connect to the target directly or through a plain jump host.
+
+<Aside type="caution">
+A failing Kerberos ticket and a refused key look similar in the agent's output. Run `klist` and `bssh ping <host>` before a session when a Kerberos host misbehaves.
+</Aside>
+
+## ProxyJump in `~/.ssh/config`
+
+If the host has no stored bastion but `~/.ssh/config` reaches it through `ProxyJump` (or `ProxyCommand`), bssh hands the connection to the system `ssh`, which reads that file. Everything OpenSSH supports there works, including several hops and per-host keys.
+
+The system `ssh` is also given `BatchMode=yes` and a connect timeout, so the same rule holds: a hop that needs a human fails instead of waiting. A `ProxyJump` that points at a bastion needing a password is not usable by an agent.
+
+`bssh ai doctor` names this route as `ssh_config ProxyJump <hop>`, so you can tell it apart from a stored bastion.
+
+## What to check
+
+```sh
+bssh ai doctor            # route, ticket, reachability for every host in scope
+bssh ai doctor web-1      # one host
+bssh ai doctor --json     # the same facts for scripts
+```
+
+For each host doctor prints the route (`direct`, `jump host <name>`, `Kerberos bastion <name>` or `ssh_config ProxyJump <hop>`) next to the reachability and enforcement checks. At first contact, an unreachable host through a route is the first thing to look at: check the ticket, then whether your key is authorised on each hop.
+
+File tools (`read_file`, `edit_file` and a plan's edits) use the same route as commands, so a host reached through a bastion never falls back to a direct SFTP connection.

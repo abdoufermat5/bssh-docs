@@ -19,9 +19,45 @@ Every policy starts from a profile:
 | `operate` | Read, and propose changes that a person approves | 30 calls per minute, 10 changes per run, 2 h per run |
 | `oncall` | The same, for unattended Teams agents | 60 calls per minute, 20 changes per run, 4 h per run |
 
-With no `default` policy at all, bssh uses `observe` on every host you have saved. A policy you write yourself sees **no host** until you give it a scope.
+With no `default` policy at all, bssh uses `observe` on every host you have saved: `list_hosts`, `host_info`, `observe`, `read_file`, `search_logs` and provably read-only `run_readonly` are allowed, and every tool that changes something is refused. To let an agent change hosts, write a policy with the `operate` profile and a scope, as in [A complete policy](#a-complete-policy) below.
+
+A policy you write yourself sees **no host** until you give it a scope.
+
+## Scope and tags
+
+`scope` decides which hosts exist for the agent:
+
+```json
+"scope": { "tags": ["staging", "prod"], "hosts": ["bastion-ops", "web-*"] }
+```
+
+- `scope.tags` matches connections carrying **any** of the tags. `"*"` is the wildcard for every host: `"scope": { "tags": ["*"] }` is what the built-in default uses.
+- `scope.hosts` matches connection names, with `*` and `?` globs.
+- Both empty means the policy reaches no host; the agent sees an empty `list_hosts`, and `bssh ai policy show` and `bssh ai doctor` say so. bssh does not guess that you meant every host.
+
+Tags are only as trustworthy as the thing that sets them. A tag on a connection you added by hand counts. A tag from an inventory source (`bssh source list`: ssh config, AWS, GCP, Tailscale, a Teams vault) counts only when that source is listed in `ai.trusted_tag_sources`, because anyone who can edit the source can add the tag:
+
+```json
+"ai": {
+  "trusted_tag_sources": ["team-vault"],
+  "policies": { "…": {} }
+}
+```
+
+Untrusted tags are still read, but only to make a decision stricter: `approval.two_person` and `approval.two_person_hosts` apply. They never widen `scope.tags` or allow `approval.in_client`. `bssh ai doctor` lists hosts whose tags come from an untrusted source, and `bssh ai mcp` prints the same warning to its log when a policy has a typo or an empty scope.
 
 ## A complete policy
+
+The shortest way is the CLI, which sets the profile and the scope and leaves everything else at its defaults:
+
+```sh
+bssh ai policy set default --profile operate --all-hosts    # every host
+bssh ai policy set default --profile operate --tag staging --host web-1
+```
+
+It refuses a scope that would reach no host, saves through the same path as every other config change, and prints the policy it wrote; restart the agent to apply it. Add approval rules, paths and budgets by editing the file when you need them.
+
+By hand, the same policy looks like this:
 
 ```json
 "ai": {
@@ -47,8 +83,8 @@ With no `default` policy at all, bssh uses `observe` on every host you have save
 
 | Field | Meaning |
 | --- | --- |
-| `scope.tags`, `scope.hosts` | Hosts the agent can see. Anything else doesn't exist for it: `list_hosts` leaves it out and calls naming it fail like an unknown host. |
-| `approval.default` | Who approves a change: `out-of-band` (desktop app, `bssh ai approve`) unless a tag rule applies. |
+| `scope.tags`, `scope.hosts` | Hosts the agent can see, `"*"` for all of them. Anything else doesn't exist for it: `list_hosts` leaves it out and calls naming it fail like an unknown host. |
+| `approval.default` | Who approves a change: `out-of-band` (desktop app, `bssh ai watch`, `bssh ai approve`) unless a tag rule applies. |
 | `approval.in_client` | Tags where a low-risk change can be confirmed in the agent's own client. Off unless you list tags. |
 | `approval.two_person` | Tags where a change needs two different admins. Needs [bssh Teams](/ai/teams-agents/). |
 | `read_paths` | Where `read_file` may read without asking. Replaces the built-in list when set. |
@@ -57,6 +93,8 @@ With no `default` policy at all, bssh uses `observe` on every host you have save
 | `deny` | Commands refused outright, without asking anyone. |
 | `budgets` | Calls per minute, changes per run, run lifetime, and how many denials in a minute end the run. |
 | `approval_timeout_secs` | A request nobody answers is refused after this many seconds. Default 300. |
+
+Field names are exactly as written here: `in_client`, not `in-client`. A field bssh does not know is ignored by the config reader, so `bssh ai policy show` and `bssh ai doctor` list unknown fields as warnings rather than silently dropping them.
 
 ### What you can't switch off
 
@@ -102,7 +140,7 @@ $ bssh ai policy test checks.txt --host web-1
 #  EXPECT  GOT    COMMAND                     (reason)
 1  allow   allow  uptime                      (analyzer: every command is read-only)
 2  allow   allow  journalctl -u nginx -n 200  (analyzer: every command is read-only)
-3  ask     ask    systemctl restart nginx     (write: Run changes the host and needs approval)
+3  ask     ask    systemctl restart nginx     (write: run changes the host and needs approval)
 4  deny    deny   cat /etc/shadow             (deny_paths: '/etc/shadow' matches '/etc/shadow')
 5  deny    deny   mkfs.ext4 /dev/sdb1         (deny: the command matches 'mkfs *')
 5 commands, 0 mismatches

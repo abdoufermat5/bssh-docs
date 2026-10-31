@@ -80,6 +80,7 @@ bssh ai stop                  # end the only running run, or name one, or --all
 bssh ai resume <run>          # resume a run paused by the circuit breaker
 bssh ai log                   # recent runs
 bssh ai log <run> --report    # what changed, with diffs, approvals and undo points
+bssh ai log <run> -o run.pdf  # the full report as a file: .txt, .md, .html, .pdf or .json
 bssh ai replay <run>          # replay the recorded output of its commands
 ```
 
@@ -87,4 +88,6 @@ A run that trips the circuit breaker is **paused**, not stopped: its calls are r
 
 <Aside type="note">
 The run report is built from the signed log, not written by a model. It lists every host touched, every decision, who approved what and how, each change with its diff and undo point, and how many secrets were redacted.
+
+The desktop app shows the same reports: **AI agents → Reports** lists past runs from the audit log, opens one with each change's steps and their results, and **Download** saves it as text, Markdown, HTML, PDF or JSON. A live run's **Report** button opens its report directly.
 </Aside>

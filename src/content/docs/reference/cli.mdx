@@ -1132,8 +1132,15 @@ Usage: bssh ai log [OPTIONS] [RUN]
 | --- | --- |
 | `[RUN]` | Run id. Without it, the list of recent runs. |
 | `--report` | Print the run report: hosts, changes with diffs, approvals, undo points. |
+| `--format <FORMAT>` | The full report as a document: `txt`, `md`, `html`, `pdf` or `json`. Prints it, or writes it with `-o`. |
+| `-o, --output <FILE>` | Write the report document to this file. The format defaults to the file's extension; a PDF needs a file. |
 | `--limit <LIMIT>` | Number of runs listed (default: 20). |
 | `--json` | Print JSON. |
+
+```sh
+bssh ai log 73c7e726 -o run.pdf          # PDF, from the extension
+bssh ai log 73c7e726 --format md > run.md
+```
 
 ### bssh ai replay
 
